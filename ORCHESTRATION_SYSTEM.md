@@ -379,6 +379,30 @@ Moves a method to a different receiver type.
 }
 ```
 
+### 5. Insert Code
+Inserts new code snippets into existing files.
+
+```json
+{
+  "type": "insert_code",
+  "parameters": {
+    "codeSnippet": "func newFunction() {\n    fmt.Println(\"Hello, World!\")\n}",
+    "location": {
+      "type": "after_function",
+      "functionName": "existingFunction"
+    }
+  }
+}
+```
+
+#### Insertion Location Types
+
+- `before_function`: Insert before a specific function
+- `after_function`: Insert after a specific function  
+- `inside_function`: Insert at the beginning of a function body
+- `at_end`: Insert at the end of the file
+- `at_beginning`: Insert at the beginning of the file (after package declaration)
+
 ## Execution Results
 
 The system provides detailed execution results:

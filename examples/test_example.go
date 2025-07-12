@@ -1,11 +1,15 @@
 package main
 
+// UserService handles user-related operations
+type DataProcessor interface {
+	ProcessData(data []string) ([]string, error)
+}
+
 import (
 	"errors"
 	"fmt"
 )
 
-// UserService handles user-related operations
 type UserService struct {
 	repo UserRepository
 }
@@ -34,10 +38,32 @@ func (s *UserService) validateUser(user interface{}) error {
 	validateUser(user)
 }
 
+func (s *UserService) ValidateUserInput(user *User) error {
+	if user.Name ==
+		"" {
+		return errors.New("name is required")
+	}
+	if user.Email == "" {
+		return errors.
+			New("email is required")
+	}
+	if user.Age < 0 {
+		return errors.
+			New("age must be positive")
+	}
+	if user.Age > 150 {
+		return errors.New("age must be reasonable")
+	}
+	return nil
+}
+
 // Save the user
 
 // ProcessData processes user data with complex logic
 func (s *UserService) ProcessData(data []string) ([]string, error) {
+	fmt.Printf("Processing %d data items\n",
+		len(data))
+
 	var result []string
 	var err error
 

@@ -1,0 +1,65 @@
+{
+  "version": "1.0",
+  "name": "code_insertion_example",
+  "description": "Example plan demonstrating code insertion capabilities",
+  "created": "2024-01-15T10:00:00Z",
+  "author": "Developer",
+  "operations": [
+    {
+      "type": "insert_code",
+      "description": "Add a new utility function after the CreateUser method",
+      "file": "examples/test_example.go",
+      "target": {
+        "functionName": "CreateUser"
+      },
+      "parameters": {
+        "codeSnippet": "// ValidateUserInput validates user input data\nfunc (s *UserService) ValidateUserInput(user *User) error {\n\tif user.Name == \"\" {\n\t\treturn errors.New(\"name is required\")\n\t}\n\tif user.Email == \"\" {\n\t\treturn errors.New(\"email is required\")\n\t}\n\tif user.Age < 0 {\n\t\treturn errors.New(\"age must be positive\")\n\t}\n\tif user.Age > 150 {\n\t\treturn errors.New(\"age must be reasonable\")\n\t}\n\treturn nil\n}",
+        "location": {
+          "type": "after_function",
+          "functionName": "CreateUser"
+        }
+      },
+      "fallback": {
+        "type": "at_end",
+        "description": "Insert at end of file if CreateUser function not found"
+      }
+    },
+    {
+      "type": "insert_code",
+      "description": "Add logging at the beginning of the ProcessData method",
+      "file": "examples/test_example.go",
+      "target": {
+        "functionName": "ProcessData"
+      },
+      "parameters": {
+        "codeSnippet": "\t// Add logging for debugging\n\tfmt.Printf(\"Processing %d data items\\n\", len(data))",
+        "location": {
+          "type": "inside_function",
+          "functionName": "ProcessData"
+        }
+      },
+      "fallback": {
+        "type": "skip",
+        "description": "Skip if ProcessData function not found"
+      }
+    },
+    {
+      "type": "insert_code",
+      "description": "Add a new interface at the beginning of the file",
+      "file": "examples/test_example.go",
+      "target": {
+        "functionName": "main"
+      },
+      "parameters": {
+        "codeSnippet": "// DataProcessor interface for processing data\ntype DataProcessor interface {\n\tProcessData(data []string) ([]string, error)\n}",
+        "location": {
+          "type": "at_beginning"
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "tags": ["insertion", "example", "utilities"],
+    "priority": "medium"
+  }
+} 

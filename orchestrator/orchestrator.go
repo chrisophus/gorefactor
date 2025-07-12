@@ -228,6 +228,8 @@ func (o *Orchestrator) executeOperation(operation *RefactoringOperation) *Operat
 		err = o.executeRenameVariable(operation, target, result)
 	case "move_method":
 		err = o.executeMoveMethod(operation, target, result)
+	case "insert_code":
+		err = o.executeInsertCode(operation, result)
 	default:
 		err = fmt.Errorf("unknown operation type: %s", operation.Type)
 	}
@@ -518,6 +520,58 @@ func (o *Orchestrator) executeMoveMethod(operation *RefactoringOperation, target
 		EndLine:     target.EndLine,
 		Description: "Moved method",
 	})
+	return nil
+}
+
+// executeInsertCode executes a code insertion operation
+func (o *Orchestrator) executeInsertCode(operation *RefactoringOperation, result *OperationResult) error {
+	// Get parameters
+	codeSnippet, ok := operation.Parameters["codeSnippet"].(string)
+	if !ok {
+		return fmt.Errorf("codeSnippet parameter is required for insert_code operation")
+	}
+
+	locationData, ok := operation.Parameters["location"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("location parameter is required for insert_code operation")
+	}
+
+	// Convert location data to InsertionLocation
+	location := &InsertionLocation{
+		Type: locationData["type"].(string),
+	}
+	if functionName, ok := locationData["functionName"].(string); ok {
+		location.FunctionName = functionName
+	}
+	if methodName, ok := locationData["methodName"].(string); ok {
+		location.MethodName = methodName
+	}
+	if receiverType, ok := locationData["receiverType"].(string); ok {
+		location.ReceiverType = receiverType
+	}
+	if lineNumber, ok := locationData["lineNumber"].(float64); ok {
+		location.LineNumber = int(lineNumber)
+	}
+	if codePattern, ok := locationData["codePattern"].(string); ok {
+		location.CodePattern = codePattern
+	}
+
+	// Create code inserter and insert code
+	inserter := NewCodeInserter()
+	insertionResult, err := inserter.InsertCode(operation.File, location, codeSnippet)
+	if err != nil {
+		return fmt.Errorf("failed to insert code: %w", err)
+	}
+
+	result.Changes = append(result.Changes, &CodeChange{
+		Type:        "insert_code",
+		File:        insertionResult.File,
+		StartLine:   insertionResult.StartLine,
+		EndLine:     insertionResult.EndLine,
+		Description: insertionResult.Description,
+		NewCode:     insertionResult.InsertedCode,
+	})
+
 	return nil
 }
 

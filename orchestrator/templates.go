@@ -112,6 +112,40 @@ func (tg *TemplateGenerator) GenerateMoveTemplate() *RefactoringOperation {
 	}
 }
 
+// GenerateInsertCodeTemplate creates a template for code insertion
+func (tg *TemplateGenerator) GenerateInsertCodeTemplate() *RefactoringOperation {
+	return &RefactoringOperation{
+		Type:        "insert_code",
+		Description: "Insert new code snippet into existing file",
+		File:        "path/to/your/file.go",
+		Target: &TargetSpecification{
+			FunctionName: "YourFunctionName",
+		},
+		Parameters: map[string]interface{}{
+			"codeSnippet": `// New function to add
+func newFunction() {
+    fmt.Println("Hello, World!")
+}`,
+			"location": map[string]interface{}{
+				"type":         "after_function",
+				"functionName": "YourFunctionName",
+			},
+		},
+		Conditions: []*Condition{
+			{
+				Type:     "existence",
+				Property: "functionExists",
+				Value:    true,
+				Operator: "eq",
+			},
+		},
+		Fallback: &FallbackStrategy{
+			Type:        "at_end",
+			Description: "Insert at end of file if target function not found",
+		},
+	}
+}
+
 // SaveTemplate saves a template to a JSON file
 func (tg *TemplateGenerator) SaveTemplate(template interface{}, filePath string) error {
 	data, err := json.MarshalIndent(template, "", "  ")
@@ -145,6 +179,7 @@ func (tg *TemplateGenerator) GenerateAllTemplates(outputDir string) error {
 		"inline_method":   tg.GenerateInlineTemplate(),
 		"rename_variable": tg.GenerateRenameTemplate(),
 		"move_method":     tg.GenerateMoveTemplate(),
+		"insert_code":     tg.GenerateInsertCodeTemplate(),
 	}
 
 	for opType, operation := range operations {
@@ -190,7 +225,8 @@ func (tg *TemplateGenerator) PrintTemplateHelp() {
 	fmt.Println("  3. inline_method_template.json - Method inlining operation")
 	fmt.Println("  4. rename_variable_template.json - Variable renaming operation")
 	fmt.Println("  5. move_method_template.json - Method moving operation")
-	fmt.Println("  6. comprehensive_example.json - Complete example with multiple operations")
+	fmt.Println("  6. insert_code_template.json - Code insertion operation")
+	fmt.Println("  7. comprehensive_example.json - Complete example with multiple operations")
 	fmt.Println()
 	fmt.Println("Targeting Strategies:")
 	fmt.Println("  - Line-based: Use startLine and endLine for precise targeting")

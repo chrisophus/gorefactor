@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "name": "simple_extraction_plan",
+  "description": "Extract a complex validation block into a separate method",
+  "created": "2024-01-15T10:00:00Z",
+  "author": "Developer",
+  "operations": [
+    {
+      "type": "extract_method",
+      "description": "Extract user validation logic into a separate method",
+      "file": "user_service.go",
+      "target": {
+        "functionName": "CreateUser",
+        "codePattern": "if err != nil",
+        "variableNames": ["user", "err"],
+        "functionCalls": ["validateUser", "saveUser"]
+      },
+      "parameters": {
+        "methodName": "validateUserInput"
+      },
+      "conditions": [
+        {
+          "type": "complexity",
+          "property": "controlStructures",
+          "value": 2,
+          "operator": "gte"
+        }
+      ],
+      "fallback": {
+        "type": "use_default",
+        "description": "Use the first function if target not found"
+      }
+    }
+  ],
+  "metadata": {
+    "tags": ["refactoring", "extraction", "validation"],
+    "priority": "medium"
+  }
+} 

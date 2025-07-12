@@ -1,0 +1,56 @@
+{
+  "version": "1.0",
+  "name": "test_extraction_plan",
+  "description": "Test plan for extracting validation logic from the example code",
+  "created": "2024-01-15T10:00:00Z",
+  "author": "Developer",
+  "operations": [
+    {
+      "type": "extract_method",
+      "description": "Extract user validation logic from CreateUser method",
+      "file": "examples/test_example.go",
+      "target": {
+        "functionName": "CreateUser",
+        "codePattern": "if user.Name == \"\"",
+        "variableNames": ["user", "err"],
+        "functionCalls": ["errors.New", "fmt.Errorf"]
+      },
+      "parameters": {
+        "methodName": "validateUser"
+      },
+      "conditions": [
+        {
+          "type": "complexity",
+          "property": "controlStructures",
+          "value": 2,
+          "operator": "gte"
+        }
+      ],
+      "fallback": {
+        "type": "use_default",
+        "description": "Use the first function if target not found"
+      }
+    },
+    {
+      "type": "extract_method",
+      "description": "Extract configuration setup logic from LoadConfig function",
+      "file": "examples/test_example.go",
+      "target": {
+        "functionName": "LoadConfig",
+        "codePattern": "config.DatabaseURL =",
+        "variableNames": ["config", "err"]
+      },
+      "parameters": {
+        "methodName": "setupDatabaseConfig"
+      },
+      "fallback": {
+        "type": "skip",
+        "description": "Skip if LoadConfig function not found"
+      }
+    }
+  ],
+  "metadata": {
+    "tags": ["test", "extraction", "validation"],
+    "priority": "low"
+  }
+} 

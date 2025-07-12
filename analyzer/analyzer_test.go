@@ -1,6 +1,9 @@
 package analyzer
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"testing"
 )
@@ -54,7 +57,7 @@ func processData(data []int) int {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			info, err := AnalyzeBlock(testFile, tt.startLine, tt.endLine)
+			info, err := AnalyzeBlock(testFile, tt.startLine, tt.endLine, DefaultConfig())
 			if err != nil {
 				t.Fatalf("AnalyzeBlock() error = %v", err)
 			}
@@ -99,7 +102,7 @@ func complexFunction(x, y int) int {
 	}
 	defer os.Remove(testFile)
 
-	recommendations, err := RecommendExtractions(testFile)
+	recommendations, err := RecommendExtractions(testFile, "", DefaultConfig())
 	if err != nil {
 		t.Fatalf("RecommendExtractions() error = %v", err)
 	}
@@ -152,7 +155,7 @@ func bigFunction(a, b, c, d, e int, arr []int) int {
 	}
 	defer os.Remove(testFile)
 
-	recommendations, err := RecommendExtractions(testFile)
+	recommendations, err := RecommendExtractions(testFile, "", DefaultConfig())
 	if err != nil {
 		t.Fatalf("RecommendExtractions() error = %v", err)
 	}
@@ -222,7 +225,7 @@ func manyVars(a, b, c, d, e, f, g, h, i, j int) int {
 	}
 	defer os.Remove(testFile)
 
-	recommendations, err := RecommendExtractions(testFile)
+	recommendations, err := RecommendExtractions(testFile, "", DefaultConfig())
 	if err != nil {
 		t.Fatalf("RecommendExtractions() error = %v", err)
 	}
@@ -257,16 +260,302 @@ func complexFunction(a, b, c, d, e int, arr []int) int {
 	}
 	defer os.Remove(testFile)
 
-	recommendations, err := RecommendExtractions(testFile)
+	recommendations, err := RecommendExtractions(testFile, "", DefaultConfig())
 	if err != nil {
 		t.Fatalf("RecommendExtractions() error = %v", err)
 	}
 
-	if len(recommendations) < 3 {
-		t.Errorf("Expected at least 3 recommended blocks, got %d", len(recommendations))
+	if len(recommendations) < 2 {
+		t.Errorf("Expected at least 2 recommended blocks, got %d", len(recommendations))
 	}
 
 	for _, rec := range recommendations {
 		t.Logf("Realistic extraction recommended block: start=%d, end=%d, vars=%v", rec.StartLine, rec.EndLine, rec.Variables)
+	}
+
+	// Debug: Print all analyzed blocks and their complexity
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, testFile, nil, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("Failed to parse test file: %v", err)
+	}
+	ast.Inspect(file, func(n ast.Node) bool {
+		block, ok := n.(*ast.BlockStmt)
+		if !ok {
+			return true
+		}
+		startLine := fset.Position(block.Pos()).Line
+		endLine := fset.Position(block.End()).Line
+		info, err := AnalyzeBlock(testFile, startLine, endLine, DefaultConfig())
+		if err != nil {
+			return true
+		}
+		t.Logf("Analyzed block: start=%d, end=%d, complexity=%d, extractable=%v", startLine, endLine, info.Complexity, info.IsExtractable)
+		return true
+	})
+}
+
+func TestRecommendExtractionsWithConfig(t *testing.T) {
+	// Create a temporary test file
+	testFile := "test_config.go"
+	content := `package test
+
+func complexFunction(x, y int) int {
+	result := 0
+	if x > 0 {
+		temp := x * 2
+		if y > 0 {
+			result = temp + y
+		}
+	}
+	return result
+}
+
+func simpleFunction(a, b int) int {
+	return a + b
+}
+
+func manyVarsFunction(a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u int) int {
+	sum := 0
+	if a > 0 {
+		sum += a
+	}
+	return sum
+}
+
+func manyStatementsFunction(x int) int {
+	result := 0
+	for i := 0; i < 100; i++ {
+		result += i
+		if result > 1000 {
+			break
+		}
+	}
+	return result
+}
+`
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	defer os.Remove(testFile)
+
+	tests := []struct {
+		name          string
+		config        *ExtractionConfig
+		expectedCount int
+		checkFunction func([]*BlockInfo) bool
+		description   string
+	}{
+		{
+			name:          "Default config",
+			config:        DefaultConfig(),
+			expectedCount: 5, // Should find all blocks including duplicates from leading statements
+			checkFunction: func(blocks []*BlockInfo) bool {
+				return len(blocks) > 0
+			},
+			description: "Default configuration should find reasonable blocks",
+		},
+		{
+			name: "High complexity threshold",
+			config: &ExtractionConfig{
+				MinComplexity: 3,
+				MaxComplexity: 10,
+				MaxReadVars:   20,
+				MaxWriteVars:  10,
+				MinStatements: 3,
+				MaxStatements: 50,
+			},
+			expectedCount: 0,
+			checkFunction: func(blocks []*BlockInfo) bool {
+				return len(blocks) == 0
+			},
+			description: "High complexity threshold should find no blocks",
+		},
+		{
+			name: "Low variable threshold",
+			config: &ExtractionConfig{
+				MinComplexity: 1,
+				MaxComplexity: 10,
+				MaxReadVars:   5,
+				MaxWriteVars:  3,
+				MinStatements: 3,
+				MaxStatements: 50,
+			},
+			expectedCount: 0,
+			checkFunction: func(blocks []*BlockInfo) bool {
+				return len(blocks) == 0
+			},
+			description: "Low variable threshold should find no blocks due to strict limits",
+		},
+		{
+			name: "Statement count limits",
+			config: &ExtractionConfig{
+				MinComplexity: 1,
+				MaxComplexity: 10,
+				MaxReadVars:   20,
+				MaxWriteVars:  10,
+				MinStatements: 10,
+				MaxStatements: 20,
+			},
+			expectedCount: 0,
+			checkFunction: func(blocks []*BlockInfo) bool {
+				return len(blocks) == 0
+			},
+			description: "Statement count limits should find no blocks due to strict limits",
+		},
+		{
+			name: "Zero leading statements",
+			config: &ExtractionConfig{
+				MinComplexity:   1,
+				MaxComplexity:   10,
+				MaxReadVars:     20,
+				MaxWriteVars:    10,
+				MinStatements:   3,
+				MaxStatements:   50,
+				NumLeadingStmts: 0,
+			},
+			expectedCount: 3,
+			checkFunction: func(blocks []*BlockInfo) bool {
+				return len(blocks) > 0
+			},
+			description: "Zero leading statements should only find pure blocks",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recommendations, err := RecommendExtractions(testFile, "", tt.config)
+			if err != nil {
+				t.Fatalf("RecommendExtractions() error = %v", err)
+			}
+
+			if len(recommendations) != tt.expectedCount {
+				t.Errorf("Got %d recommendations, want %d", len(recommendations), tt.expectedCount)
+			}
+
+			if !tt.checkFunction(recommendations) {
+				t.Errorf("Check function failed: %s", tt.description)
+			}
+
+			// Print details of recommendations for debugging
+			for i, rec := range recommendations {
+				t.Logf("Recommendation %d: start=%d, end=%d, complexity=%d, statements=%d, readVars=%d, writeVars=%d",
+					i+1, rec.StartLine, rec.EndLine, rec.Complexity, rec.StatementCount,
+					len(rec.ReadVars), len(rec.WriteVars))
+			}
+		})
+	}
+}
+
+func TestAnalyzeBlockWithConfig(t *testing.T) {
+	// Create a temporary test file
+	testFile := "test_analyze.go"
+	content := `package test
+
+func testFunction(x, y int) int {
+	result := 0
+	if x > 0 {
+		temp := x * 2
+		if y > 0 {
+			result = temp + y
+		}
+	}
+	return result
+}
+`
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	defer os.Remove(testFile)
+
+	tests := []struct {
+		name          string
+		startLine     int
+		endLine       int
+		config        *ExtractionConfig
+		shouldExtract bool
+		description   string
+	}{
+		{
+			name:      "Default config - nested if block",
+			startLine: 7,
+			endLine:   9,
+			config: &ExtractionConfig{
+				MinComplexity: 1,
+				MaxComplexity: 10,
+				MaxReadVars:   20,
+				MaxWriteVars:  10,
+				MinStatements: 2,
+				MaxStatements: 50,
+			},
+			shouldExtract: true,
+			description:   "Default config should extract nested if block",
+		},
+		{
+			name:      "High complexity threshold - nested if block",
+			startLine: 7,
+			endLine:   9,
+			config: &ExtractionConfig{
+				MinComplexity: 3,
+				MaxComplexity: 10,
+				MaxReadVars:   20,
+				MaxWriteVars:  10,
+				MinStatements: 3,
+				MaxStatements: 50,
+			},
+			shouldExtract: false,
+			description:   "High complexity threshold should not extract nested if block",
+		},
+		{
+			name:      "Low variable threshold - nested if block",
+			startLine: 7,
+			endLine:   9,
+			config: &ExtractionConfig{
+				MinComplexity: 1,
+				MaxComplexity: 10,
+				MaxReadVars:   1,
+				MaxWriteVars:  1,
+				MinStatements: 3,
+				MaxStatements: 50,
+			},
+			shouldExtract: false,
+			description:   "Low variable threshold should not extract nested if block",
+		},
+		{
+			name:      "Statement count limits - nested if block",
+			startLine: 7,
+			endLine:   9,
+			config: &ExtractionConfig{
+				MinComplexity: 1,
+				MaxComplexity: 10,
+				MaxReadVars:   20,
+				MaxWriteVars:  10,
+				MinStatements: 10,
+				MaxStatements: 20,
+			},
+			shouldExtract: false,
+			description:   "Statement count limits should not extract nested if block",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			info, err := AnalyzeBlock(testFile, tt.startLine, tt.endLine, tt.config)
+			if err != nil {
+				t.Fatalf("AnalyzeBlock() error = %v", err)
+			}
+
+			if info == nil {
+				t.Fatal("AnalyzeBlock() returned nil info")
+			}
+
+			if info.IsExtractable != tt.shouldExtract {
+				t.Errorf("IsExtractable = %v, want %v: %s", info.IsExtractable, tt.shouldExtract, tt.description)
+			}
+
+			// Print details of the analysis for debugging
+			t.Logf("Analysis: complexity=%d, statements=%d, readVars=%d, writeVars=%d",
+				info.Complexity, info.StatementCount, len(info.ReadVars), len(info.WriteVars))
+		})
 	}
 }

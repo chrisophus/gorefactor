@@ -1,0 +1,89 @@
+{
+  "version": "1.0",
+  "name": "multi_operation_plan",
+  "description": "Comprehensive refactoring plan with multiple operations using different targeting strategies",
+  "created": "2024-01-15T10:00:00Z",
+  "author": "Senior Developer",
+  "operations": [
+    {
+      "type": "extract_method",
+      "description": "Extract error handling logic into a reusable method",
+      "file": "api/handlers.go",
+      "target": {
+        "functionName": "handleRequest",
+        "codePattern": "if err != nil {",
+        "controlStructures": ["if", "return"],
+        "comments": ["TODO: Extract error handling"]
+      },
+      "parameters": {
+        "methodName": "handleError"
+      },
+      "conditions": [
+        {
+          "type": "complexity",
+          "property": "errorHandlingPaths",
+          "value": 1,
+          "operator": "gte"
+        }
+      ]
+    },
+    {
+      "type": "extract_method",
+      "description": "Extract data validation logic",
+      "file": "models/user.go",
+      "target": {
+        "methodName": "Validate",
+        "receiverType": "User",
+        "variableNames": ["user", "errors"],
+        "functionCalls": ["validateEmail", "validateAge"]
+      },
+      "parameters": {
+        "methodName": "validateUserData"
+      },
+      "fallback": {
+        "type": "skip",
+        "description": "Skip if validation method not found"
+      }
+    },
+    {
+      "type": "extract_method",
+      "description": "Extract database query logic",
+      "file": "repository/user_repository.go",
+      "target": {
+        "startLine": 45,
+        "endLine": 67
+      },
+      "parameters": {
+        "methodName": "buildUserQuery"
+      }
+    },
+    {
+      "type": "extract_method",
+      "description": "Extract configuration loading logic",
+      "file": "config/config.go",
+      "target": {
+        "functionName": "LoadConfig",
+        "codePattern": "viper.SetConfig",
+        "variableNames": ["config", "viper"],
+        "functionCalls": ["viper.ReadInConfig", "viper.Unmarshal"]
+      },
+      "parameters": {
+        "methodName": "loadConfigFile"
+      },
+      "conditions": [
+        {
+          "type": "complexity",
+          "property": "statementCount",
+          "value": 5,
+          "operator": "gte"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "tags": ["refactoring", "extraction", "api", "models", "repository"],
+    "priority": "high",
+    "estimatedTime": "2 hours",
+    "risk": "low"
+  }
+} 

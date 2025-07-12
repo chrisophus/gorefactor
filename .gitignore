@@ -1,0 +1,46 @@
+# Build artifacts
+gorefactor
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Generated templates (created by generate-templates command)
+test_templates/
+templates/
+generated_templates/
+
+# User-generated refactoring plans
+user_plans/
+refactoring_plans/
+plans/
+
+# Execution results
+results/
+execution_results/
+*.results.json
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Go specific
+*.test
+*.out
+go.work
+
+# Temporary files
+*.tmp
+*.temp 

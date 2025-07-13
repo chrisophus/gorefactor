@@ -308,7 +308,7 @@ func (da *DiffAnalyzer) analyzeAddedCode(filePath string, hunk *DiffHunk, addedL
 		}
 	}
 
-	// Detect method addition
+	// Detect method addition (check this before function addition)
 	if da.isMethodAddition(code) {
 		return &Change{
 			Type:        "method_addition",
@@ -411,6 +411,10 @@ func (da *DiffAnalyzer) analyzeModifiedCode(filePath string, hunk *DiffHunk, mod
 		return nil
 	}
 
+	if len(modifiedLines) < 2 {
+		return nil
+	}
+
 	oldCode := strings.Join(modifiedLines[0], "\n")
 	newCode := strings.Join(modifiedLines[1], "\n")
 
@@ -470,7 +474,7 @@ func (da *DiffAnalyzer) isFunctionAddition(code string) bool {
 }
 
 func (da *DiffAnalyzer) isMethodAddition(code string) bool {
-	return strings.Contains(code, "func (") && strings.Contains(code, ") ")
+	return strings.Contains(code, "func (") && strings.Contains(code, ") ") && !strings.Contains(code, "func ()")
 }
 
 func (da *DiffAnalyzer) isInterfaceAddition(code string) bool {

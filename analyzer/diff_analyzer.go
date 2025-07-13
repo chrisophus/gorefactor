@@ -663,8 +663,8 @@ func (da *DiffAnalyzer) createInsertCodeOperation(change *Change) *orchestrator.
 			},
 		},
 		Fallback: &orchestrator.FallbackStrategy{
-			Type:        "at_end",
-			Description: "Insert at end of file if target not found",
+			Type:        "skip",
+			Description: "Skip if target not found",
 		},
 	}
 }

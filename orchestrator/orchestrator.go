@@ -1,12 +1,16 @@
 package orchestrator
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"go/ast"
+	"go/format"
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -39,6 +43,11 @@ type TargetSpecification struct {
 	FunctionCalls     []string `json:"functionCalls,omitempty"`
 	ControlStructures []string `json:"controlStructures,omitempty"`
 	Comments          []string `json:"comments,omitempty"`
+
+	// Declaration-level targeting
+	TypeName  string `json:"typeName,omitempty"`  // For type declarations
+	ConstName string `json:"constName,omitempty"` // For const declarations
+	VarName   string `json:"varName,omitempty"`   // For var declarations
 
 	// Context-based targeting
 	BeforePattern   string            `json:"beforePattern,omitempty"`
@@ -199,22 +208,55 @@ func (o *Orchestrator) executeOperation(operation *RefactoringOperation) *Operat
 		return result
 	}
 
-	// Find the target using resilient targeting
-	target, err := o.findTarget(operation.Target, operation.File)
-	if err != nil {
-		// Try fallback strategy
-		if operation.Fallback != nil {
-			target, err = o.executeFallback(operation.Fallback, operation.File)
-			if err != nil {
-				result.Success = false
-				result.Error = fmt.Sprintf("Failed to find target and fallback: %v", err)
-				return result
+	// Special handling for insert_code with at_beginning on new files
+	if operation.Type == "insert_code" {
+		locationData, ok := operation.Parameters["location"].(map[string]interface{})
+		if ok {
+			locationType, _ := locationData["type"].(string)
+			if locationType == "at_beginning" {
+				// Check if file exists
+				if _, err := os.Stat(operation.File); os.IsNotExist(err) {
+					// Skip target finding for new file creation
+					err = o.executeInsertCode(operation, result)
+					if err != nil {
+						result.Success = false
+						result.Error = err.Error()
+					} else {
+						result.Success = true
+						result.Applied = true
+						result.Message = "Operation completed successfully"
+					}
+					return result
+				}
 			}
-			result.FallbackUsed = true
-		} else {
-			result.Success = false
-			result.Error = fmt.Sprintf("Failed to find target: %v", err)
-			return result
+		}
+	}
+
+	// Find the target using resilient targeting
+	// Note: insert_code operations may not need a target, but we'll still try to find one if specified
+	var target *TargetLocation
+	var err error
+	if operation.Target != nil {
+		target, err = o.findTarget(operation.Target, operation.File)
+		if err != nil {
+			// For insert_code, target is optional
+			if operation.Type != "insert_code" {
+				// Try fallback strategy
+				if operation.Fallback != nil {
+					target, err = o.executeFallback(operation.Fallback, operation.File)
+					if err != nil {
+						result.Success = false
+						result.Error = fmt.Sprintf("Failed to find target and fallback: %v", err)
+						return result
+					}
+					result.FallbackUsed = true
+				} else {
+					result.Success = false
+					result.Error = fmt.Sprintf("Failed to find target: %v", err)
+					return result
+				}
+			}
+			// For insert_code, we can proceed without a target
 		}
 	}
 
@@ -230,6 +272,8 @@ func (o *Orchestrator) executeOperation(operation *RefactoringOperation) *Operat
 		err = o.executeMoveMethod(operation, target, result)
 	case "insert_code":
 		err = o.executeInsertCode(operation, result)
+	case "create_file":
+		err = o.executeCreateFile(operation, result)
 	default:
 		err = fmt.Errorf("unknown operation type: %s", operation.Type)
 	}
@@ -239,8 +283,14 @@ func (o *Orchestrator) executeOperation(operation *RefactoringOperation) *Operat
 		result.Error = err.Error()
 	} else {
 		result.Success = true
-		result.Applied = true
-		result.Message = "Operation completed successfully"
+		// Only set Applied to true if it hasn't been explicitly set to false
+		// (e.g., by create_file with skip fallback)
+		if !result.Applied && result.Message == "" {
+			result.Applied = true
+		}
+		if result.Message == "" {
+			result.Message = "Operation completed successfully"
+		}
 	}
 
 	return result
@@ -313,6 +363,58 @@ func (o *Orchestrator) findTargetBySemantics(target *TargetSpecification, filePa
 			}
 		}
 
+		// Check type declarations
+		if genDecl, ok := n.(*ast.GenDecl); ok {
+			// First check if the entire GenDecl matches (for code patterns)
+			genDeclScore := o.calculateSemanticScore(genDecl, target, fset)
+			if genDeclScore > bestScore {
+				startLine := fset.Position(genDecl.Pos()).Line
+				endLine := fset.Position(genDecl.End()).Line
+				bestMatch = &TargetLocation{
+					File:      filePath,
+					StartLine: startLine,
+					EndLine:   endLine,
+					Function:  "", // Will be set below if we find a specific spec
+				}
+				bestScore = genDeclScore
+			}
+
+			for _, spec := range genDecl.Specs {
+				if typeSpec, ok := spec.(*ast.TypeSpec); ok {
+					score := o.calculateSemanticScore(typeSpec, target, fset)
+					if score > bestScore {
+						startLine := fset.Position(genDecl.Pos()).Line
+						endLine := fset.Position(genDecl.End()).Line
+						bestMatch = &TargetLocation{
+							File:      filePath,
+							StartLine: startLine,
+							EndLine:   endLine,
+							Function:  typeSpec.Name.Name, // Reuse Function field for type name
+						}
+						bestScore = score
+					}
+				}
+
+				// Check const/var declarations
+				if valueSpec, ok := spec.(*ast.ValueSpec); ok {
+					for _, name := range valueSpec.Names {
+						score := o.calculateSemanticScore(valueSpec, target, fset)
+						if score > bestScore {
+							startLine := fset.Position(genDecl.Pos()).Line
+							endLine := fset.Position(genDecl.End()).Line
+							bestMatch = &TargetLocation{
+								File:      filePath,
+								StartLine: startLine,
+								EndLine:   endLine,
+								Function:  name.Name, // Reuse Function field for const/var name
+							}
+							bestScore = score
+						}
+					}
+				}
+			}
+		}
+
 		return true
 	})
 
@@ -345,11 +447,49 @@ func (o *Orchestrator) calculateSemanticScore(node ast.Node, target *TargetSpeci
 		}
 	}
 
-	// Check code pattern match
+	// Check type name match
+	if target.TypeName != "" {
+		if typeSpec, ok := node.(*ast.TypeSpec); ok {
+			if typeSpec.Name.Name == target.TypeName {
+				score += 10
+			}
+		}
+	}
+
+	// Check const name match
+	if target.ConstName != "" {
+		if valueSpec, ok := node.(*ast.ValueSpec); ok {
+			for _, name := range valueSpec.Names {
+				if name.Name == target.ConstName {
+					score += 10
+					break
+				}
+			}
+		}
+	}
+
+	// Check var name match
+	if target.VarName != "" {
+		if valueSpec, ok := node.(*ast.ValueSpec); ok {
+			for _, name := range valueSpec.Names {
+				if name.Name == target.VarName {
+					score += 10
+					break
+				}
+			}
+		}
+	}
+
+	// Check code pattern match with regex support
 	if target.CodePattern != "" {
 		code := o.nodeToString(node, fset)
-		if strings.Contains(code, target.CodePattern) {
+
+		// Try regex first, fall back to simple contains
+		matched, err := regexp.MatchString(target.CodePattern, code)
+		if err == nil && matched {
 			score += 5
+		} else if strings.Contains(code, target.CodePattern) {
+			score += 3 // Lower score for non-regex match
 		}
 	}
 
@@ -388,9 +528,12 @@ func (o *Orchestrator) calculateSemanticScore(node ast.Node, target *TargetSpeci
 
 // nodeToString converts an AST node to a string representation
 func (o *Orchestrator) nodeToString(node ast.Node, fset *token.FileSet) string {
-	// This is a simplified implementation
-	// In a real implementation, you'd use go/format to properly format the code
-	return fmt.Sprintf("%v", node)
+	var buf bytes.Buffer
+	if err := format.Node(&buf, fset, node); err != nil {
+		// Fallback to simple string representation
+		return fmt.Sprintf("%v", node)
+	}
+	return buf.String()
 }
 
 // checkConditions verifies that all conditions are met
@@ -510,16 +653,271 @@ func (o *Orchestrator) executeRenameVariable(operation *RefactoringOperation, ta
 	return nil
 }
 
+// commentBelongsToDecl returns true if a comment group should be associated with a declaration.
+// If the comment lies inside the declaration's tokens, or if it ends within one blank line above the declaration.
+func commentBelongsToDecl(fileSet *token.FileSet, declStart, declEnd token.Pos, commentGroups *ast.CommentGroup) bool {
+	// Inside the declaration: always include.
+	if commentGroups.Pos() >= declStart && commentGroups.End() <= declEnd {
+		return true
+	}
+	// Otherwise, if the comment lies above the declaration and its end is within one blank line.
+	declLine := fileSet.Position(declStart).Line
+	commentGroupsEndLine := fileSet.Position(commentGroups.End()).Line
+	if declLine > commentGroupsEndLine && (declLine-commentGroupsEndLine) <= 2 {
+		return true
+	}
+	return false
+}
+
 // executeMoveMethod executes a method moving operation
 func (o *Orchestrator) executeMoveMethod(operation *RefactoringOperation, target *TargetLocation, result *OperationResult) error {
-	// Implementation for method moving
-	result.Changes = append(result.Changes, &CodeChange{
-		Type:        "move_method",
-		File:        target.File,
-		StartLine:   target.StartLine,
-		EndLine:     target.EndLine,
-		Description: "Moved method",
-	})
+	newFile, ok := operation.Parameters["newFile"].(string)
+	if !ok {
+		return fmt.Errorf("newFile parameter is required for move_method operation")
+	}
+
+	fset := token.NewFileSet()
+
+	// Parse source file
+	sourceNode, err := parser.ParseFile(fset, target.File, nil, parser.ParseComments)
+	if err != nil {
+		return fmt.Errorf("failed to parse source file: %w", err)
+	}
+
+	// Re-find the target using the same FileSet for accurate positions
+	// This ensures line numbers match between finding and moving
+	actualTarget, err := o.findTarget(operation.Target, target.File)
+	if err != nil {
+		return fmt.Errorf("failed to re-find target: %w", err)
+	}
+
+	// Find the declaration to move using line numbers from the same FileSet
+	var declToMove ast.Decl
+	var declIndex int = -1
+	var declType string
+
+	for i, decl := range sourceNode.Decls {
+		startLine := fset.Position(decl.Pos()).Line
+		endLine := fset.Position(decl.End()).Line
+
+		// Check if this declaration matches the target
+		// Declaration should start at or before target start and end at or after target end
+		if startLine <= actualTarget.StartLine && endLine >= actualTarget.EndLine {
+			declToMove = decl
+			declIndex = i
+
+			// Determine declaration type for better error messages and logging
+			switch d := decl.(type) {
+			case *ast.FuncDecl:
+				declType = fmt.Sprintf("function '%s'", d.Name.Name)
+			case *ast.GenDecl:
+				switch d.Tok {
+				case token.TYPE:
+					if len(d.Specs) > 0 {
+						if ts, ok := d.Specs[0].(*ast.TypeSpec); ok {
+							declType = fmt.Sprintf("type '%s'", ts.Name.Name)
+						} else {
+							declType = "type declaration"
+						}
+					} else {
+						declType = "type declaration"
+					}
+				case token.CONST:
+					declType = "const declaration"
+				case token.VAR:
+					if len(d.Specs) > 0 {
+						if vs, ok := d.Specs[0].(*ast.ValueSpec); ok && len(vs.Names) > 0 {
+							declType = fmt.Sprintf("var '%s'", vs.Names[0].Name)
+						} else {
+							declType = "var declaration"
+						}
+					} else {
+						declType = "var declaration"
+					}
+				default:
+					declType = "generic declaration"
+				}
+			default:
+				declType = "declaration"
+			}
+			break
+		}
+	}
+
+	if declToMove == nil {
+		// Provide helpful error message with available declarations
+		var declInfo []string
+		for i, decl := range sourceNode.Decls {
+			startLine := fset.Position(decl.Pos()).Line
+			endLine := fset.Position(decl.End()).Line
+			switch d := decl.(type) {
+			case *ast.FuncDecl:
+				declInfo = append(declInfo, fmt.Sprintf("  %d: function '%s' (lines %d-%d)", i, d.Name.Name, startLine, endLine))
+			case *ast.GenDecl:
+				switch d.Tok {
+				case token.TYPE:
+					if len(d.Specs) > 0 {
+						if ts, ok := d.Specs[0].(*ast.TypeSpec); ok {
+							declInfo = append(declInfo, fmt.Sprintf("  %d: type '%s' (lines %d-%d)", i, ts.Name.Name, startLine, endLine))
+						}
+					}
+				case token.CONST:
+					declInfo = append(declInfo, fmt.Sprintf("  %d: const block (lines %d-%d)", i, startLine, endLine))
+				case token.VAR:
+					declInfo = append(declInfo, fmt.Sprintf("  %d: var block (lines %d-%d)", i, startLine, endLine))
+				}
+			}
+		}
+		declList := strings.Join(declInfo, "\n")
+		if declList == "" {
+			declList = "  (no declarations found)"
+		}
+		return fmt.Errorf("declaration not found at lines %d-%d in file %s\nAvailable declarations:\n%s", actualTarget.StartLine, actualTarget.EndLine, target.File, declList)
+	}
+
+	// Extract the code snippet for the declaration
+	var declBuf bytes.Buffer
+	if err := format.Node(&declBuf, fset, declToMove); err != nil {
+		return fmt.Errorf("failed to format declaration: %w", err)
+	}
+	declCode := declBuf.String()
+
+	// Collect comments associated with this declaration
+	declStart := declToMove.Pos()
+	declEnd := declToMove.End()
+	var commentsToMove []*ast.CommentGroup
+	var newSourceComments []*ast.CommentGroup
+
+	for _, commentGroup := range sourceNode.Comments {
+		if commentBelongsToDecl(fset, declStart, declEnd, commentGroup) {
+			commentsToMove = append(commentsToMove, commentGroup)
+		} else {
+			newSourceComments = append(newSourceComments, commentGroup)
+		}
+	}
+
+	// Remove declaration from source file
+	sourceNode.Decls = append(sourceNode.Decls[:declIndex], sourceNode.Decls[declIndex+1:]...)
+	// Update source file comments
+	sourceNode.Comments = newSourceComments
+
+	// Write modified source file
+	var sourceBuf bytes.Buffer
+	if err := format.Node(&sourceBuf, fset, sourceNode); err != nil {
+		return fmt.Errorf("failed to format source file: %w", err)
+	}
+	if err := os.WriteFile(target.File, sourceBuf.Bytes(), 0644); err != nil {
+		return fmt.Errorf("failed to write source file: %w", err)
+	}
+
+	// Run goimports on source file to fix imports
+	cmd := exec.Command("goimports", "-w", target.File)
+	if err := cmd.Run(); err != nil {
+		// Log but don't fail - goimports might not be available
+		// This is a best-effort operation
+	}
+
+	// Parse or create destination file
+	var destNode *ast.File
+	destExists := true
+	if _, err := os.Stat(newFile); os.IsNotExist(err) {
+		destExists = false
+	}
+
+	if destExists {
+		destNode, err = parser.ParseFile(fset, newFile, nil, parser.ParseComments)
+		if err != nil {
+			return fmt.Errorf("failed to parse destination file: %w", err)
+		}
+	} else {
+		// Create new file with package declaration
+		// Try to extract package name from source file
+		packageName := sourceNode.Name.Name
+		destNode = &ast.File{
+			Name:     ast.NewIdent(packageName),
+			Decls:    []ast.Decl{},
+			Comments: []*ast.CommentGroup{},
+		}
+	}
+
+	// Add declaration to destination file (at the end)
+	destNode.Decls = append(destNode.Decls, declToMove)
+	// Add comments to destination file
+	destNode.Comments = append(destNode.Comments, commentsToMove...)
+
+	// Write destination file
+	var destBuf bytes.Buffer
+	if err := format.Node(&destBuf, fset, destNode); err != nil {
+		return fmt.Errorf("failed to format destination file: %w", err)
+	}
+	destContent := destBuf.Bytes()
+	if err := os.WriteFile(newFile, destContent, 0644); err != nil {
+		return fmt.Errorf("failed to write destination file: %w", err)
+	}
+
+	// Run goimports on destination file to fix imports
+	cmd = exec.Command("goimports", "-w", newFile)
+	if err := cmd.Run(); err != nil {
+		// Log but don't fail - goimports might not be available
+		// This is a best-effort operation
+	}
+
+	// Re-read the file after goimports may have modified it
+	updatedDestContent, err := os.ReadFile(newFile)
+	if err != nil {
+		updatedDestContent = destContent // Fallback to original content
+	}
+
+	// Parse the written file to get accurate line numbers for the added declaration
+	destFset := token.NewFileSet()
+	parsedDestNode, err := parser.ParseFile(destFset, newFile, updatedDestContent, parser.ParseComments)
+	if err == nil && len(parsedDestNode.Decls) > 0 {
+		// Find the last declaration (the one we just added)
+		lastDecl := parsedDestNode.Decls[len(parsedDestNode.Decls)-1]
+		destStartLine := destFset.Position(lastDecl.Pos()).Line
+		destEndLine := destFset.Position(lastDecl.End()).Line
+
+		// Record changes with detailed information
+		result.Changes = append(result.Changes, &CodeChange{
+			Type:        "move_method",
+			File:        target.File,
+			StartLine:   actualTarget.StartLine,
+			EndLine:     actualTarget.EndLine,
+			Description: fmt.Sprintf("Moved %s to %s", declType, newFile),
+			OldCode:     declCode,
+			NewCode:     "",
+		})
+
+		result.Changes = append(result.Changes, &CodeChange{
+			Type:        "move_method",
+			File:        newFile,
+			StartLine:   destStartLine,
+			EndLine:     destEndLine,
+			Description: fmt.Sprintf("Added %s from %s", declType, target.File),
+			NewCode:     declCode,
+		})
+	} else {
+		// Fallback if parsing fails - still record the change
+		result.Changes = append(result.Changes, &CodeChange{
+			Type:        "move_method",
+			File:        target.File,
+			StartLine:   actualTarget.StartLine,
+			EndLine:     actualTarget.EndLine,
+			Description: fmt.Sprintf("Moved %s to %s", declType, newFile),
+			OldCode:     declCode,
+			NewCode:     "",
+		})
+
+		result.Changes = append(result.Changes, &CodeChange{
+			Type:        "move_method",
+			File:        newFile,
+			StartLine:   1,
+			EndLine:     1,
+			Description: fmt.Sprintf("Added %s from %s", declType, target.File),
+			NewCode:     declCode,
+		})
+	}
+
 	return nil
 }
 
@@ -575,6 +973,43 @@ func (o *Orchestrator) executeInsertCode(operation *RefactoringOperation, result
 	return nil
 }
 
+// executeCreateFile creates a new file with the specified content
+func (o *Orchestrator) executeCreateFile(operation *RefactoringOperation, result *OperationResult) error {
+	codeSnippet, ok := operation.Parameters["codeSnippet"].(string)
+	if !ok {
+		return fmt.Errorf("codeSnippet parameter is required for create_file operation")
+	}
+
+	// Check if file already exists
+	if _, err := os.Stat(operation.File); err == nil {
+		// File exists - check if we should skip or overwrite
+		if operation.Fallback != nil && operation.Fallback.Type == "skip" {
+			result.Success = true
+			result.Applied = false
+			result.Message = "File already exists and fallback is skip"
+			result.Changes = []*CodeChange{} // No changes applied
+			return nil
+		}
+	}
+
+	// Write the file
+	if err := os.WriteFile(operation.File, []byte(codeSnippet), 0644); err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+
+	lines := strings.Split(codeSnippet, "\n")
+	result.Changes = append(result.Changes, &CodeChange{
+		Type:        "create_file",
+		File:        operation.File,
+		StartLine:   1,
+		EndLine:     len(lines),
+		Description: "Created new file",
+		NewCode:     codeSnippet,
+	})
+
+	return nil
+}
+
 // validatePlan validates a refactoring plan
 func (o *Orchestrator) validatePlan(plan *RefactoringPlan) error {
 	if plan.Name == "" {
@@ -601,8 +1036,9 @@ func (o *Orchestrator) validateOperation(operation *RefactoringOperation) error 
 	if operation.File == "" {
 		return fmt.Errorf("operation file is required")
 	}
-	if operation.Target == nil {
-		return fmt.Errorf("operation target is required")
+	// Target is optional for insert_code and create_file operations
+	if operation.Target == nil && operation.Type != "insert_code" && operation.Type != "create_file" {
+		return fmt.Errorf("operation target is required for operation type: %s", operation.Type)
 	}
 
 	return nil

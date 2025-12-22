@@ -42,24 +42,73 @@ type InsertionResult struct {
 // InsertCode inserts a code snippet into a Go file at the specified location
 func (ci *CodeInserter) InsertCode(filePath string, location *InsertionLocation, codeSnippet string) (*InsertionResult, error) {
 	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse file: %w", err)
+
+	// Check if file exists
+	fileExists := true
+	_, err := os.Stat(filePath)
+	if os.IsNotExist(err) {
+		fileExists = false
+	}
+
+	var node *ast.File
+
+	if fileExists {
+		// Parse existing file
+		node, err = parser.ParseFile(fset, filePath, nil, parser.ParseComments)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse file: %w", err)
+		}
+	} else {
+		// For at_beginning on new files, we can just write the snippet directly
+		if location.Type == "at_beginning" {
+			// Write the file directly with the code snippet
+			if err := os.WriteFile(filePath, []byte(codeSnippet), 0644); err != nil {
+				return nil, fmt.Errorf("failed to create file: %w", err)
+			}
+
+			lines := strings.Split(codeSnippet, "\n")
+			return &InsertionResult{
+				File:         filePath,
+				Location:     "at beginning of file (new file)",
+				StartLine:    1,
+				EndLine:      len(lines),
+				Description:  "Created new file with code",
+				InsertedCode: codeSnippet,
+			}, nil
+		}
+
+		// For other locations, parse the code snippet as a file to create the AST
+		// Check if snippet already has a package declaration
+		trimmed := strings.TrimSpace(codeSnippet)
+		var codeToParse string
+		if strings.HasPrefix(trimmed, "package ") {
+			// Already has package declaration, use as-is
+			codeToParse = codeSnippet
+		} else {
+			// Wrap the snippet in a package declaration for parsing
+			codeToParse = fmt.Sprintf("package main\n\n%s", codeSnippet)
+		}
+
+		// Parse with file path so it gets added to the file set
+		node, err = parser.ParseFile(fset, filePath, []byte(codeToParse), parser.ParseComments)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse code snippet: %w", err)
+		}
 	}
 
 	var result *InsertionResult
 
 	switch location.Type {
 	case "before_function":
-		result, err = ci.insertBeforeFunction(node, fset, location, codeSnippet)
+		result, err = ci.insertBeforeFunction(filePath, node, fset, location, codeSnippet)
 	case "after_function":
-		result, err = ci.insertAfterFunction(node, fset, location, codeSnippet)
+		result, err = ci.insertAfterFunction(filePath, node, fset, location, codeSnippet)
 	case "inside_function":
-		result, err = ci.insertInsideFunction(node, fset, location, codeSnippet)
+		result, err = ci.insertInsideFunction(filePath, node, fset, location, codeSnippet)
 	case "at_end":
-		result, err = ci.insertAtEnd(node, fset, codeSnippet)
+		result, err = ci.insertAtEnd(filePath, node, fset, codeSnippet)
 	case "at_beginning":
-		result, err = ci.insertAtBeginning(node, fset, codeSnippet)
+		result, err = ci.insertAtBeginning(filePath, node, fset, codeSnippet)
 	default:
 		return nil, fmt.Errorf("unknown insertion location type: %s", location.Type)
 	}
@@ -77,7 +126,7 @@ func (ci *CodeInserter) InsertCode(filePath string, location *InsertionLocation,
 }
 
 // insertBeforeFunction inserts code before a specific function
-func (ci *CodeInserter) insertBeforeFunction(node *ast.File, fset *token.FileSet, location *InsertionLocation, codeSnippet string) (*InsertionResult, error) {
+func (ci *CodeInserter) insertBeforeFunction(filePath string, node *ast.File, fset *token.FileSet, location *InsertionLocation, codeSnippet string) (*InsertionResult, error) {
 	// Parse the code snippet
 	snippetNode, err := ci.parseCodeSnippet(codeSnippet)
 	if err != nil {
@@ -100,7 +149,7 @@ func (ci *CodeInserter) insertBeforeFunction(node *ast.File, fset *token.FileSet
 	endLine := startLine + len(strings.Split(codeSnippet, "\n")) - 1
 
 	return &InsertionResult{
-		File:         fset.File(node.Pos()).Name(),
+		File:         filePath,
 		Location:     fmt.Sprintf("before function %s", targetFunc.Name.Name),
 		StartLine:    startLine,
 		EndLine:      endLine,
@@ -110,7 +159,7 @@ func (ci *CodeInserter) insertBeforeFunction(node *ast.File, fset *token.FileSet
 }
 
 // insertAfterFunction inserts code after a specific function
-func (ci *CodeInserter) insertAfterFunction(node *ast.File, fset *token.FileSet, location *InsertionLocation, codeSnippet string) (*InsertionResult, error) {
+func (ci *CodeInserter) insertAfterFunction(filePath string, node *ast.File, fset *token.FileSet, location *InsertionLocation, codeSnippet string) (*InsertionResult, error) {
 	// Parse the code snippet
 	snippetNode, err := ci.parseCodeSnippet(codeSnippet)
 	if err != nil {
@@ -133,7 +182,7 @@ func (ci *CodeInserter) insertAfterFunction(node *ast.File, fset *token.FileSet,
 	endLine := startLine + len(strings.Split(codeSnippet, "\n")) - 1
 
 	return &InsertionResult{
-		File:         fset.File(node.Pos()).Name(),
+		File:         filePath,
 		Location:     fmt.Sprintf("after function %s", targetFunc.Name.Name),
 		StartLine:    startLine,
 		EndLine:      endLine,
@@ -143,7 +192,7 @@ func (ci *CodeInserter) insertAfterFunction(node *ast.File, fset *token.FileSet,
 }
 
 // insertInsideFunction inserts code inside a specific function
-func (ci *CodeInserter) insertInsideFunction(node *ast.File, fset *token.FileSet, location *InsertionLocation, codeSnippet string) (*InsertionResult, error) {
+func (ci *CodeInserter) insertInsideFunction(filePath string, node *ast.File, fset *token.FileSet, location *InsertionLocation, codeSnippet string) (*InsertionResult, error) {
 	// Parse the code snippet as statements
 	snippetStmts, err := ci.parseCodeSnippetAsStatements(codeSnippet)
 	if err != nil {
@@ -168,7 +217,7 @@ func (ci *CodeInserter) insertInsideFunction(node *ast.File, fset *token.FileSet
 	endLine := startLine + len(strings.Split(codeSnippet, "\n")) - 1
 
 	return &InsertionResult{
-		File:         fset.File(node.Pos()).Name(),
+		File:         filePath,
 		Location:     fmt.Sprintf("inside function %s", targetFunc.Name.Name),
 		StartLine:    startLine,
 		EndLine:      endLine,
@@ -178,7 +227,7 @@ func (ci *CodeInserter) insertInsideFunction(node *ast.File, fset *token.FileSet
 }
 
 // insertAtEnd inserts code at the end of the file
-func (ci *CodeInserter) insertAtEnd(node *ast.File, fset *token.FileSet, codeSnippet string) (*InsertionResult, error) {
+func (ci *CodeInserter) insertAtEnd(filePath string, node *ast.File, fset *token.FileSet, codeSnippet string) (*InsertionResult, error) {
 	// Parse the code snippet
 	snippetNode, err := ci.parseCodeSnippet(codeSnippet)
 	if err != nil {
@@ -192,7 +241,7 @@ func (ci *CodeInserter) insertAtEnd(node *ast.File, fset *token.FileSet, codeSni
 	endLine := startLine + len(strings.Split(codeSnippet, "\n")) - 1
 
 	return &InsertionResult{
-		File:         fset.File(node.Pos()).Name(),
+		File:         filePath,
 		Location:     "at end of file",
 		StartLine:    startLine,
 		EndLine:      endLine,
@@ -202,7 +251,7 @@ func (ci *CodeInserter) insertAtEnd(node *ast.File, fset *token.FileSet, codeSni
 }
 
 // insertAtBeginning inserts code at the beginning of the file
-func (ci *CodeInserter) insertAtBeginning(node *ast.File, fset *token.FileSet, codeSnippet string) (*InsertionResult, error) {
+func (ci *CodeInserter) insertAtBeginning(filePath string, node *ast.File, fset *token.FileSet, codeSnippet string) (*InsertionResult, error) {
 	// Parse the code snippet
 	snippetNode, err := ci.parseCodeSnippet(codeSnippet)
 	if err != nil {
@@ -216,7 +265,7 @@ func (ci *CodeInserter) insertAtBeginning(node *ast.File, fset *token.FileSet, c
 	endLine := startLine + len(strings.Split(codeSnippet, "\n")) - 1
 
 	return &InsertionResult{
-		File:         fset.File(node.Pos()).Name(),
+		File:         filePath,
 		Location:     "at beginning of file",
 		StartLine:    startLine,
 		EndLine:      endLine,
@@ -227,8 +276,16 @@ func (ci *CodeInserter) insertAtBeginning(node *ast.File, fset *token.FileSet, c
 
 // parseCodeSnippet parses a code snippet into AST nodes
 func (ci *CodeInserter) parseCodeSnippet(codeSnippet string) ([]ast.Decl, error) {
-	// Wrap the snippet in a package declaration for parsing
-	wrappedCode := fmt.Sprintf("package main\n\n%s", codeSnippet)
+	// Check if snippet already has a package declaration
+	trimmed := strings.TrimSpace(codeSnippet)
+	var wrappedCode string
+	if strings.HasPrefix(trimmed, "package ") {
+		// Already has package declaration, use as-is
+		wrappedCode = codeSnippet
+	} else {
+		// Wrap the snippet in a package declaration for parsing
+		wrappedCode = fmt.Sprintf("package main\n\n%s", codeSnippet)
+	}
 
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, "", []byte(wrappedCode), parser.ParseComments)

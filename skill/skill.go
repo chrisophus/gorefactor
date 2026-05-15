@@ -1,4 +1,4 @@
-// Package skill provides a Claude Code skill interface for gorefactor operations.
+// Command skill-refactor provides a Claude Code skill interface for gorefactor operations.
 // This tool makes refactoring decisions intelligently and applies them efficiently.
 package main
 
@@ -116,48 +116,54 @@ func handleAnalyze(args []string) (SkillOutput, error) {
 		"--min-statements", "3",
 		"--max-statements", "40")
 
-	output, err := cmd.Output()
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return SkillOutput{Success: false, Message: fmt.Sprintf("Failed to analyze: %v", err)}, nil
+		return SkillOutput{
+			Success: false,
+			Message: fmt.Sprintf("Failed to analyze: %v", err),
+			Details: map[string]interface{}{
+				"stderr": string(output),
+			},
+		}, nil
 	}
 
-	// Parse recommendations (top-level array)
-	var blocks []map[string]interface{}
+	// Parse recommendations (top-level array) into typed struct
+	type BlockInfo struct {
+		StartLine      int      `json:"startLine"`
+		EndLine        int      `json:"endLine"`
+		Complexity     int      `json:"complexity"`
+		StatementCount int      `json:"statementCount"`
+		ReadVars       []string `json:"readVars"`
+		WriteVars      []string `json:"writeVars"`
+		Extractable    bool     `json:"extractable"`
+		IsExtractable  bool     `json:"isExtractable"`
+	}
+
+	var blocks []BlockInfo
 	if err := json.Unmarshal(output, &blocks); err != nil {
-		return SkillOutput{Success: false, Message: fmt.Sprintf("Failed to parse results: %v", err)}, nil
+		return SkillOutput{
+			Success: false,
+			Message: fmt.Sprintf("Failed to parse results: %v", err),
+			Details: map[string]interface{}{
+				"output": string(output),
+			},
+		}, nil
 	}
 
 	// Convert to recommendations
 	recommendations := []ExtractionRecommendation{}
-	for _, blockMap := range blocks {
+	for _, block := range blocks {
+		// Use isExtractable if extractable is false (handle both field names)
+		isExtractable := block.Extractable || block.IsExtractable
+
 		rec := ExtractionRecommendation{
-			StartLine:      int(blockMap["startLine"].(float64)),
-			EndLine:        int(blockMap["endLine"].(float64)),
-			Complexity:     int(blockMap["complexity"].(float64)),
-			StatementCount: int(blockMap["statementCount"].(float64)),
-		}
-
-		// Handle both "extractable" and "isExtractable" field names
-		if extractable, ok := blockMap["extractable"]; ok {
-			rec.Extractable = extractable.(bool)
-		} else if isExtractable, ok := blockMap["isExtractable"]; ok {
-			rec.Extractable = isExtractable.(bool)
-		}
-
-		// Extract variables
-		if readVars, ok := blockMap["readVars"].([]interface{}); ok {
-			for _, v := range readVars {
-				if str, ok := v.(string); ok {
-					rec.ReadVars = append(rec.ReadVars, str)
-				}
-			}
-		}
-		if writeVars, ok := blockMap["writeVars"].([]interface{}); ok {
-			for _, v := range writeVars {
-				if str, ok := v.(string); ok {
-					rec.WriteVars = append(rec.WriteVars, str)
-				}
-			}
+			StartLine:      block.StartLine,
+			EndLine:        block.EndLine,
+			Complexity:     block.Complexity,
+			StatementCount: block.StatementCount,
+			ReadVars:       block.ReadVars,
+			WriteVars:      block.WriteVars,
+			Extractable:    isExtractable,
 		}
 
 		// Calculate priority (1-10)
@@ -196,49 +202,56 @@ func handleRefactor(args []string) (SkillOutput, error) {
 		}
 	}
 
-	// Analyze first
-	analyzeOutput, err := handleAnalyze([]string{file})
-	if err != nil {
-		return analyzeOutput, err
-	}
-
-	if len(analyzeOutput.Recommendations) == 0 {
-		return SkillOutput{
-			Success:   true,
-			Operation: "refactor",
-			File:      file,
-			Message:   "No refactoring opportunities found",
-		}, nil
-	}
-
-	// Apply top recommendations
 	changes := []Change{}
-	for i := 0; i < maxExtractions && i < len(analyzeOutput.Recommendations); i++ {
-		rec := analyzeOutput.Recommendations[i]
-		if !rec.Extractable {
-			continue
+	applied := 0
+
+	// Apply refactorings iteratively, re-analyzing after each successful extraction
+	// This ensures line numbers remain accurate as the file changes
+	for applied < maxExtractions {
+		// Analyze current state
+		analyzeOutput, err := handleAnalyze([]string{file})
+		if err != nil {
+			break
 		}
 
-		methodName := rec.SuggestedName
+		if len(analyzeOutput.Recommendations) == 0 {
+			break // No more opportunities
+		}
+
+		// Find the highest priority extractable recommendation
+		var bestRec *ExtractionRecommendation
+		for i := range analyzeOutput.Recommendations {
+			rec := &analyzeOutput.Recommendations[i]
+			if rec.Extractable && (bestRec == nil || rec.Priority > bestRec.Priority) {
+				bestRec = rec
+			}
+		}
+
+		if bestRec == nil {
+			break // No extractable recommendations
+		}
+
+		// Apply extraction
+		methodName := bestRec.SuggestedName
 		cmd := exec.Command(*gorefactorPath, "extract", file,
-			strconv.Itoa(rec.StartLine),
-			strconv.Itoa(rec.EndLine),
+			strconv.Itoa(bestRec.StartLine),
+			strconv.Itoa(bestRec.EndLine),
 			methodName)
 
-		if _, err := cmd.Output(); err != nil {
-			continue // Skip failed extractions
+		_, err = cmd.CombinedOutput()
+		if err != nil {
+			// Skip failed extraction and continue
+			continue
 		}
 
 		changes = append(changes, Change{
 			Type:       "extract_method",
-			StartLine:  rec.StartLine,
-			EndLine:    rec.EndLine,
+			StartLine:  bestRec.StartLine,
+			EndLine:    bestRec.EndLine,
 			MethodName: methodName,
 		})
 
-		if len(changes) >= maxExtractions {
-			break
-		}
+		applied++
 	}
 
 	return SkillOutput{
@@ -260,18 +273,47 @@ func handleExtract(args []string) (SkillOutput, error) {
 	}
 
 	file := args[0]
-	startLine := args[1]
-	endLine := args[2]
+	startLineStr := args[1]
+	endLineStr := args[2]
 	methodName := args[3]
 
-	cmd := exec.Command(*gorefactorPath, "extract", file, startLine, endLine, methodName)
-
-	if _, err := cmd.Output(); err != nil {
-		return SkillOutput{Success: false, Message: fmt.Sprintf("Extraction failed: %v", err)}, nil
+	// Validate line numbers are valid integers
+	start, err := strconv.Atoi(startLineStr)
+	if err != nil {
+		return SkillOutput{
+			Success: false,
+			Message: fmt.Sprintf("Invalid startLine: %q is not a valid integer", startLineStr),
+		}, nil
 	}
 
-	start, _ := strconv.Atoi(startLine)
-	end, _ := strconv.Atoi(endLine)
+	end, err := strconv.Atoi(endLineStr)
+	if err != nil {
+		return SkillOutput{
+			Success: false,
+			Message: fmt.Sprintf("Invalid endLine: %q is not a valid integer", endLineStr),
+		}, nil
+	}
+
+	// Validate line range
+	if start <= 0 || end <= 0 || start > end {
+		return SkillOutput{
+			Success: false,
+			Message: fmt.Sprintf("Invalid line range: startLine=%d, endLine=%d (must be positive with start <= end)", start, end),
+		}, nil
+	}
+
+	cmd := exec.Command(*gorefactorPath, "extract", file, startLineStr, endLineStr, methodName)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return SkillOutput{
+			Success: false,
+			Message: fmt.Sprintf("Extraction failed: %v", err),
+			Details: map[string]interface{}{
+				"stderr": string(output),
+			},
+		}, nil
+	}
 
 	return SkillOutput{
 		Success:   true,

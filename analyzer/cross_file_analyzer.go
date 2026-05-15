@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 // DuplicateBlock represents a code block that appears in multiple files
@@ -43,6 +44,7 @@ type CrossFileAnalysis struct {
 
 // FindDuplicateBlocks analyzes multiple files to find duplicate code blocks
 // Returns deduplicated blocks found in multiple files, sorted by impact
+// Note: Files that cannot be read or parsed are skipped silently
 func FindDuplicateBlocks(files []string) ([]DuplicateBlock, error) {
 	// Map of normalized code hash -> list of locations
 	codeMap := make(map[string][]Location)
@@ -58,12 +60,16 @@ func FindDuplicateBlocks(files []string) ([]DuplicateBlock, error) {
 
 		fileContent, err := os.ReadFile(filePath)
 		if err != nil {
+			// Skip files that cannot be read (e.g., permission denied)
+			// This is acceptable as we're looking for patterns, not comprehensive coverage
 			continue
 		}
 
 		fset := token.NewFileSet()
 		node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 		if err != nil {
+			// Skip files that cannot be parsed (e.g., syntax errors)
+			// This is acceptable as we're looking for patterns, not comprehensive coverage
 			continue
 		}
 
@@ -121,11 +127,14 @@ func extractBlocksFromFunc(fn *ast.FuncDecl, filePath string, fset *token.FileSe
 		return
 	}
 
+	// Split file once to avoid O(n) splits for each block extraction
+	fileLines := strings.Split(fileContent, "\n")
+
 	startLine := fset.Position(fn.Body.Pos()).Line
 	endLine := fset.Position(fn.Body.End()).Line
 
 	// Extract the full function body
-	code := extractCodeFromLines(fileContent, startLine, endLine)
+	code := extractCodeFromLinesSlice(fileLines, startLine, endLine)
 	if code != "" {
 		normalized := NormalizeCode(code)
 		hash := hashCode(normalized)
@@ -156,7 +165,7 @@ func extractBlocksFromFunc(fn *ast.FuncDecl, filePath string, fset *token.FileSe
 
 			// Only extract substantial blocks
 			if bEndLine-bStartLine >= 2 {
-				code := extractCodeFromLines(fileContent, bStartLine, bEndLine)
+				code := extractCodeFromLinesSlice(fileLines, bStartLine, bEndLine)
 				if code != "" {
 					normalized := NormalizeCode(code)
 					hash := hashCode(normalized)
@@ -180,9 +189,10 @@ func extractBlocksFromFunc(fn *ast.FuncDecl, filePath string, fset *token.FileSe
 
 // NormalizeCode removes variable names and formatting for semantic comparison
 func NormalizeCode(code string) string {
-	// Remove comments
+	// Remove single-line comments
 	code = regexp.MustCompile(`//.*`).ReplaceAllString(code, "")
-	code = regexp.MustCompile(`/\*.*?\*/`).ReplaceAllString(code, "")
+	// Remove multi-line comments (using (?s) flag so . matches newlines)
+	code = regexp.MustCompile(`(?s)/\*.*?\*/`).ReplaceAllString(code, "")
 
 	// Remove extra whitespace
 	code = regexp.MustCompile(`\s+`).ReplaceAllString(code, " ")
@@ -232,9 +242,8 @@ func hashCode(code string) string {
 	return fmt.Sprintf("%x", hash)
 }
 
-// extractCodeFromLines extracts code from a file based on line numbers
-func extractCodeFromLines(fileContent string, startLine, endLine int) string {
-	lines := strings.Split(fileContent, "\n")
+// extractCodeFromLinesSlice extracts code from pre-split lines (avoids repeated string splitting)
+func extractCodeFromLinesSlice(lines []string, startLine, endLine int) string {
 	if startLine < 1 || startLine > len(lines) || endLine < startLine || endLine > len(lines) {
 		return ""
 	}
@@ -336,7 +345,7 @@ func AnalyzeCrossFile(dirPath string) (*CrossFileAnalysis, error) {
 		TotalFunctions:    totalFuncs,
 		TotalMethods:      totalMethods,
 		EstimatedSavings:  estimateSavings(duplicates),
-		AnalysisTimestamp: "",
+		AnalysisTimestamp: time.Now().Format(time.RFC3339),
 	}
 
 	return analysis, nil

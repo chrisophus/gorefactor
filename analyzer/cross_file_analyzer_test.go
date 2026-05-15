@@ -302,7 +302,7 @@ func TestFindDuplicateBlocks(t *testing.T) {
 	file1 := filepath.Join(tmpDir, "service1.go")
 	content1 := `package main
 
-func ProcessData() {
+func ProcessData() int {
 	x := 0
 	for i := 0; i < 10; i++ {
 		x += i
@@ -318,7 +318,7 @@ func ProcessData() {
 	file2 := filepath.Join(tmpDir, "service2.go")
 	content2 := `package main
 
-func CalculateSum() {
+func CalculateSum() int {
 	total := 0
 	for j := 0; j < 10; j++ {
 		total += j
@@ -334,7 +334,7 @@ func CalculateSum() {
 	file3 := filepath.Join(tmpDir, "utils.go")
 	content3 := `package main
 
-func Different() {
+func Different() string {
 	name := "test"
 	return name
 }

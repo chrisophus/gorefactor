@@ -126,8 +126,8 @@ func (o *Orchestrator) executeOperation(operation *RefactoringOperation) *Operat
 	if operation.Target != nil {
 		target, err = o.findTarget(operation.Target, operation.File)
 		if err != nil {
-			// For insert_code, target is optional
-			if operation.Type != "insert_code" {
+			// For insert_code and rename_declaration, target is optional
+			if operation.Type != "insert_code" && operation.Type != "rename_declaration" {
 				// Try fallback strategy
 				if operation.Fallback != nil {
 					target, err = o.executeFallback(operation.Fallback, operation.File)
@@ -161,6 +161,8 @@ func (o *Orchestrator) executeOperation(operation *RefactoringOperation) *Operat
 		err = o.executeReplaceCode(operation, result)
 	case "delete_declaration":
 		err = o.executeDeleteDeclaration(operation, target, result)
+	case "rename_declaration":
+		err = o.executeRenameDeclaration(operation, result)
 	default:
 		err = fmt.Errorf("unknown operation type: %s", operation.Type)
 	}

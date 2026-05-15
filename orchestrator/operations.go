@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -460,5 +461,65 @@ func (o *Orchestrator) executeDeleteDeclaration(operation *RefactoringOperation,
 		EndLine:     endLine,
 		Description: fmt.Sprintf("Deleted declaration at lines %d-%d from %s", startLine, endLine, operation.File),
 	})
+	return nil
+}
+func (o *Orchestrator) executeRenameDeclaration(operation *RefactoringOperation, result *OperationResult) error {
+	oldName := ""
+	if operation.Target != nil {
+		oldName = operation.Target.FunctionName
+		if oldName == "" {
+			oldName = operation.Target.MethodName
+		}
+	}
+	if oldName == "" {
+		return fmt.Errorf("target functionName or methodName is required for rename_declaration")
+	}
+	newName, _ := operation.Parameters["newName"].(string)
+	if newName == "" {
+		return fmt.Errorf("newName parameter is required for rename_declaration")
+	}
+	if len(oldName) > 0 && oldName[0] >= 'A' && oldName[0] <= 'Z' {
+		return fmt.Errorf("rename_declaration only supports unexported identifiers; use gopls rename for exported symbols")
+	}
+	dir := filepath.Dir(operation.File)
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, dir, nil, parser.ParseComments)
+	if err != nil {
+		return fmt.Errorf("failed to parse package directory: %w", err)
+	}
+	for _, pkg := range pkgs {
+		for filename, fileNode := range pkg.Files {
+			changed := false
+			ast.Inspect(fileNode, func(n ast.Node) bool {
+				if ident, ok := n.(*ast.Ident); ok && ident.Name == oldName {
+					ident.Name = newName
+					changed = true
+				}
+				return true
+			})
+			if !changed {
+				continue
+			}
+			var buf bytes.Buffer
+			if err := format.Node(&buf, fset, fileNode); err != nil {
+				return fmt.Errorf("failed to format %s: %w", filename, err)
+			}
+			normalized, nErr := format.Source(buf.Bytes())
+			if nErr != nil {
+				normalized = buf.Bytes()
+			}
+			if err := os.WriteFile(filename, normalized, 0644); err != nil {
+				return fmt.Errorf("failed to write %s: %w", filename, err)
+			}
+			result.Changes = append(result.Changes, &CodeChange{
+				Type:        "rename_declaration",
+				File:        filename,
+				Description: fmt.Sprintf("Renamed %q to %q in %s", oldName, newName, filename),
+			})
+		}
+	}
+	if len(result.Changes) == 0 {
+		return fmt.Errorf("identifier %q not found in package", oldName)
+	}
 	return nil
 }

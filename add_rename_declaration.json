@@ -1,0 +1,16 @@
+{
+  "version": "1.0",
+  "name": "add_rename_declaration",
+  "description": "Add rename_declaration operation — renames an unexported identifier across all files in the package",
+  "operations": [
+    {
+      "type": "insert_code",
+      "description": "Add executeRenameDeclaration to operations.go",
+      "file": "orchestrator/operations.go",
+      "parameters": {
+        "location": { "type": "at_end" },
+        "codeSnippet": "func (o *Orchestrator) executeRenameDeclaration(operation *RefactoringOperation, result *OperationResult) error {\n\toldName := \"\"\n\tif operation.Target != nil {\n\t\toldName = operation.Target.FunctionName\n\t\tif oldName == \"\" {\n\t\t\toldName = operation.Target.MethodName\n\t\t}\n\t}\n\tif oldName == \"\" {\n\t\treturn fmt.Errorf(\"target functionName or methodName is required for rename_declaration\")\n\t}\n\tnewName, _ := operation.Parameters[\"newName\"].(string)\n\tif newName == \"\" {\n\t\treturn fmt.Errorf(\"newName parameter is required for rename_declaration\")\n\t}\n\tif len(oldName) > 0 && oldName[0] >= 'A' && oldName[0] <= 'Z' {\n\t\treturn fmt.Errorf(\"rename_declaration only supports unexported identifiers; use gopls rename for exported symbols\")\n\t}\n\tdir := filepath.Dir(operation.File)\n\tfset := token.NewFileSet()\n\tpkgs, err := parser.ParseDir(fset, dir, nil, parser.ParseComments)\n\tif err != nil {\n\t\treturn fmt.Errorf(\"failed to parse package directory: %w\", err)\n\t}\n\tfor _, pkg := range pkgs {\n\t\tfor filename, fileNode := range pkg.Files {\n\t\t\tchanged := false\n\t\t\tast.Inspect(fileNode, func(n ast.Node) bool {\n\t\t\t\tif ident, ok := n.(*ast.Ident); ok && ident.Name == oldName {\n\t\t\t\t\tident.Name = newName\n\t\t\t\t\tchanged = true\n\t\t\t\t}\n\t\t\t\treturn true\n\t\t\t})\n\t\t\tif !changed {\n\t\t\t\tcontinue\n\t\t\t}\n\t\t\tvar buf bytes.Buffer\n\t\t\tif err := format.Node(&buf, fset, fileNode); err != nil {\n\t\t\t\treturn fmt.Errorf(\"failed to format %s: %w\", filename, err)\n\t\t\t}\n\t\t\tnormalized, nErr := format.Source(buf.Bytes())\n\t\t\tif nErr != nil {\n\t\t\t\tnormalized = buf.Bytes()\n\t\t\t}\n\t\t\tif err := os.WriteFile(filename, normalized, 0644); err != nil {\n\t\t\t\treturn fmt.Errorf(\"failed to write %s: %w\", filename, err)\n\t\t\t}\n\t\t\tresult.Changes = append(result.Changes, &CodeChange{\n\t\t\t\tType:        \"rename_declaration\",\n\t\t\t\tFile:        filename,\n\t\t\t\tDescription: fmt.Sprintf(\"Renamed %q to %q in %s\", oldName, newName, filename),\n\t\t\t})\n\t\t}\n\t}\n\tif len(result.Changes) == 0 {\n\t\treturn fmt.Errorf(\"identifier %q not found in package\", oldName)\n\t}\n\treturn nil\n}"
+      }
+    }
+  ]
+}

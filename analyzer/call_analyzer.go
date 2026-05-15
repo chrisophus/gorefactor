@@ -15,31 +15,31 @@ type CallSite struct {
 	CallerName     string `json:"callerName"`
 	CallerReceiver string `json:"callerReceiver,omitempty"` // For method callers
 	Snippet        string `json:"snippet"`
-	IsIndirect     bool   `json:"isIndirect"` // Called via interface or function pointer
+	IsIndirect     bool   `json:"isIndirect"`             // Called via interface or function pointer
 	IndirectType   string `json:"indirectType,omitempty"` // Interface or func type
 }
 
 // CallerAnalysis contains all information about callers of a symbol
 type CallerAnalysis struct {
-	TargetName      string      `json:"targetName"`
-	TargetReceiver  string      `json:"targetReceiver,omitempty"`
-	TargetFile      string      `json:"targetFile"`
-	TargetLine      int         `json:"targetLine"`
-	DirectCallers   []CallSite  `json:"directCallers"`
-	IndirectCallers []CallSite  `json:"indirectCallers"`
-	TestCallers     []CallSite  `json:"testCallers"`
-	TotalCallCount  int         `json:"totalCallCount"`
-	IsExported      bool        `json:"isExported"`
-	Confidence      float64     `json:"confidence"` // 0-1, confidence in analysis
+	TargetName      string     `json:"targetName"`
+	TargetReceiver  string     `json:"targetReceiver,omitempty"`
+	TargetFile      string     `json:"targetFile"`
+	TargetLine      int        `json:"targetLine"`
+	DirectCallers   []CallSite `json:"directCallers"`
+	IndirectCallers []CallSite `json:"indirectCallers"`
+	TestCallers     []CallSite `json:"testCallers"`
+	TotalCallCount  int        `json:"totalCallCount"`
+	IsExported      bool       `json:"isExported"`
+	Confidence      float64    `json:"confidence"` // 0-1, confidence in analysis
 }
 
 // CallChain represents a chain of function calls (A calls B calls C)
 type CallChain struct {
-	Start     string         `json:"start"`
-	Chains    [][]CallSite   `json:"chains"`
-	MaxDepth  int            `json:"maxDepth"`
-	IsCircular bool          `json:"isCircular"`
-	Confidence float64       `json:"confidence"`
+	Start      string       `json:"start"`
+	Chains     [][]CallSite `json:"chains"`
+	MaxDepth   int          `json:"maxDepth"`
+	IsCircular bool         `json:"isCircular"`
+	Confidence float64      `json:"confidence"`
 }
 
 // CallAnalyzer analyzes function calls
@@ -125,8 +125,8 @@ func (ca *CallAnalyzer) FindCallChain(startName, startReceiver, targetName, targ
 	}
 
 	chain := &CallChain{
-		Start:     startName,
-		MaxDepth:  maxDepth,
+		Start:      startName,
+		MaxDepth:   maxDepth,
 		Confidence: 0.85,
 	}
 

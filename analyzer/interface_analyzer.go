@@ -8,23 +8,23 @@ import (
 
 // Implementation represents a type that implements an interface
 type Implementation struct {
-	TypeName             string        `json:"typeName"`
-	Package              string        `json:"package"`
-	Methods              []MethodMatch `json:"methods"`
-	ImplementedMethods   []string      `json:"implementedMethods"`
-	MissingMethods       []string      `json:"missingMethods"`
-	ExplicitImpl          bool          `json:"explicitImpl"`
-	Confidence           float64       `json:"confidence"`
-	File                 string        `json:"file"`
-	Line                 int           `json:"line"`
+	TypeName           string        `json:"typeName"`
+	Package            string        `json:"package"`
+	Methods            []MethodMatch `json:"methods"`
+	ImplementedMethods []string      `json:"implementedMethods"`
+	MissingMethods     []string      `json:"missingMethods"`
+	ExplicitImpl       bool          `json:"explicitImpl"`
+	Confidence         float64       `json:"confidence"`
+	File               string        `json:"file"`
+	Line               int           `json:"line"`
 }
 
 // MethodMatch represents a method that matches an interface method
 type MethodMatch struct {
-	Name       string `json:"name"`
-	Receiver   string `json:"receiver"`
-	Line       int    `json:"line"`
-	Signature  string `json:"signature"`
+	Name      string `json:"name"`
+	Receiver  string `json:"receiver"`
+	Line      int    `json:"line"`
+	Signature string `json:"signature"`
 }
 
 // InterfaceInfo represents an interface definition
@@ -38,19 +38,19 @@ type InterfaceInfo struct {
 
 // ImplementationAnalysis contains all information about implementations
 type ImplementationAnalysis struct {
-	Interface           InterfaceInfo      `json:"interface"`
-	Implementations     []Implementation   `json:"implementations"`
-	PartialImplements   []Implementation   `json:"partialImplements"`
-	DeadImplementations []Implementation   `json:"deadImplementations"`
-	TotalImplementations int               `json:"totalImplementations"`
-	Confidence          float64            `json:"confidence"`
+	Interface            InterfaceInfo    `json:"interface"`
+	Implementations      []Implementation `json:"implementations"`
+	PartialImplements    []Implementation `json:"partialImplements"`
+	DeadImplementations  []Implementation `json:"deadImplementations"`
+	TotalImplementations int              `json:"totalImplementations"`
+	Confidence           float64          `json:"confidence"`
 }
 
 // InterfaceAnalyzer analyzes interface implementations
 type InterfaceAnalyzer struct {
-	symbolAnalyzer *UseAnalyzer
-	files          []string
-	interfaces     map[string]*InterfaceInfo
+	symbolAnalyzer  *UseAnalyzer
+	files           []string
+	interfaces      map[string]*InterfaceInfo
 	implementations map[string][]Implementation
 }
 

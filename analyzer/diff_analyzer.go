@@ -634,24 +634,6 @@ func (da *DiffAnalyzer) extractVariableName(code string) string {
 	return ""
 }
 
-func (da *DiffAnalyzer) extractVariables(code string) []string {
-	re := regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*)\s*:=`)
-	matches := re.FindAllStringSubmatch(code, -1)
-	var vars []string
-	for _, match := range matches {
-		if len(match) > 1 {
-			vars = append(vars, match[1])
-		}
-	}
-	return vars
-}
-
-func (da *DiffAnalyzer) removeVariableNames(code string) string {
-	// Remove variable names to compare structure
-	re := regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*)\s*:=`)
-	return re.ReplaceAllString(code, "VAR :=")
-}
-
 // consolidateChanges consolidates related changes (e.g., multiple renames of the same variable)
 func (da *DiffAnalyzer) consolidateChanges(changes []*Change) []*Change {
 	if len(changes) <= 1 {

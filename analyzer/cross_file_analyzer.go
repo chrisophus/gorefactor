@@ -16,13 +16,13 @@ import (
 
 // DuplicateBlock represents a code block that appears in multiple files
 type DuplicateBlock struct {
-	Pattern        string       `json:"pattern"`
-	Hash           string       `json:"hash"`
-	Locations      []Location   `json:"locations"`
-	StatementCount int          `json:"statementCount"`
-	Complexity     int          `json:"complexity"`
-	ImpactScore    int          `json:"impactScore"`
-	Recommendation string       `json:"recommendation"`
+	Pattern        string     `json:"pattern"`
+	Hash           string     `json:"hash"`
+	Locations      []Location `json:"locations"`
+	StatementCount int        `json:"statementCount"`
+	Complexity     int        `json:"complexity"`
+	ImpactScore    int        `json:"impactScore"`
+	Recommendation string     `json:"recommendation"`
 }
 
 // Location represents where a duplicate block is found
@@ -34,12 +34,12 @@ type Location struct {
 
 // CrossFileAnalysis holds all cross-file analysis results
 type CrossFileAnalysis struct {
-	DuplicateBlocks     []DuplicateBlock `json:"duplicateBlocks"`
-	TotalFiles          int              `json:"totalFiles"`
-	TotalFunctions      int              `json:"totalFunctions"`
-	TotalMethods        int              `json:"totalMethods"`
-	EstimatedSavings    string           `json:"estimatedSavings"`
-	AnalysisTimestamp   string           `json:"analysisTimestamp"`
+	DuplicateBlocks   []DuplicateBlock `json:"duplicateBlocks"`
+	TotalFiles        int              `json:"totalFiles"`
+	TotalFunctions    int              `json:"totalFunctions"`
+	TotalMethods      int              `json:"totalMethods"`
+	EstimatedSavings  string           `json:"estimatedSavings"`
+	AnalysisTimestamp string           `json:"analysisTimestamp"`
 }
 
 // FindDuplicateBlocks analyzes multiple files to find duplicate code blocks

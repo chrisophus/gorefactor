@@ -13,16 +13,16 @@ import (
 type UseContext string
 
 const (
-	UsageCall      UseContext = "call"       // func() or method() call
-	UsageRead      UseContext = "read"       // var used in expression
-	UsageWrite     UseContext = "write"      // var = something (assignment target)
-	UsageDefine    UseContext = "define"     // var := value (declaration)
-	UsageParameter UseContext = "parameter"  // in function parameters
-	UsageReturn    UseContext = "return"     // in return statement
-	UsageDefer     UseContext = "defer"      // defer statement
-	UsagePass      UseContext = "pass"       // passed as function argument
-	UsageType      UseContext = "type"       // used as a type
-	UsageReceiver  UseContext = "receiver"   // method receiver
+	UsageCall      UseContext = "call"      // func() or method() call
+	UsageRead      UseContext = "read"      // var used in expression
+	UsageWrite     UseContext = "write"     // var = something (assignment target)
+	UsageDefine    UseContext = "define"    // var := value (declaration)
+	UsageParameter UseContext = "parameter" // in function parameters
+	UsageReturn    UseContext = "return"    // in return statement
+	UsageDefer     UseContext = "defer"     // defer statement
+	UsagePass      UseContext = "pass"      // passed as function argument
+	UsageType      UseContext = "type"      // used as a type
+	UsageReceiver  UseContext = "receiver"  // method receiver
 )
 
 // SymbolType represents the kind of symbol

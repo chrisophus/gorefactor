@@ -4,7 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	
+
 	"os"
 	"path/filepath"
 	"strings"
@@ -142,31 +142,31 @@ func TestCountStatements(t *testing.T) {
 
 func TestCalculateImpactScore(t *testing.T) {
 	tests := []struct {
-		name           string
-		locations      int
-		statements     int
-		complexity     int
+		name            string
+		locations       int
+		statements      int
+		complexity      int
 		expectedInRange bool // just check it's reasonable
 	}{
 		{
-			name:           "duplicate in 2 files",
-			locations:      2,
-			statements:     10,
-			complexity:     2,
+			name:            "duplicate in 2 files",
+			locations:       2,
+			statements:      10,
+			complexity:      2,
 			expectedInRange: true,
 		},
 		{
-			name:           "duplicate in 3 files",
-			locations:      3,
-			statements:     20,
-			complexity:     5,
+			name:            "duplicate in 3 files",
+			locations:       3,
+			statements:      20,
+			complexity:      5,
 			expectedInRange: true,
 		},
 		{
-			name:           "single location (no duplicate)",
-			locations:      1,
-			statements:     10,
-			complexity:     2,
+			name:            "single location (no duplicate)",
+			locations:       1,
+			statements:      10,
+			complexity:      2,
 			expectedInRange: true,
 		},
 	}

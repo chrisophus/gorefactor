@@ -15,13 +15,13 @@ import (
 
 // SkillOutput represents the structured output for Claude Code
 type SkillOutput struct {
-	Success      bool                     `json:"success"`
-	Operation    string                   `json:"operation"`
-	File         string                   `json:"file"`
-	Changes      []Change                 `json:"changes"`
+	Success         bool                       `json:"success"`
+	Operation       string                     `json:"operation"`
+	File            string                     `json:"file"`
+	Changes         []Change                   `json:"changes"`
 	Recommendations []ExtractionRecommendation `json:"recommendations,omitempty"`
-	Message      string                   `json:"message"`
-	Details      map[string]interface{}   `json:"details,omitempty"`
+	Message         string                     `json:"message"`
+	Details         map[string]interface{}     `json:"details,omitempty"`
 }
 
 // Change represents a code change made

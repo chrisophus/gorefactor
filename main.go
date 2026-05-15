@@ -169,116 +169,13 @@ func generateTemplates(args []string) error {
 	return nil
 }
 
-func recommendExtractions(args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("missing file path")
-	}
+// Check for help flag
 
-	// Check for help flag
-	if args[0] == "--help" {
-		printUsage()
-		return nil
-	}
+// Create default config
 
-	// Create default config
-	config := analyzer.DefaultConfig()
-	var functionName string
+// Parse optional configuration flags
 
-	// Parse optional configuration flags
-	for i := 1; i < len(args); i++ {
-		switch args[i] {
-		case "--help":
-			printUsage()
-			return nil
-		case "--min-complexity":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --min-complexity")
-			}
-			val, err := strconv.Atoi(args[i+1])
-			if err != nil {
-				return fmt.Errorf("invalid value for --min-complexity: %v", err)
-			}
-			config.MinComplexity = val
-			i++
-		case "--max-complexity":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --max-complexity")
-			}
-			val, err := strconv.Atoi(args[i+1])
-			if err != nil {
-				return fmt.Errorf("invalid value for --max-complexity: %v", err)
-			}
-			config.MaxComplexity = val
-			i++
-		case "--max-read-vars":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --max-read-vars")
-			}
-			val, err := strconv.Atoi(args[i+1])
-			if err != nil {
-				return fmt.Errorf("invalid value for --max-read-vars: %v", err)
-			}
-			config.MaxReadVars = val
-			i++
-		case "--max-write-vars":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --max-write-vars")
-			}
-			val, err := strconv.Atoi(args[i+1])
-			if err != nil {
-				return fmt.Errorf("invalid value for --max-write-vars: %v", err)
-			}
-			config.MaxWriteVars = val
-			i++
-		case "--min-statements":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --min-statements")
-			}
-			val, err := strconv.Atoi(args[i+1])
-			if err != nil {
-				return fmt.Errorf("invalid value for --min-statements: %v", err)
-			}
-			config.MinStatements = val
-			i++
-		case "--max-statements":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --max-statements")
-			}
-			val, err := strconv.Atoi(args[i+1])
-			if err != nil {
-				return fmt.Errorf("invalid value for --max-statements: %v", err)
-			}
-			config.MaxStatements = val
-			i++
-		case "--num-leading-stmts":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --num-leading-stmts")
-			}
-			val, err := strconv.Atoi(args[i+1])
-			if err != nil {
-				return fmt.Errorf("invalid value for --num-leading-stmts: %v", err)
-			}
-			config.NumLeadingStmts = val
-			i++
-		case "--function":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --function")
-			}
-			functionName = args[i+1]
-			i++
-		}
-	}
-
-	recommendations, err := analyzer.RecommendExtractions(args[0], functionName, config)
-	if err != nil {
-		return err
-	}
-
-	// Output as JSON
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(recommendations)
-}
+// Output as JSON
 
 func orchestrateRefactoring(args []string) error {
 	if len(args) < 1 {
@@ -489,4 +386,77 @@ func execOperation(args []string) error {
 		return fmt.Errorf("one or more operations failed")
 	}
 	return nil
+}
+
+func recommendExtractions(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("missing file path")
+	}
+	if args[0] == "--help" {
+		printUsage()
+		return nil
+	}
+	config, functionName, err := parseRecommendFlags(args[1:])
+	if err != nil {
+		return err
+	}
+	if config == nil {
+		return nil
+	}
+	recommendations, err := analyzer.RecommendExtractions(args[0], functionName, config)
+	if err != nil {
+		return err
+	}
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(recommendations)
+}
+func applyIntFlag(flag, val string, config *analyzer.ExtractionConfig) error {
+	n, err := strconv.Atoi(val)
+	if err != nil {
+		return fmt.Errorf("invalid value for %s: %v", flag, err)
+	}
+	switch flag {
+	case "--min-complexity":
+		config.MinComplexity = n
+	case "--max-complexity":
+		config.MaxComplexity = n
+	case "--max-read-vars":
+		config.MaxReadVars = n
+	case "--max-write-vars":
+		config.MaxWriteVars = n
+	case "--min-statements":
+		config.MinStatements = n
+	case "--max-statements":
+		config.MaxStatements = n
+	case "--num-leading-stmts":
+		config.NumLeadingStmts = n
+	}
+	return nil
+}
+func parseRecommendFlags(args []string) (*analyzer.ExtractionConfig, string, error) {
+	config := analyzer.DefaultConfig()
+	var functionName string
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--help":
+			printUsage()
+			return nil, "", nil
+		case "--function":
+			if i+1 >= len(args) {
+				return nil, "", fmt.Errorf("missing value for --function")
+			}
+			functionName = args[i+1]
+			i++
+		default:
+			if i+1 >= len(args) {
+				return nil, "", fmt.Errorf("missing value for %s", args[i])
+			}
+			if err := applyIntFlag(args[i], args[i+1], config); err != nil {
+				return nil, "", err
+			}
+			i++
+		}
+	}
+	return config, functionName, nil
 }

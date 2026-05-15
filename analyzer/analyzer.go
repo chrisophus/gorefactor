@@ -61,237 +61,36 @@ type BlockInfo struct {
 
 // RecommendExtractions analyzes a file and returns recommendations for method extraction.
 // If functionName is non-empty, only the specified function is analyzed; otherwise, all functions are analyzed.
-func RecommendExtractions(filePath string, functionName string, config *ExtractionConfig) ([]*BlockInfo, error) {
-	if config == nil {
-		config = DefaultConfig()
-	}
 
-	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
-	if err != nil {
-		return nil, err
-	}
+// Helper to recursively analyze all blocks
 
-	var recommendations []*BlockInfo
+// Avoid duplicates by checking for overlapping ranges
 
-	// Helper to recursively analyze all blocks
-	recursiveAnalyze := func(parent ast.Node, fset *token.FileSet, config *ExtractionConfig) {
-		ast.Inspect(parent, func(n ast.Node) bool {
-			block, ok := n.(*ast.BlockStmt)
-			if ok {
-				startLine := fset.Position(block.Pos()).Line
-				endLine := fset.Position(block.End()).Line
-				info, err := AnalyzeBlock(filePath, startLine, endLine, config)
-				if err == nil && info != nil && info.IsExtractable {
-					// Avoid duplicates by checking for overlapping ranges
-					duplicate := false
-					for _, rec := range recommendations {
-						if rec.StartLine == info.StartLine && rec.EndLine == info.EndLine {
-							duplicate = true
-							break
-						}
-					}
-					if !duplicate {
-						recommendations = append(recommendations, info)
-					}
-				}
-			}
-			return true
-		})
-	}
-
-	ast.Inspect(node, func(n ast.Node) bool {
-		if n == nil {
-			return false
-		}
-		// Look for function declarations
-		if funcDecl, ok := n.(*ast.FuncDecl); ok {
-			if functionName == "" || funcDecl.Name.Name == functionName {
-				if funcDecl.Body != nil {
-					recursiveAnalyze(funcDecl.Body, fset, config)
-				}
-			}
-		}
-		return true
-	})
-
-	return recommendations, nil
-}
+// Look for function declarations
 
 // AnalyzeBlock analyzes a code block and returns information about it
-func AnalyzeBlock(filePath string, startLine, endLine int, config *ExtractionConfig) (*BlockInfo, error) {
-	if config == nil {
-		config = DefaultConfig()
-	}
 
-	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
-	if err != nil {
-		return nil, err
-	}
+// Find all nodes in the given line range
 
-	info := &BlockInfo{
-		StartLine: startLine,
-		EndLine:   endLine,
-	}
+// Analyze all nodes in the range
 
-	// Find all nodes in the given line range
-	var nodesInRange []ast.Node
-	ast.Inspect(node, func(n ast.Node) bool {
-		if n == nil {
-			return false
-		}
-		pos := fset.Position(n.Pos())
-		end := fset.Position(n.End())
-		if pos.Line >= startLine && end.Line <= endLine {
-			nodesInRange = append(nodesInRange, n)
-		}
-		return true
-	})
+// Track variable assignments
 
-	if len(nodesInRange) == 0 {
-		return nil, nil
-	}
+// Track variable reads
 
-	// Analyze all nodes in the range
-	for _, n := range nodesInRange {
-		switch node := n.(type) {
-		case *ast.BlockStmt:
-			analyzeBlock(node, info)
-		case *ast.AssignStmt:
-			// Track variable assignments
-			for _, lhs := range node.Lhs {
-				if ident, ok := lhs.(*ast.Ident); ok {
-					info.WriteVars = append(info.WriteVars, ident.Name)
-					info.Assignments = append(info.Assignments, ident.Name)
-				}
-			}
-			info.StatementCount++
-		case *ast.Ident:
-			// Track variable reads
-			if node.Obj != nil {
-				info.ReadVars = append(info.ReadVars, node.Name)
-			}
-		case *ast.IfStmt:
-			info.ControlStructures++
-			info.Complexity++
-			info.StatementCount++
-		case *ast.ForStmt, *ast.RangeStmt, *ast.SwitchStmt:
-			info.ControlStructures++
-			info.Complexity++
-			info.StatementCount++
-		case *ast.BinaryExpr:
-			if node.Op == token.LAND || node.Op == token.LOR {
-				info.LogicalOperators++
-				info.Complexity++
-			}
-		case *ast.CallExpr:
-			if ident, ok := node.Fun.(*ast.Ident); ok {
-				info.FunctionCalls = append(info.FunctionCalls, ident.Name)
-			}
-			info.StatementCount++
-		case *ast.ReturnStmt:
-			info.ReturnCount++
-			info.StatementCount++
-		case *ast.ExprStmt:
-			info.StatementCount++
-		case *ast.DeclStmt:
-			info.StatementCount++
-		}
-	}
+// Track variables and their usage
 
-	info.IsExtractable = isBlockExtractable(info, config)
-	return info, nil
-}
+// Track variable reads
 
-func analyzeBlock(block *ast.BlockStmt, info *BlockInfo) {
-	// Track variables and their usage
-	readVars := make(map[string]bool)
-	writeVars := make(map[string]bool)
-	assignments := make(map[string]bool)
-	variableScopes := make(map[string][]int)
-	currentNesting := 0
-	maxNesting := 0
+// Track variable scope
 
-	ast.Inspect(block, func(n ast.Node) bool {
-		switch node := n.(type) {
-		case *ast.Ident:
-			// Track variable reads
-			if node.Obj != nil {
-				readVars[node.Name] = true
-				// Track variable scope
-				if _, exists := variableScopes[node.Name]; !exists {
-					variableScopes[node.Name] = []int{int(node.Pos())}
-				}
-				variableScopes[node.Name] = append(variableScopes[node.Name], int(node.End()))
-			}
-		case *ast.AssignStmt:
-			// Track variable assignments
-			for _, lhs := range node.Lhs {
-				if ident, ok := lhs.(*ast.Ident); ok {
-					writeVars[ident.Name] = true
-					assignments[ident.Name] = true
-				}
-			}
-			info.StatementCount++
-		case *ast.IfStmt:
-			info.ControlStructures++
-			info.Complexity++
-			currentNesting++
-			if currentNesting > maxNesting {
-				maxNesting = currentNesting
-			}
-			// Check for error handling pattern
-			if len(node.Body.List) > 0 {
-				if _, ok := node.Body.List[0].(*ast.ReturnStmt); ok {
-					info.ErrorHandlingPaths++
-				}
-			}
-			info.StatementCount++
-		case *ast.ForStmt, *ast.RangeStmt, *ast.SwitchStmt:
-			info.ControlStructures++
-			info.Complexity++
-			currentNesting++
-			if currentNesting > maxNesting {
-				maxNesting = currentNesting
-			}
-			info.StatementCount++
-		case *ast.BinaryExpr:
-			if node.Op == token.LAND || node.Op == token.LOR {
-				info.LogicalOperators++
-				info.Complexity++
-			}
-		case *ast.CallExpr:
-			if ident, ok := node.Fun.(*ast.Ident); ok {
-				info.FunctionCalls = append(info.FunctionCalls, ident.Name)
-			}
-			info.StatementCount++
-		case *ast.ReturnStmt:
-			info.ReturnCount++
-			info.StatementCount++
-		case *ast.ExprStmt:
-			info.StatementCount++
-		case *ast.DeclStmt:
-			info.StatementCount++
-		}
-		return true
-	})
+// Track variable assignments
 
-	// Update nesting depth
-	info.MaxNestingDepth = maxNesting
+// Check for error handling pattern
 
-	// Convert maps to slices
-	for v := range readVars {
-		info.ReadVars = append(info.ReadVars, v)
-	}
-	for v := range writeVars {
-		info.WriteVars = append(info.WriteVars, v)
-	}
-	for v := range assignments {
-		info.Assignments = append(info.Assignments, v)
-	}
-	info.VariableScopes = variableScopes
-}
+// Update nesting depth
+
+// Convert maps to slices
 
 func isBlockExtractable(info *BlockInfo, config *ExtractionConfig) bool {
 	if config == nil {
@@ -331,4 +130,214 @@ func isBlockExtractable(info *BlockInfo, config *ExtractionConfig) bool {
 	}
 
 	return true
+}
+func applyAssignStmt(node *ast.AssignStmt, info *BlockInfo) {
+	for _, lhs := range node.Lhs {
+		if ident, ok := lhs.(*ast.Ident); ok {
+			info.WriteVars = append(info.WriteVars, ident.Name)
+			info.Assignments = append(info.Assignments, ident.Name)
+		}
+	}
+	info.StatementCount++
+}
+func applyBinaryExpr(node *ast.BinaryExpr, info *BlockInfo) {
+	if node.Op == token.LAND || node.Op == token.LOR {
+		info.LogicalOperators++
+		info.Complexity++
+	}
+}
+func applyCallExpr(node *ast.CallExpr, info *BlockInfo) {
+	if ident, ok := node.Fun.(*ast.Ident); ok {
+		info.FunctionCalls = append(info.FunctionCalls, ident.Name)
+	}
+	info.StatementCount++
+}
+func applyRangeNode(n ast.Node, info *BlockInfo) {
+	switch node := n.(type) {
+	case *ast.BlockStmt:
+		analyzeBlock(node, info)
+	case *ast.AssignStmt:
+		applyAssignStmt(node, info)
+	case *ast.Ident:
+		if node.Obj != nil {
+			info.ReadVars = append(info.ReadVars, node.Name)
+		}
+	case *ast.IfStmt:
+		info.ControlStructures++
+		info.Complexity++
+		info.StatementCount++
+	case *ast.ForStmt, *ast.RangeStmt, *ast.SwitchStmt:
+		info.ControlStructures++
+		info.Complexity++
+		info.StatementCount++
+	case *ast.BinaryExpr:
+		applyBinaryExpr(node, info)
+	case *ast.CallExpr:
+		applyCallExpr(node, info)
+	case *ast.ReturnStmt:
+		info.ReturnCount++
+		info.StatementCount++
+	case *ast.ExprStmt, *ast.DeclStmt:
+		info.StatementCount++
+	}
+}
+func recordIdent(node *ast.Ident, readVars map[string]bool, variableScopes map[string][]int) {
+	if node.Obj != nil {
+		readVars[node.Name] = true
+		if _, exists := variableScopes[node.Name]; !exists {
+			variableScopes[node.Name] = []int{int(node.Pos())}
+		}
+		variableScopes[node.Name] = append(variableScopes[node.Name], int(node.End()))
+	}
+}
+func recordAssignment(node *ast.AssignStmt, info *BlockInfo, writeVars, assignments map[string]bool) {
+	for _, lhs := range node.Lhs {
+		if ident, ok := lhs.(*ast.Ident); ok {
+			writeVars[ident.Name] = true
+			assignments[ident.Name] = true
+		}
+	}
+	info.StatementCount++
+}
+func recordIfStmt(node *ast.IfStmt, info *BlockInfo, currentNesting, maxNesting *int) {
+	info.ControlStructures++
+	info.Complexity++
+	info.StatementCount++
+	*currentNesting++
+	if *currentNesting > *maxNesting {
+		*maxNesting = *currentNesting
+	}
+	if len(node.Body.List) > 0 {
+		if _, ok := node.Body.List[0].(*ast.ReturnStmt); ok {
+			info.ErrorHandlingPaths++
+		}
+	}
+}
+func recordLoopStmt(info *BlockInfo, currentNesting, maxNesting *int) {
+	info.ControlStructures++
+	info.Complexity++
+	info.StatementCount++
+	*currentNesting++
+	if *currentNesting > *maxNesting {
+		*maxNesting = *currentNesting
+	}
+}
+func buildVariableInfo(readVars, writeVars, assignments map[string]bool, info *BlockInfo) {
+	for v := range readVars {
+		info.ReadVars = append(info.ReadVars, v)
+	}
+	for v := range writeVars {
+		info.WriteVars = append(info.WriteVars, v)
+	}
+	for v := range assignments {
+		info.Assignments = append(info.Assignments, v)
+	}
+}
+func AnalyzeBlock(filePath string, startLine, endLine int, config *ExtractionConfig) (*BlockInfo, error) {
+	if config == nil {
+		config = DefaultConfig()
+	}
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
+	if err != nil {
+		return nil, err
+	}
+	info := &BlockInfo{StartLine: startLine, EndLine: endLine}
+	var nodesInRange []ast.Node
+	ast.Inspect(node, func(n ast.Node) bool {
+		if n == nil {
+			return false
+		}
+		pos := fset.Position(n.Pos())
+		end := fset.Position(n.End())
+		if pos.Line >= startLine && end.Line <= endLine {
+			nodesInRange = append(nodesInRange, n)
+		}
+		return true
+	})
+	if len(nodesInRange) == 0 {
+		return nil, nil
+	}
+	for _, n := range nodesInRange {
+		applyRangeNode(n, info)
+	}
+	info.IsExtractable = isBlockExtractable(info, config)
+	return info, nil
+}
+func analyzeBlock(block *ast.BlockStmt, info *BlockInfo) {
+	readVars := make(map[string]bool)
+	writeVars := make(map[string]bool)
+	assignments := make(map[string]bool)
+	variableScopes := make(map[string][]int)
+	currentNesting := 0
+	maxNesting := 0
+	ast.Inspect(block, func(n ast.Node) bool {
+		switch node := n.(type) {
+		case *ast.Ident:
+			recordIdent(node, readVars, variableScopes)
+		case *ast.AssignStmt:
+			recordAssignment(node, info, writeVars, assignments)
+		case *ast.IfStmt:
+			recordIfStmt(node, info, &currentNesting, &maxNesting)
+		case *ast.ForStmt, *ast.RangeStmt, *ast.SwitchStmt:
+			recordLoopStmt(info, &currentNesting, &maxNesting)
+		case *ast.BinaryExpr:
+			applyBinaryExpr(node, info)
+		case *ast.CallExpr:
+			applyCallExpr(node, info)
+		case *ast.ReturnStmt:
+			info.ReturnCount++
+			info.StatementCount++
+		case *ast.ExprStmt, *ast.DeclStmt:
+			info.StatementCount++
+		}
+		return true
+	})
+	info.MaxNestingDepth = maxNesting
+	buildVariableInfo(readVars, writeVars, assignments, info)
+	info.VariableScopes = variableScopes
+}
+func collectRecommendations(parent ast.Node, filePath string, fset *token.FileSet, config *ExtractionConfig, recommendations *[]*BlockInfo) {
+	ast.Inspect(parent, func(n ast.Node) bool {
+		block, ok := n.(*ast.BlockStmt)
+		if !ok {
+			return true
+		}
+		startLine := fset.Position(block.Pos()).Line
+		endLine := fset.Position(block.End()).Line
+		info, err := AnalyzeBlock(filePath, startLine, endLine, config)
+		if err != nil || info == nil || !info.IsExtractable {
+			return true
+		}
+		for _, rec := range *recommendations {
+			if rec.StartLine == info.StartLine && rec.EndLine == info.EndLine {
+				return true
+			}
+		}
+		*recommendations = append(*recommendations, info)
+		return true
+	})
+}
+func RecommendExtractions(filePath string, functionName string, config *ExtractionConfig) ([]*BlockInfo, error) {
+	if config == nil {
+		config = DefaultConfig()
+	}
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
+	if err != nil {
+		return nil, err
+	}
+	var recommendations []*BlockInfo
+	ast.Inspect(node, func(n ast.Node) bool {
+		if n == nil {
+			return false
+		}
+		if funcDecl, ok := n.(*ast.FuncDecl); ok {
+			if (functionName == "" || funcDecl.Name.Name == functionName) && funcDecl.Body != nil {
+				collectRecommendations(funcDecl.Body, filePath, fset, config, &recommendations)
+			}
+		}
+		return true
+	})
+	return recommendations, nil
 }

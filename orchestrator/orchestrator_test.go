@@ -228,10 +228,10 @@ func TestExecuteOperation_NoFallback(t *testing.T) {
 	if result.Success {
 		t.Error("Expected operation to fail without fallback strategy")
 	}
-
-	if !strings.Contains(result.Error, "Failed to find target") {
-		t.Errorf("Expected 'Failed to find target' error, got: %s", result.Error)
+	if !strings.Contains(result.Error, "failed to find target") {
+		t.Errorf("Expected error containing failed to find target, got: %s", result.Error)
 	}
+
 }
 
 func TestExecuteOperation_UnknownType(t *testing.T) {

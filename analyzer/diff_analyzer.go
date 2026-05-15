@@ -70,94 +70,70 @@ func (da *DiffAnalyzer) AnalyzeDiffString(diffContent string) (*DiffAnalysis, er
 	return da.AnalyzeDiffReader(reader)
 }
 
-// AnalyzeDiffReader analyzes a diff from a reader and generates a refactoring plan
-func (da *DiffAnalyzer) AnalyzeDiffReader(reader interface{}) (*DiffAnalysis, error) {
-	var scanner *bufio.Scanner
+type diffState struct {
+	files       []*DiffFile
+	currentFile *DiffFile
+	currentHunk *DiffHunk
+}
 
+func createScanner(reader interface{}) (*bufio.Scanner, error) {
 	switch r := reader.(type) {
 	case *os.File:
-		scanner = bufio.NewScanner(r)
+		return bufio.NewScanner(r), nil
 	case *strings.Reader:
-		// Convert strings.Reader to string content
 		buf := make([]byte, r.Len())
 		if len(buf) > 0 {
 			if _, err := r.ReadAt(buf, 0); err != nil {
 				return nil, fmt.Errorf("failed to read from reader: %w", err)
 			}
 		}
-		scanner = bufio.NewScanner(strings.NewReader(string(buf)))
+		return bufio.NewScanner(strings.NewReader(string(buf))), nil
 	default:
 		return nil, fmt.Errorf("unsupported reader type")
 	}
-
-	var files []*DiffFile
-	var currentFile *DiffFile
-	var currentHunk *DiffHunk
-
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		// Parse file header
-		if strings.HasPrefix(line, "diff --git") {
-			if currentFile != nil {
-				if currentHunk != nil {
-					currentFile.Hunks = append(currentFile.Hunks, currentHunk)
-				}
-				files = append(files, currentFile)
-			}
-			currentFile = &DiffFile{}
-			currentHunk = nil
-			continue
-		}
-
-		// Parse file path
-		if strings.HasPrefix(line, "--- a/") || strings.HasPrefix(line, "+++ b/") {
-			if currentFile != nil && currentFile.Path == "" {
-				path := strings.TrimPrefix(line, "--- a/")
-				path = strings.TrimPrefix(path, "+++ b/")
-				currentFile.Path = path
-				currentFile.Language = da.detectLanguage(path)
-			}
-			continue
-		}
-
-		// Parse hunk header
-		if strings.HasPrefix(line, "@@") {
-			if currentHunk != nil && currentFile != nil {
-				currentFile.Hunks = append(currentFile.Hunks, currentHunk)
-			}
-			currentHunk = da.parseHunkHeader(line)
-			continue
-		}
-
-		// Parse hunk content
-		if currentHunk != nil {
-			currentHunk.Lines = append(currentHunk.Lines, line)
-		}
-	}
-
-	// Add the last file and hunk
-	if currentFile != nil {
-		if currentHunk != nil {
-			currentFile.Hunks = append(currentFile.Hunks, currentHunk)
-		}
-		files = append(files, currentFile)
-	}
-
-	// Analyze the changes
-	changes := da.analyzeChanges(files)
-	// Consolidate related changes (e.g., multiple variable renames of the same variable)
-	changes = da.consolidateChanges(changes)
-	summary := da.generateSummary(changes)
-	plan := da.generateRefactoringPlan(changes)
-
-	return &DiffAnalysis{
-		Files:   files,
-		Summary: summary,
-		Changes: changes,
-		Plan:    plan,
-	}, nil
 }
+func (da *DiffAnalyzer) processDiffGit(state *diffState) {
+	if state.currentFile != nil {
+		if state.currentHunk != nil {
+			state.currentFile.Hunks = append(state.currentFile.Hunks, state.currentHunk)
+		}
+		state.files = append(state.files, state.currentFile)
+	}
+	state.currentFile = &DiffFile{}
+	state.currentHunk = nil
+}
+func (da *DiffAnalyzer) processFilePath(state *diffState, line string) {
+	if state.currentFile != nil && state.currentFile.Path == "" {
+		path := strings.TrimPrefix(line, "--- a/")
+		path = strings.TrimPrefix(path, "+++ b/")
+		state.currentFile.Path = path
+		state.currentFile.Language = da.detectLanguage(path)
+	}
+}
+func (da *DiffAnalyzer) processHunkHeader(state *diffState, line string) {
+	if state.currentHunk != nil && state.currentFile != nil {
+		state.currentFile.Hunks = append(state.currentFile.Hunks, state.currentHunk)
+	}
+	state.currentHunk = da.parseHunkHeader(line)
+}
+
+// AnalyzeDiffReader analyzes a diff from a reader and generates a refactoring plan
+
+// Convert strings.Reader to string content
+
+// Parse file header
+
+// Parse file path
+
+// Parse hunk header
+
+// Parse hunk content
+
+// Add the last file and hunk
+
+// Analyze the changes
+
+// Consolidate related changes (e.g., multiple variable renames of the same variable)
 
 // parseHunkHeader parses a hunk header line
 func (da *DiffAnalyzer) parseHunkHeader(line string) *DiffHunk {
@@ -540,4 +516,42 @@ func (da *DiffAnalyzer) createExtractMethodOperation(change *Change) *orchestrat
 			Description: "Skip if function not found",
 		},
 	}
+}
+func (da *DiffAnalyzer) AnalyzeDiffReader(reader interface{}) (*DiffAnalysis, error) {
+	scanner, err := createScanner(reader)
+	if err != nil {
+		return nil, err
+	}
+	state := &diffState{}
+	for scanner.Scan() {
+		line := scanner.Text()
+		switch {
+		case strings.HasPrefix(line, "diff --git"):
+			da.processDiffGit(state)
+		case strings.HasPrefix(line, "--- a/") || strings.HasPrefix(line, "+++ b/"):
+			da.processFilePath(state, line)
+		case strings.HasPrefix(line, "@@"):
+			da.processHunkHeader(state, line)
+		default:
+			if state.currentHunk != nil {
+				state.currentHunk.Lines = append(state.currentHunk.Lines, line)
+			}
+		}
+	}
+	if state.currentFile != nil {
+		if state.currentHunk != nil {
+			state.currentFile.Hunks = append(state.currentFile.Hunks, state.currentHunk)
+		}
+		state.files = append(state.files, state.currentFile)
+	}
+	changes := da.analyzeChanges(state.files)
+	changes = da.consolidateChanges(changes)
+	summary := da.generateSummary(changes)
+	plan := da.generateRefactoringPlan(changes)
+	return &DiffAnalysis{
+		Files:   state.files,
+		Summary: summary,
+		Changes: changes,
+		Plan:    plan,
+	}, nil
 }

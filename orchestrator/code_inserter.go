@@ -40,158 +40,45 @@ type InsertionResult struct {
 }
 
 // InsertCode inserts a code snippet into a Go file at the specified location
-func (ci *CodeInserter) InsertCode(filePath string, location *InsertionLocation, codeSnippet string) (*InsertionResult, error) {
-	fset := token.NewFileSet()
 
-	// Check if file exists
-	fileExists := true
-	_, err := os.Stat(filePath)
-	if os.IsNotExist(err) {
-		fileExists = false
-	}
+// Check if file exists
 
-	var node *ast.File
+// Parse existing file
 
-	if fileExists {
-		// Parse existing file
-		node, err = parser.ParseFile(fset, filePath, nil, parser.ParseComments)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse file: %w", err)
-		}
-	} else {
-		// For at_beginning on new files, we can just write the snippet directly
-		if location.Type == "at_beginning" {
-			// Write the file directly with the code snippet
-			if err := os.WriteFile(filePath, []byte(codeSnippet), 0644); err != nil {
-				return nil, fmt.Errorf("failed to create file: %w", err)
-			}
+// For at_beginning on new files, we can just write the snippet directly
 
-			lines := strings.Split(codeSnippet, "\n")
-			return &InsertionResult{
-				File:         filePath,
-				Location:     "at beginning of file (new file)",
-				StartLine:    1,
-				EndLine:      len(lines),
-				Description:  "Created new file with code",
-				InsertedCode: codeSnippet,
-			}, nil
-		}
+// Write the file directly with the code snippet
 
-		// For other locations, parse the code snippet as a file to create the AST
-		// Check if snippet already has a package declaration
-		trimmed := strings.TrimSpace(codeSnippet)
-		var codeToParse string
-		if strings.HasPrefix(trimmed, "package ") {
-			// Already has package declaration, use as-is
-			codeToParse = codeSnippet
-		} else {
-			// Wrap the snippet in a package declaration for parsing
-			codeToParse = fmt.Sprintf("package main\n\n%s", codeSnippet)
-		}
+// For other locations, parse the code snippet as a file to create the AST
+// Check if snippet already has a package declaration
 
-		// Parse with file path so it gets added to the file set
-		node, err = parser.ParseFile(fset, filePath, []byte(codeToParse), parser.ParseComments)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse code snippet: %w", err)
-		}
-	}
+// Already has package declaration, use as-is
 
-	var result *InsertionResult
+// Wrap the snippet in a package declaration for parsing
 
-	switch location.Type {
-	case "before_function":
-		result, err = ci.insertBeforeFunction(filePath, node, fset, location, codeSnippet)
-	case "after_function":
-		result, err = ci.insertAfterFunction(filePath, node, fset, location, codeSnippet)
-	case "inside_function":
-		result, err = ci.insertInsideFunction(filePath, node, fset, location, codeSnippet)
-	case "at_end":
-		result, err = ci.insertAtEnd(filePath, node, fset, codeSnippet)
-	case "at_beginning":
-		result, err = ci.insertAtBeginning(filePath, node, fset, codeSnippet)
-	case "after_statement":
-		result, err = ci.insertAfterStatement(filePath, node, fset, location, codeSnippet)
-	default:
-		return nil, fmt.Errorf("unknown insertion location type: %s", location.Type)
-	}
+// Parse with file path so it gets added to the file set
 
-	if err != nil {
-		return nil, err
-	}
-
-	// Format and write the modified file
-	if err := ci.writeFormattedFile(filePath, node, fset); err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
+// Format and write the modified file
 
 // insertBeforeFunction inserts code before a specific function
-func (ci *CodeInserter) insertBeforeFunction(filePath string, node *ast.File, fset *token.FileSet, location *InsertionLocation, codeSnippet string) (*InsertionResult, error) {
-	// Parse the code snippet
-	snippetNode, err := ci.parseCodeSnippet(codeSnippet, fset)
-	if err != nil {
-		return nil, err
-	}
 
-	// Find the target function
-	targetFunc := ci.findFunction(node, location.FunctionName, location.MethodName, location.ReceiverType)
-	if targetFunc == nil {
-		return nil, fmt.Errorf("target function not found")
-	}
+// Parse the code snippet
 
-	// Find the position before the function
-	insertPos := targetFunc.Pos()
+// Find the target function
 
-	// Insert the snippet before the function
-	ci.insertDeclarationsBefore(node, insertPos, snippetNode)
+// Find the position before the function
 
-	startLine := fset.Position(insertPos).Line
-	endLine := startLine + len(strings.Split(codeSnippet, "\n")) - 1
-
-	return &InsertionResult{
-		File:         filePath,
-		Location:     fmt.Sprintf("before function %s", targetFunc.Name.Name),
-		StartLine:    startLine,
-		EndLine:      endLine,
-		Description:  fmt.Sprintf("Inserted code before function '%s'", targetFunc.Name.Name),
-		InsertedCode: codeSnippet,
-	}, nil
-}
+// Insert the snippet before the function
 
 // insertAfterFunction inserts code after a specific function
-func (ci *CodeInserter) insertAfterFunction(filePath string, node *ast.File, fset *token.FileSet, location *InsertionLocation, codeSnippet string) (*InsertionResult, error) {
-	// Parse the code snippet
-	snippetNode, err := ci.parseCodeSnippet(codeSnippet, fset)
-	if err != nil {
-		return nil, err
-	}
 
-	// Find the target function
-	targetFunc := ci.findFunction(node, location.FunctionName, location.MethodName, location.ReceiverType)
-	if targetFunc == nil {
-		return nil, fmt.Errorf("target function not found")
-	}
+// Parse the code snippet
 
-	// Find the position after the function
-	insertPos := targetFunc.End()
+// Find the target function
 
-	// Insert the snippet after the function
-	ci.insertDeclarationsAfter(node, insertPos, snippetNode)
+// Find the position after the function
 
-	startLine := fset.Position(insertPos).Line
-	endLine := startLine + len(strings.Split(codeSnippet, "\n")) - 1
-
-	return &InsertionResult{
-		File:         filePath,
-		Location:     fmt.Sprintf("after function %s", targetFunc.Name.Name),
-		StartLine:    startLine,
-		EndLine:      endLine,
-		Description:  fmt.Sprintf("Inserted code after function '%s'", targetFunc.Name.Name),
-		InsertedCode: codeSnippet,
-	}, nil
-}
+// Insert the snippet after the function
 
 // insertInsideFunction inserts code inside a specific function
 func (ci *CodeInserter) insertInsideFunction(filePath string, node *ast.File, fset *token.FileSet, location *InsertionLocation, codeSnippet string) (*InsertionResult, error) {
@@ -277,39 +164,8 @@ func (ci *CodeInserter) insertAtBeginning(filePath string, node *ast.File, fset 
 }
 
 // findFunction finds a function by name and optional receiver type
-func (ci *CodeInserter) findFunction(node *ast.File, functionName, methodName, receiverType string) *ast.FuncDecl {
-	var targetFunc *ast.FuncDecl
 
-	ast.Inspect(node, func(n ast.Node) bool {
-		if funcDecl, ok := n.(*ast.FuncDecl); ok {
-			if functionName != "" && funcDecl.Name.Name == functionName {
-				targetFunc = funcDecl
-				return false
-			}
-			if methodName != "" && funcDecl.Name.Name == methodName {
-				if receiverType == "" {
-					targetFunc = funcDecl
-					return false
-				}
-				// Check receiver type
-				if funcDecl.Recv != nil && len(funcDecl.Recv.List) > 0 {
-					if t, ok := funcDecl.Recv.List[0].Type.(*ast.StarExpr); ok {
-						if ident, ok := t.X.(*ast.Ident); ok && ident.Name == receiverType {
-							targetFunc = funcDecl
-							return false
-						}
-					} else if ident, ok := funcDecl.Recv.List[0].Type.(*ast.Ident); ok && ident.Name == receiverType {
-						targetFunc = funcDecl
-						return false
-					}
-				}
-			}
-		}
-		return true
-	})
-
-	return targetFunc
-}
+// Check receiver type
 
 // insertDeclarationsBefore inserts declarations before a specific position
 func (ci *CodeInserter) insertDeclarationsBefore(node *ast.File, pos token.Pos, declarations []ast.Decl) {
@@ -352,73 +208,6 @@ func (ci *CodeInserter) insertDeclarationsAtBeginning(node *ast.File, declaratio
 	node.Decls = append(declarations, node.Decls...)
 }
 
-func (ci *CodeInserter) RemoveCodeBlock(filePath string,
-	location *InsertionLocation, codePattern string) (*InsertionResult, error) {
-	src, err := os.ReadFile(filePath)
-	if err !=
-		nil {
-		return nil, fmt.
-			Errorf("failed to read file: %w", err)
-	}
-	fset := token.
-		NewFileSet()
-	node, err := parser.ParseFile(fset, filePath, src,
-
-		parser.ParseComments)
-	if err != nil {
-		return nil, fmt.
-			Errorf("failed to parse file: %w",
-				err)
-	}
-	targetFunc := ci.findFunction(node, location.FunctionName, location.MethodName, location.ReceiverType)
-	if targetFunc == nil {
-		name := location.FunctionName
-		if name == "" {
-			name = location.MethodName
-		}
-		return nil, fmt.Errorf("function not found: %s",
-			name)
-	}
-	if targetFunc.Body == nil {
-		return nil,
-			fmt.Errorf("function %s has no body", targetFunc.Name.
-				Name)
-	}
-	normPattern := stripWhitespace(codePattern)
-	removedIdx := -1
-	for i, stmt := range targetFunc.Body.List {
-		start := fset.Position(stmt.Pos()).Offset
-		end := fset.Position(stmt.End()).Offset
-		if start < 0 || end > len(src) || end <=
-			start {
-			continue
-		}
-		if strings.Contains(stripWhitespace(string(src[start:end])), normPattern) {
-			removedIdx = i
-			break
-		}
-	}
-	if removedIdx < 0 {
-		return nil, fmt.Errorf("no statement matching %q found in %s", codePattern, targetFunc.Name.Name)
-	}
-	startLine := fset.Position(targetFunc.
-		Body.List[removedIdx].
-		Pos()).Line
-	endLine :=
-		fset.Position(targetFunc.
-			Body.List[removedIdx].End()).Line
-	targetFunc.Body.
-		List = append(targetFunc.
-		Body.List[:removedIdx], targetFunc.Body.
-		List[removedIdx+1:]...,
-	)
-	if err := ci.writeFormattedFile(filePath, node, fset); err != nil {
-		return nil, err
-	}
-	return &InsertionResult{File: filePath, Location: fmt.Sprintf("inside function %s", targetFunc.Name.Name), StartLine: startLine,
-		EndLine: endLine, Description: fmt.Sprintf("Removed code block matching %q from %s",
-			codePattern, targetFunc.Name.Name)}, nil
-}
 func stripWhitespace(s string) string {
 	s = strings.ReplaceAll(s, " ", "")
 	s = strings.
@@ -489,65 +278,7 @@ func (ci *CodeInserter) parseCodeSnippetAsStatements(codeSnippet string, fset *t
 		})
 	return stmts, nil
 }
-func (ci *CodeInserter) ReplaceCodeBlock(filePath string, location *InsertionLocation, codePattern string, replacementCode string) (*InsertionResult, error) {
-	src, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read file: %w", err)
-	}
-	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, filePath, src, parser.ParseComments)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse file: %w", err)
-	}
-	targetFunc := ci.findFunction(node, location.FunctionName, location.MethodName, location.ReceiverType)
-	if targetFunc == nil {
-		name := location.FunctionName
-		if name == "" {
-			name = location.MethodName
-		}
-		return nil, fmt.Errorf("function not found: %s", name)
-	}
-	if targetFunc.Body == nil {
-		return nil, fmt.Errorf("function %s has no body", targetFunc.Name.Name)
-	}
-	normPattern := stripWhitespace(codePattern)
-	foundIdx := -1
-	for i, stmt := range targetFunc.Body.List {
-		start := fset.Position(stmt.Pos()).Offset
-		end := fset.Position(stmt.End()).Offset
-		if start < 0 || end > len(src) || end <= start {
-			continue
-		}
-		if strings.Contains(stripWhitespace(string(src[start:end])), normPattern) {
-			foundIdx = i
-			break
-		}
-	}
-	if foundIdx < 0 {
-		return nil, fmt.Errorf("no statement matching %q found in %s", codePattern, targetFunc.Name.Name)
-	}
-	replacementStmts, err := ci.parseCodeSnippetAsStatements(replacementCode, fset)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse replacement code: %w", err)
-	}
-	startLine := fset.Position(targetFunc.Body.List[foundIdx].Pos()).Line
-	endLine := fset.Position(targetFunc.Body.List[foundIdx].End()).Line
-	targetFunc.Body.List = append(
-		targetFunc.Body.List[:foundIdx],
-		append(replacementStmts, targetFunc.Body.List[foundIdx+1:]...)...,
-	)
-	if err := ci.writeFormattedFile(filePath, node, fset); err != nil {
-		return nil, err
-	}
-	return &InsertionResult{
-		File:         filePath,
-		Location:     fmt.Sprintf("inside function %s", targetFunc.Name.Name),
-		StartLine:    startLine,
-		EndLine:      endLine,
-		Description:  fmt.Sprintf("Replaced code matching %q in %s", codePattern, targetFunc.Name.Name),
-		InsertedCode: replacementCode,
-	}, nil
-}
+
 func (ci *CodeInserter) insertAfterStatement(filePath string, node *ast.File, fset *token.FileSet, location *InsertionLocation, codeSnippet string) (*InsertionResult, error) {
 	src, err := os.ReadFile(filePath)
 	if err != nil {
@@ -594,4 +325,247 @@ func (ci *CodeInserter) insertAfterStatement(filePath string, node *ast.File, fs
 		Description:  fmt.Sprintf("Inserted code after statement matching %q in '%s'", location.CodePattern, targetFunc.Name.Name),
 		InsertedCode: codeSnippet,
 	}, nil
+}
+func matchesReceiverType(funcDecl *ast.FuncDecl, receiverType string) bool {
+	if funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 {
+		return false
+	}
+	if t, ok := funcDecl.Recv.List[0].Type.(*ast.StarExpr); ok {
+		if ident, ok := t.X.(*ast.Ident); ok && ident.Name == receiverType {
+			return true
+		}
+	}
+	if ident, ok := funcDecl.Recv.List[0].Type.(*ast.Ident); ok && ident.Name == receiverType {
+		return true
+	}
+	return false
+}
+func findStmtByPattern(src []byte, stmts []ast.Stmt, fset *token.FileSet, normPattern string) int {
+	for i, stmt := range stmts {
+		start := fset.Position(stmt.Pos()).Offset
+		end := fset.Position(stmt.End()).Offset
+		if start < 0 || end > len(src) || end <= start {
+			continue
+		}
+		if strings.Contains(stripWhitespace(string(src[start:end])), normPattern) {
+			return i
+		}
+	}
+	return -1
+}
+func (ci *CodeInserter) resolveTargetFunc(node *ast.File, location *InsertionLocation) (*ast.FuncDecl, error) {
+	targetFunc := ci.findFunction(node, location.FunctionName, location.MethodName, location.ReceiverType)
+	if targetFunc == nil {
+		name := location.FunctionName
+		if name == "" {
+			name = location.MethodName
+		}
+		return nil, fmt.Errorf("function not found: %s", name)
+	}
+	if targetFunc.Body == nil {
+		return nil, fmt.Errorf("function %s has no body", targetFunc.Name.Name)
+	}
+	return targetFunc, nil
+}
+func (ci *CodeInserter) loadOrParseNode(filePath string, location *InsertionLocation, codeSnippet string, fset *token.FileSet) (*ast.File, *InsertionResult, error) {
+	_, err := os.Stat(filePath)
+	if !os.IsNotExist(err) {
+		node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to parse file: %w", err)
+		}
+		return node, nil, nil
+	}
+	if location.Type == "at_beginning" {
+		if err := os.WriteFile(filePath, []byte(codeSnippet), 0644); err != nil {
+			return nil, nil, fmt.Errorf("failed to create file: %w", err)
+		}
+		lines := strings.Split(codeSnippet, "\n")
+		return nil, &InsertionResult{
+			File:         filePath,
+			Location:     "at beginning of file (new file)",
+			StartLine:    1,
+			EndLine:      len(lines),
+			Description:  "Created new file with code",
+			InsertedCode: codeSnippet,
+		}, nil
+	}
+	trimmed := strings.TrimSpace(codeSnippet)
+	var codeToParse string
+	if strings.HasPrefix(trimmed, "package ") {
+		codeToParse = codeSnippet
+	} else {
+		codeToParse = fmt.Sprintf("package main\n\n%s", codeSnippet)
+	}
+	node, err := parser.ParseFile(fset, filePath, []byte(codeToParse), parser.ParseComments)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse code snippet: %w", err)
+	}
+	return node, nil, nil
+}
+func (ci *CodeInserter) insertNearFunction(filePath string, node *ast.File, fset *token.FileSet, location *InsertionLocation, codeSnippet string, before bool) (*InsertionResult, error) {
+	snippetNode, err := ci.parseCodeSnippet(codeSnippet, fset)
+	if err != nil {
+		return nil, err
+	}
+	targetFunc := ci.findFunction(node, location.FunctionName, location.MethodName, location.ReceiverType)
+	if targetFunc == nil {
+		return nil, fmt.Errorf("target function not found")
+	}
+	var insertPos token.Pos
+	var locStr, descFmt string
+	if before {
+		insertPos = targetFunc.Pos()
+		ci.insertDeclarationsBefore(node, insertPos, snippetNode)
+		locStr = fmt.Sprintf("before function %s", targetFunc.Name.Name)
+		descFmt = "Inserted code before function '%s'"
+	} else {
+		insertPos = targetFunc.End()
+		ci.insertDeclarationsAfter(node, insertPos, snippetNode)
+		locStr = fmt.Sprintf("after function %s", targetFunc.Name.Name)
+		descFmt = "Inserted code after function '%s'"
+	}
+	startLine := fset.Position(insertPos).Line
+	endLine := startLine + len(strings.Split(codeSnippet, "\n")) - 1
+	return &InsertionResult{
+		File:         filePath,
+		Location:     locStr,
+		StartLine:    startLine,
+		EndLine:      endLine,
+		Description:  fmt.Sprintf(descFmt, targetFunc.Name.Name),
+		InsertedCode: codeSnippet,
+	}, nil
+}
+func (ci *CodeInserter) InsertCode(filePath string, location *InsertionLocation, codeSnippet string) (*InsertionResult, error) {
+	fset := token.NewFileSet()
+	node, immediate, err := ci.loadOrParseNode(filePath, location, codeSnippet, fset)
+	if err != nil {
+		return nil, err
+	}
+	if immediate != nil {
+		return immediate, nil
+	}
+	var result *InsertionResult
+	switch location.Type {
+	case "before_function":
+		result, err = ci.insertBeforeFunction(filePath, node, fset, location, codeSnippet)
+	case "after_function":
+		result, err = ci.insertAfterFunction(filePath, node, fset, location, codeSnippet)
+	case "inside_function":
+		result, err = ci.insertInsideFunction(filePath, node, fset, location, codeSnippet)
+	case "at_end":
+		result, err = ci.insertAtEnd(filePath, node, fset, codeSnippet)
+	case "at_beginning":
+		result, err = ci.insertAtBeginning(filePath, node, fset, codeSnippet)
+	case "after_statement":
+		result, err = ci.insertAfterStatement(filePath, node, fset, location, codeSnippet)
+	default:
+		return nil, fmt.Errorf("unknown insertion location type: %s", location.Type)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := ci.writeFormattedFile(filePath, node, fset); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (ci *CodeInserter) findFunction(node *ast.File, functionName, methodName, receiverType string) *ast.FuncDecl {
+	var targetFunc *ast.FuncDecl
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok {
+			return true
+		}
+		if functionName != "" && funcDecl.Name.Name == functionName {
+			targetFunc = funcDecl
+			return false
+		}
+		if methodName != "" && funcDecl.Name.Name == methodName {
+			if receiverType == "" || matchesReceiverType(funcDecl, receiverType) {
+				targetFunc = funcDecl
+				return false
+			}
+		}
+		return true
+	})
+	return targetFunc
+}
+func (ci *CodeInserter) RemoveCodeBlock(filePath string, location *InsertionLocation, codePattern string) (*InsertionResult, error) {
+	src, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, filePath, src, parser.ParseComments)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse file: %w", err)
+	}
+	targetFunc, err := ci.resolveTargetFunc(node, location)
+	if err != nil {
+		return nil, err
+	}
+	removedIdx := findStmtByPattern(src, targetFunc.Body.List, fset, stripWhitespace(codePattern))
+	if removedIdx < 0 {
+		return nil, fmt.Errorf("no statement matching %q found in %s", codePattern, targetFunc.Name.Name)
+	}
+	startLine := fset.Position(targetFunc.Body.List[removedIdx].Pos()).Line
+	endLine := fset.Position(targetFunc.Body.List[removedIdx].End()).Line
+	targetFunc.Body.List = append(targetFunc.Body.List[:removedIdx], targetFunc.Body.List[removedIdx+1:]...)
+	if err := ci.writeFormattedFile(filePath, node, fset); err != nil {
+		return nil, err
+	}
+	return &InsertionResult{
+		File:        filePath,
+		Location:    fmt.Sprintf("inside function %s", targetFunc.Name.Name),
+		StartLine:   startLine,
+		EndLine:     endLine,
+		Description: fmt.Sprintf("Removed code block matching %q from %s", codePattern, targetFunc.Name.Name),
+	}, nil
+}
+func (ci *CodeInserter) ReplaceCodeBlock(filePath string, location *InsertionLocation, codePattern string, replacementCode string) (*InsertionResult, error) {
+	src, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, filePath, src, parser.ParseComments)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse file: %w", err)
+	}
+	targetFunc, err := ci.resolveTargetFunc(node, location)
+	if err != nil {
+		return nil, err
+	}
+	foundIdx := findStmtByPattern(src, targetFunc.Body.List, fset, stripWhitespace(codePattern))
+	if foundIdx < 0 {
+		return nil, fmt.Errorf("no statement matching %q found in %s", codePattern, targetFunc.Name.Name)
+	}
+	replacementStmts, err := ci.parseCodeSnippetAsStatements(replacementCode, fset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse replacement code: %w", err)
+	}
+	startLine := fset.Position(targetFunc.Body.List[foundIdx].Pos()).Line
+	endLine := fset.Position(targetFunc.Body.List[foundIdx].End()).Line
+	targetFunc.Body.List = append(
+		targetFunc.Body.List[:foundIdx],
+		append(replacementStmts, targetFunc.Body.List[foundIdx+1:]...)...,
+	)
+	if err := ci.writeFormattedFile(filePath, node, fset); err != nil {
+		return nil, err
+	}
+	return &InsertionResult{
+		File:         filePath,
+		Location:     fmt.Sprintf("inside function %s", targetFunc.Name.Name),
+		StartLine:    startLine,
+		EndLine:      endLine,
+		Description:  fmt.Sprintf("Replaced code matching %q in %s", codePattern, targetFunc.Name.Name),
+		InsertedCode: replacementCode,
+	}, nil
+}
+func (ci *CodeInserter) insertBeforeFunction(filePath string, node *ast.File, fset *token.FileSet, location *InsertionLocation, codeSnippet string) (*InsertionResult, error) {
+	return ci.insertNearFunction(filePath, node, fset, location, codeSnippet, true)
+}
+func (ci *CodeInserter) insertAfterFunction(filePath string, node *ast.File, fset *token.FileSet, location *InsertionLocation, codeSnippet string) (*InsertionResult, error) {
+	return ci.insertNearFunction(filePath, node, fset, location, codeSnippet, false)
 }

@@ -81,109 +81,29 @@ func (o *Orchestrator) ExecutePlan(planName string) (*ExecutionResult, error) {
 }
 
 // executeOperation executes a single refactoring operation
-func (o *Orchestrator) executeOperation(operation *RefactoringOperation) *OperationResult {
-	result := &OperationResult{
-		Operation: operation,
-		Changes:   make([]*CodeChange, 0),
-	}
 
-	// Check conditions first
-	if !o.checkConditions(operation.Conditions) {
-		result.Success = false
-		result.Applied = false
-		result.Message = "Conditions not met"
-		return result
-	}
+// Check conditions first
 
-	// Special handling for insert_code with at_beginning on new files
-	if operation.Type == "insert_code" {
-		locationData, ok := operation.Parameters["location"].(map[string]interface{})
-		if ok {
-			locationType, _ := locationData["type"].(string)
-			if locationType == "at_beginning" {
-				// Check if file exists
-				if _, err := os.Stat(operation.File); os.IsNotExist(err) {
-					// Skip target finding for new file creation
-					err = o.executeInsertCode(operation, result)
-					if err != nil {
-						result.Success = false
-						result.Error = err.Error()
-					} else {
-						result.Success = true
-						result.Applied = true
-						result.Message = "Operation completed successfully"
-					}
-					return result
-				}
-			}
-		}
-	}
+// Special handling for insert_code with at_beginning on new files
 
-	// Find the target using resilient targeting
-	// Note: insert_code operations may not need a target, but we'll still try to find one if specified
-	var target *TargetLocation
-	var err error
-	if operation.Target != nil {
-		target, err = o.findTarget(operation.Target, operation.File)
-		if err != nil {
-			// For insert_code and rename_declaration, target is optional
-			if operation.Type != "insert_code" && operation.Type != "rename_declaration" {
-				// Try fallback strategy
-				if operation.Fallback != nil {
-					target, err = o.executeFallback(operation.Fallback, operation.File)
-					if err != nil {
-						result.Success = false
-						result.Error = fmt.Sprintf("Failed to find target and fallback: %v", err)
-						return result
-					}
-					result.FallbackUsed = true
-				} else {
-					result.Success = false
-					result.Error = fmt.Sprintf("Failed to find target: %v", err)
-					return result
-				}
-			}
-			// For insert_code, we can proceed without a target
-		}
-	}
+// Check if file exists
 
-	// Execute the operation based on type
-	switch operation.Type {
-	case "move_method":
-		err = o.executeMoveMethod(operation, target, result)
-	case "insert_code":
-		err = o.executeInsertCode(operation, result)
-	case "create_file":
-		err = o.executeCreateFile(operation, result)
-	case "remove_code_block":
-		err = o.executeRemoveCodeBlock(operation, result)
-	case "replace_code":
-		err = o.executeReplaceCode(operation, result)
-	case "delete_declaration":
-		err = o.executeDeleteDeclaration(operation, target, result)
-	case "rename_declaration":
-		err = o.executeRenameDeclaration(operation, result)
-	default:
-		err = fmt.Errorf("unknown operation type: %s", operation.Type)
-	}
+// Skip target finding for new file creation
 
-	if err != nil {
-		result.Success = false
-		result.Error = err.Error()
-	} else {
-		result.Success = true
-		// Only set Applied to true if it hasn't been explicitly set to false
-		// (e.g., by create_file with skip fallback)
-		if !result.Applied && result.Message == "" {
-			result.Applied = true
-		}
-		if result.Message == "" {
-			result.Message = "Operation completed successfully"
-		}
-	}
+// Find the target using resilient targeting
+// Note: insert_code operations may not need a target, but we'll still try to find one if specified
 
-	return result
-}
+// For insert_code and rename_declaration, target is optional
+
+// Try fallback strategy
+
+// For insert_code, we can proceed without a target
+
+// Execute the operation based on type
+
+// Only set Applied to true if it hasn't been explicitly set to false
+// (e.g., by create_file with skip fallback)
+
 func (o *Orchestrator) ExecuteOperations(ops []*RefactoringOperation) (*ExecutionResult, error) {
 	plan := &RefactoringPlan{
 		Version:    "1.0",
@@ -345,4 +265,100 @@ func (o *Orchestrator) SaveResult(result *ExecutionResult, filePath string) erro
 	}
 
 	return nil
+}
+func (o *Orchestrator) isNewFileAtBeginning(operation *RefactoringOperation) bool {
+	if operation.Type != "insert_code" {
+		return false
+	}
+	locationData, ok := operation.Parameters["location"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+	locationType, _ := locationData["type"].(string)
+	if locationType != "at_beginning" {
+		return false
+	}
+	_, err := os.Stat(operation.File)
+	return os.IsNotExist(err)
+}
+
+func (o *Orchestrator) dispatchOperation(operation *RefactoringOperation, target *TargetLocation, result *OperationResult) error {
+	switch operation.Type {
+	case "move_method":
+		return o.executeMoveMethod(operation, target, result)
+	case "insert_code":
+		return o.executeInsertCode(operation, result)
+	case "create_file":
+		return o.executeCreateFile(operation, result)
+	case "remove_code_block":
+		return o.executeRemoveCodeBlock(operation, result)
+	case "replace_code":
+		return o.executeReplaceCode(operation, result)
+	case "delete_declaration":
+		return o.executeDeleteDeclaration(operation, target, result)
+	case "rename_declaration":
+		return o.executeRenameDeclaration(operation, result)
+	default:
+		return fmt.Errorf("unknown operation type: %s", operation.Type)
+	}
+}
+func (o *Orchestrator) finalizeResult(result *OperationResult, err error) *OperationResult {
+	if err != nil {
+		result.Success = false
+		result.Error = err.Error()
+		return result
+	}
+	result.Success = true
+	if !result.Applied && result.Message == "" {
+		result.Applied = true
+	}
+	if result.Message == "" {
+		result.Message = "Operation completed successfully"
+	}
+	return result
+}
+func (o *Orchestrator) executeOperation(operation *RefactoringOperation) *OperationResult {
+	result := &OperationResult{
+		Operation: operation,
+		Changes:   make([]*CodeChange, 0),
+	}
+	if !o.checkConditions(operation.Conditions) {
+		result.Success = false
+		result.Applied = false
+		result.Message = "Conditions not met"
+		return result
+	}
+	if o.isNewFileAtBeginning(operation) {
+		return o.finalizeResult(result, o.executeInsertCode(operation, result))
+	}
+	target, fallbackUsed, err := o.resolveTarget(operation)
+	if err != nil {
+		result.Success = false
+		result.Error = err.Error()
+		return result
+	}
+	if fallbackUsed {
+		result.FallbackUsed = true
+	}
+	return o.finalizeResult(result, o.dispatchOperation(operation, target, result))
+}
+func (o *Orchestrator) resolveTarget(operation *RefactoringOperation) (*TargetLocation, bool, error) {
+	if operation.Target == nil {
+		return nil, false, nil
+	}
+	target, err := o.findTarget(operation.Target, operation.File)
+	if err == nil {
+		return target, false, nil
+	}
+	if operation.Type == "insert_code" || operation.Type == "rename_declaration" {
+		return nil, false, nil
+	}
+	if operation.Fallback != nil {
+		target, err = o.executeFallback(operation.Fallback, operation.File)
+		if err != nil {
+			return nil, false, fmt.Errorf("failed to find target and fallback: %v", err)
+		}
+		return target, true, nil
+	}
+	return nil, false, fmt.Errorf("failed to find target: %v", err)
 }

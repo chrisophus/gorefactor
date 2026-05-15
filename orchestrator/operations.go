@@ -30,273 +30,75 @@ func commentBelongsToDecl(fileSet *token.FileSet, declStart, declEnd token.Pos, 
 }
 
 // executeMoveMethod executes a method moving operation
-func (o *Orchestrator) executeMoveMethod(operation *RefactoringOperation, target *TargetLocation, result *OperationResult) error {
-	newFile, ok := operation.Parameters["newFile"].(string)
-	if !ok {
-		return fmt.Errorf("newFile parameter is required for move_method operation")
-	}
 
-	fset := token.NewFileSet()
+// Parse source file
 
-	// Parse source file
-	sourceNode, err := parser.ParseFile(fset, target.File, nil, parser.ParseComments)
-	if err != nil {
-		return fmt.Errorf("failed to parse source file: %w", err)
-	}
+// Re-find the target using the same FileSet for accurate positions
+// This ensures line numbers match between finding and moving
 
-	// Re-find the target using the same FileSet for accurate positions
-	// This ensures line numbers match between finding and moving
-	actualTarget, err := o.findTarget(operation.Target, target.File)
-	if err != nil {
-		return fmt.Errorf("failed to re-find target: %w", err)
-	}
+// Find the declaration to move using line numbers from the same FileSet
 
-	// Find the declaration to move using line numbers from the same FileSet
-	var declToMove ast.Decl
-	declIndex := -1
-	var declType string
+// Check if this declaration matches the target
+// Declaration should start at or before target start and end at or after target end
 
-	for i, decl := range sourceNode.Decls {
-		startLine := fset.Position(decl.Pos()).Line
-		endLine := fset.Position(decl.End()).Line
+// Determine declaration type for better error messages and logging
 
-		// Check if this declaration matches the target
-		// Declaration should start at or before target start and end at or after target end
-		if startLine <= actualTarget.StartLine && endLine >= actualTarget.EndLine {
-			declToMove = decl
-			declIndex = i
+// Provide helpful error message with available declarations
 
-			// Determine declaration type for better error messages and logging
-			switch d := decl.(type) {
-			case *ast.FuncDecl:
-				declType = fmt.Sprintf("function '%s'", d.Name.Name)
-			case *ast.GenDecl:
-				switch d.Tok {
-				case token.TYPE:
-					if len(d.Specs) > 0 {
-						if ts, ok := d.Specs[0].(*ast.TypeSpec); ok {
-							declType = fmt.Sprintf("type '%s'", ts.Name.Name)
-						} else {
-							declType = "type declaration"
-						}
-					} else {
-						declType = "type declaration"
-					}
-				case token.CONST:
-					declType = "const declaration"
-				case token.VAR:
-					if len(d.Specs) > 0 {
-						if vs, ok := d.Specs[0].(*ast.ValueSpec); ok && len(vs.Names) > 0 {
-							declType = fmt.Sprintf("var '%s'", vs.Names[0].Name)
-						} else {
-							declType = "var declaration"
-						}
-					} else {
-						declType = "var declaration"
-					}
-				default:
-					declType = "generic declaration"
-				}
-			default:
-				declType = "declaration"
-			}
-			break
-		}
-	}
+// Extract the code snippet for the declaration
 
-	if declToMove == nil {
-		// Provide helpful error message with available declarations
-		var declInfo []string
-		for i, decl := range sourceNode.Decls {
-			startLine := fset.Position(decl.Pos()).Line
-			endLine := fset.Position(decl.End()).Line
-			switch d := decl.(type) {
-			case *ast.FuncDecl:
-				declInfo = append(declInfo, fmt.Sprintf("  %d: function '%s' (lines %d-%d)", i, d.Name.Name, startLine, endLine))
-			case *ast.GenDecl:
-				switch d.Tok {
-				case token.TYPE:
-					if len(d.Specs) > 0 {
-						if ts, ok := d.Specs[0].(*ast.TypeSpec); ok {
-							declInfo = append(declInfo, fmt.Sprintf("  %d: type '%s' (lines %d-%d)", i, ts.Name.Name, startLine, endLine))
-						}
-					}
-				case token.CONST:
-					declInfo = append(declInfo, fmt.Sprintf("  %d: const block (lines %d-%d)", i, startLine, endLine))
-				case token.VAR:
-					declInfo = append(declInfo, fmt.Sprintf("  %d: var block (lines %d-%d)", i, startLine, endLine))
-				}
-			}
-		}
-		declList := strings.Join(declInfo, "\n")
-		if declList == "" {
-			declList = "  (no declarations found)"
-		}
-		return fmt.Errorf("declaration not found at lines %d-%d in file %s\nAvailable declarations:\n%s", actualTarget.StartLine, actualTarget.EndLine, target.File, declList)
-	}
+// Collect comments associated with this declaration
 
-	// Extract the code snippet for the declaration
-	var declBuf bytes.Buffer
-	if err := format.Node(&declBuf, fset, declToMove); err != nil {
-		return fmt.Errorf("failed to format declaration: %w", err)
-	}
-	declCode := declBuf.String()
+// Remove declaration from source file
 
-	// Collect comments associated with this declaration
-	declStart := declToMove.Pos()
-	declEnd := declToMove.End()
-	var commentsToMove []*ast.CommentGroup
-	var newSourceComments []*ast.CommentGroup
+// Update source file comments
 
-	for _, commentGroup := range sourceNode.Comments {
-		if commentBelongsToDecl(fset, declStart, declEnd, commentGroup) {
-			commentsToMove = append(commentsToMove, commentGroup)
-		} else {
-			newSourceComments = append(newSourceComments, commentGroup)
-		}
-	}
+// Write modified source file
 
-	// Remove declaration from source file
-	sourceNode.Decls = append(sourceNode.Decls[:declIndex], sourceNode.Decls[declIndex+1:]...)
-	// Update source file comments
-	sourceNode.Comments = newSourceComments
+// Run goimports on source file to fix imports
 
-	// Write modified source file
-	var sourceBuf bytes.Buffer
-	if err := format.Node(&sourceBuf, fset, sourceNode); err != nil {
-		return fmt.Errorf("failed to format source file: %w", err)
-	}
-	if err := os.WriteFile(target.File, sourceBuf.Bytes(), 0644); err != nil {
-		return fmt.Errorf("failed to write source file: %w", err)
-	}
+// Parse or create destination file
 
-	// Run goimports on source file to fix imports
-	cmd := exec.Command("goimports", "-w", target.File)
-	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: goimports on %s: %v\n", target.File, err)
-	}
+// Create new file with package declaration
+// Try to extract package name from source file
 
-	// Parse or create destination file
-	var destNode *ast.File
-	destExists := true
-	if _, err := os.Stat(newFile); os.IsNotExist(err) {
-		destExists = false
-	}
+// Add declaration to destination file (at the end)
 
-	if destExists {
-		destNode, err = parser.ParseFile(fset, newFile, nil, parser.ParseComments)
-		if err != nil {
-			return fmt.Errorf("failed to parse destination file: %w", err)
-		}
-	} else {
-		// Create new file with package declaration
-		// Try to extract package name from source file
-		packageName := sourceNode.Name.Name
-		destNode = &ast.File{
-			Name:     ast.NewIdent(packageName),
-			Decls:    []ast.Decl{},
-			Comments: []*ast.CommentGroup{},
-		}
-	}
+// Add comments to destination file
 
-	// Add declaration to destination file (at the end)
-	destNode.Decls = append(destNode.Decls, declToMove)
-	// Add comments to destination file
-	destNode.Comments = append(destNode.Comments, commentsToMove...)
+// Write destination file
 
-	// Write destination file
-	var destBuf bytes.Buffer
-	if err := format.Node(&destBuf, fset, destNode); err != nil {
-		return fmt.Errorf("failed to format destination file: %w", err)
-	}
-	destContent := destBuf.Bytes()
-	if err := os.WriteFile(newFile, destContent, 0644); err != nil {
-		return fmt.Errorf("failed to write destination file: %w", err)
-	}
+// Run goimports on destination file to fix imports
 
-	// Run goimports on destination file to fix imports
-	cmd = exec.Command("goimports", "-w", newFile)
-	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: goimports on %s: %v\n", newFile, err)
-	}
+// Re-read the file after goimports may have modified it
 
-	// Re-read the file after goimports may have modified it
-	updatedDestContent, err := os.ReadFile(newFile)
-	if err != nil {
-		updatedDestContent = destContent // Fallback to original content
-	}
+// Fallback to original content
 
-	// Parse the written file to get accurate line numbers for the added declaration
-	destFset := token.NewFileSet()
-	parsedDestNode, err := parser.ParseFile(destFset, newFile, updatedDestContent, parser.ParseComments)
-	if err == nil && len(parsedDestNode.Decls) > 0 {
-		// Find the last declaration (the one we just added)
-		lastDecl := parsedDestNode.Decls[len(parsedDestNode.Decls)-1]
-		destStartLine := destFset.Position(lastDecl.Pos()).Line
-		destEndLine := destFset.Position(lastDecl.End()).Line
+// Parse the written file to get accurate line numbers for the added declaration
 
-		// Record changes with detailed information
-		result.Changes = append(result.Changes, &CodeChange{
-			Type:        "move_method",
-			File:        target.File,
-			StartLine:   actualTarget.StartLine,
-			EndLine:     actualTarget.EndLine,
-			Description: fmt.Sprintf("Moved %s to %s", declType, newFile),
-			OldCode:     declCode,
-			NewCode:     "",
-		})
+// Find the last declaration (the one we just added)
 
-		result.Changes = append(result.Changes, &CodeChange{
-			Type:        "move_method",
-			File:        newFile,
-			StartLine:   destStartLine,
-			EndLine:     destEndLine,
-			Description: fmt.Sprintf("Added %s from %s", declType, target.File),
-			NewCode:     declCode,
-		})
-	} else {
-		// Fallback if parsing fails - still record the change
+// Record changes with detailed information
 
-		// executeInsertCode executes a code insertion operation
+// Fallback if parsing fails - still record the change
 
-		// Get parameters
+// executeInsertCode executes a code insertion operation
 
-		// Convert location data to InsertionLocation
+// Get parameters
 
-		// Create code inserter and insert code
+// Convert location data to InsertionLocation
 
-		// executeCreateFile creates a new file with the specified content
+// Create code inserter and insert code
 
-		// Check if file already exists
+// executeCreateFile creates a new file with the specified content
 
-		// File exists - check if we should skip or overwrite
+// Check if file already exists
 
-		// No changes applied
+// File exists - check if we should skip or overwrite
 
-		// Write the file
+// No changes applied
 
-		result.Changes = append(result.Changes, &CodeChange{
-			Type:        "move_method",
-			File:        target.File,
-			StartLine:   actualTarget.StartLine,
-			EndLine:     actualTarget.EndLine,
-			Description: fmt.Sprintf("Moved %s to %s", declType, newFile),
-			OldCode:     declCode,
-			NewCode:     "",
-		})
-
-		result.Changes = append(result.Changes, &CodeChange{
-			Type:        "move_method",
-			File:        newFile,
-			StartLine:   1,
-			EndLine:     1,
-			Description: fmt.Sprintf("Added %s from %s", declType, target.File),
-			NewCode:     declCode,
-		})
-	}
-
-	return nil
-}
+// Write the file
 
 func (o *Orchestrator) executeInsertCode(operation *RefactoringOperation, result *OperationResult) error {
 
@@ -463,14 +265,140 @@ func (o *Orchestrator) executeDeleteDeclaration(operation *RefactoringOperation,
 	})
 	return nil
 }
-func (o *Orchestrator) executeRenameDeclaration(operation *RefactoringOperation, result *OperationResult) error {
-	oldName := ""
-	if operation.Target != nil {
-		oldName = operation.Target.FunctionName
-		if oldName == "" {
-			oldName = operation.Target.MethodName
+
+func declLabel(decl ast.Decl, fset *token.FileSet) string {
+	switch d := decl.(type) {
+	case *ast.FuncDecl:
+		return fmt.Sprintf("function '%s'", d.Name.Name)
+	case *ast.GenDecl:
+		return genDeclLabel(d)
+	}
+	return "declaration"
+}
+func genDeclLabel(d *ast.GenDecl) string {
+	switch d.Tok {
+	case token.TYPE:
+		if len(d.Specs) > 0 {
+			if ts, ok := d.Specs[0].(*ast.TypeSpec); ok {
+				return fmt.Sprintf("type '%s'", ts.Name.Name)
+			}
+		}
+		return "type declaration"
+	case token.CONST:
+		return "const declaration"
+	case token.VAR:
+		if len(d.Specs) > 0 {
+			if vs, ok := d.Specs[0].(*ast.ValueSpec); ok && len(vs.Names) > 0 {
+				return fmt.Sprintf("var '%s'", vs.Names[0].Name)
+			}
+		}
+		return "var declaration"
+	}
+	return "generic declaration"
+}
+func findDeclInRange(decls []ast.Decl, fset *token.FileSet, startLine, endLine int) (ast.Decl, int, string, error) {
+	for i, decl := range decls {
+		s := fset.Position(decl.Pos()).Line
+		e := fset.Position(decl.End()).Line
+		if s <= startLine && e >= endLine {
+			return decl, i, declLabel(decl, fset), nil
 		}
 	}
+	var info []string
+	for i, decl := range decls {
+		s := fset.Position(decl.Pos()).Line
+		e := fset.Position(decl.End()).Line
+		info = append(info, fmt.Sprintf("  %d: %s (lines %d-%d)", i, declLabel(decl, fset), s, e))
+	}
+	list := strings.Join(info, "\n")
+	if list == "" {
+		list = "  (no declarations found)"
+	}
+	return nil, -1, "", fmt.Errorf("available declarations:\n%s", list)
+}
+func writeFileAndImport(path string, node *ast.File, fset *token.FileSet) error {
+	var buf bytes.Buffer
+	if err := format.Node(&buf, fset, node); err != nil {
+		return fmt.Errorf("failed to format %s: %w", path, err)
+	}
+	if err := os.WriteFile(path, buf.Bytes(), 0644); err != nil {
+		return fmt.Errorf("failed to write %s: %w", path, err)
+	}
+	if err := exec.Command("goimports", "-w", path).Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: goimports on %s: %v\n", path, err)
+	}
+	return nil
+}
+
+func recordMoveResults(result *OperationResult, sourceFile, destFile string, sourceStart, sourceEnd int, declCode, declType string) {
+	destStartLine, destEndLine := 1, 1
+	if content, err := os.ReadFile(destFile); err == nil {
+		destFset := token.NewFileSet()
+		if parsedNode, err := parser.ParseFile(destFset, destFile, content, parser.ParseComments); err == nil && len(parsedNode.Decls) > 0 {
+			last := parsedNode.Decls[len(parsedNode.Decls)-1]
+			destStartLine = destFset.Position(last.Pos()).Line
+			destEndLine = destFset.Position(last.End()).Line
+		}
+	}
+	result.Changes = append(result.Changes, &CodeChange{
+		Type:        "move_method",
+		File:        sourceFile,
+		StartLine:   sourceStart,
+		EndLine:     sourceEnd,
+		Description: fmt.Sprintf("Moved %s to %s", declType, destFile),
+		OldCode:     declCode,
+	})
+	result.Changes = append(result.Changes, &CodeChange{
+		Type:        "move_method",
+		File:        destFile,
+		StartLine:   destStartLine,
+		EndLine:     destEndLine,
+		Description: fmt.Sprintf("Added %s from %s", declType, sourceFile),
+		NewCode:     declCode,
+	})
+}
+
+func extractOldName(target *TargetSpecification) string {
+	if target == nil {
+		return ""
+	}
+	if target.FunctionName != "" {
+		return target.FunctionName
+	}
+	return target.MethodName
+}
+func renameInFile(filename string, fileNode *ast.File, fset *token.FileSet, oldName, newName string, result *OperationResult) error {
+	changed := false
+	ast.Inspect(fileNode, func(n ast.Node) bool {
+		if ident, ok := n.(*ast.Ident); ok && ident.Name == oldName {
+			ident.Name = newName
+			changed = true
+		}
+		return true
+	})
+	if !changed {
+		return nil
+	}
+	var buf bytes.Buffer
+	if err := format.Node(&buf, fset, fileNode); err != nil {
+		return fmt.Errorf("failed to format %s: %w", filename, err)
+	}
+	normalized, nErr := format.Source(buf.Bytes())
+	if nErr != nil {
+		normalized = buf.Bytes()
+	}
+	if err := os.WriteFile(filename, normalized, 0644); err != nil {
+		return fmt.Errorf("failed to write %s: %w", filename, err)
+	}
+	result.Changes = append(result.Changes, &CodeChange{
+		Type:        "rename_declaration",
+		File:        filename,
+		Description: fmt.Sprintf("Renamed %q to %q in %s", oldName, newName, filename),
+	})
+	return nil
+}
+func (o *Orchestrator) executeRenameDeclaration(operation *RefactoringOperation, result *OperationResult) error {
+	oldName := extractOldName(operation.Target)
 	if oldName == "" {
 		return fmt.Errorf("target functionName or methodName is required for rename_declaration")
 	}
@@ -489,37 +417,79 @@ func (o *Orchestrator) executeRenameDeclaration(operation *RefactoringOperation,
 	}
 	for _, pkg := range pkgs {
 		for filename, fileNode := range pkg.Files {
-			changed := false
-			ast.Inspect(fileNode, func(n ast.Node) bool {
-				if ident, ok := n.(*ast.Ident); ok && ident.Name == oldName {
-					ident.Name = newName
-					changed = true
-				}
-				return true
-			})
-			if !changed {
-				continue
+			if err := renameInFile(filename, fileNode, fset, oldName, newName, result); err != nil {
+				return err
 			}
-			var buf bytes.Buffer
-			if err := format.Node(&buf, fset, fileNode); err != nil {
-				return fmt.Errorf("failed to format %s: %w", filename, err)
-			}
-			normalized, nErr := format.Source(buf.Bytes())
-			if nErr != nil {
-				normalized = buf.Bytes()
-			}
-			if err := os.WriteFile(filename, normalized, 0644); err != nil {
-				return fmt.Errorf("failed to write %s: %w", filename, err)
-			}
-			result.Changes = append(result.Changes, &CodeChange{
-				Type:        "rename_declaration",
-				File:        filename,
-				Description: fmt.Sprintf("Renamed %q to %q in %s", oldName, newName, filename),
-			})
 		}
 	}
 	if len(result.Changes) == 0 {
 		return fmt.Errorf("identifier %q not found in package", oldName)
 	}
+	return nil
+}
+func appendDeclToFile(filePath, declCode, packageName string) error {
+	var content []byte
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		content = []byte(fmt.Sprintf("package %s\n", packageName))
+	} else {
+		var err error
+		content, err = os.ReadFile(filePath)
+		if err != nil {
+			return fmt.Errorf("failed to read destination file: %w", err)
+		}
+	}
+	content = append(bytes.TrimRight(content, "\n\r"), []byte("\n\n"+declCode+"\n")...)
+	if err := os.WriteFile(filePath, content, 0644); err != nil {
+		return fmt.Errorf("failed to write destination file: %w", err)
+	}
+	if err := exec.Command("goimports", "-w", filePath).Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: goimports on %s: %v\n", filePath, err)
+	}
+	return nil
+}
+func (o *Orchestrator) executeMoveMethod(operation *RefactoringOperation, target *TargetLocation, result *OperationResult) error {
+	newFile, ok := operation.Parameters["newFile"].(string)
+	if !ok {
+		return fmt.Errorf("newFile parameter is required for move_method operation")
+	}
+	src, err := os.ReadFile(target.File)
+	if err != nil {
+		return fmt.Errorf("failed to read source file: %w", err)
+	}
+	fset := token.NewFileSet()
+	sourceNode, err := parser.ParseFile(fset, target.File, src, parser.ParseComments)
+	if err != nil {
+		return fmt.Errorf("failed to parse source file: %w", err)
+	}
+	actualTarget, err := o.findTarget(operation.Target, target.File)
+	if err != nil {
+		return fmt.Errorf("failed to re-find target: %w", err)
+	}
+	declToMove, declIndex, declType, err := findDeclInRange(sourceNode.Decls, fset, actualTarget.StartLine, actualTarget.EndLine)
+	if err != nil {
+		return fmt.Errorf("declaration not found at lines %d-%d in file %s\n%s", actualTarget.StartLine, actualTarget.EndLine, target.File, err.Error())
+	}
+	textStart := fset.Position(declToMove.Pos()).Offset
+	textEnd := fset.Position(declToMove.End()).Offset
+	var newSourceComments []*ast.CommentGroup
+	for _, cg := range sourceNode.Comments {
+		if commentBelongsToDecl(fset, declToMove.Pos(), declToMove.End(), cg) {
+			if off := fset.Position(cg.Pos()).Offset; off < textStart {
+				textStart = off
+			}
+		} else {
+			newSourceComments = append(newSourceComments, cg)
+		}
+	}
+	declCode := string(bytes.TrimSpace(src[textStart:textEnd]))
+	sourceNode.Decls = append(sourceNode.Decls[:declIndex], sourceNode.Decls[declIndex+1:]...)
+	sourceNode.Comments = newSourceComments
+	if err := writeFileAndImport(target.File, sourceNode, fset); err != nil {
+		return err
+	}
+	if err := appendDeclToFile(newFile, declCode, sourceNode.Name.Name); err != nil {
+		return err
+	}
+	recordMoveResults(result, target.File, newFile, actualTarget.StartLine, actualTarget.EndLine, declCode, declType)
 	return nil
 }

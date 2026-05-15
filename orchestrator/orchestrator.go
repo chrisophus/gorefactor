@@ -149,12 +149,6 @@ func (o *Orchestrator) executeOperation(operation *RefactoringOperation) *Operat
 
 	// Execute the operation based on type
 	switch operation.Type {
-	case "extract_method":
-		err = o.executeExtractMethod(operation, target, result)
-	case "inline_method":
-		err = o.executeInlineMethod(operation, target, result)
-	case "rename_variable":
-		err = o.executeRenameVariable(operation, target, result)
 	case "move_method":
 		err = o.executeMoveMethod(operation, target, result)
 	case "insert_code":

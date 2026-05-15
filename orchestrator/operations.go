@@ -7,61 +7,10 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
-	"gorefactor/extractor"
 	"os"
 	"os/exec"
 	"strings"
 )
-
-// executeExtractMethod executes a method extraction operation
-func (o *Orchestrator) executeExtractMethod(operation *RefactoringOperation, target *TargetLocation, result *OperationResult) error {
-	methodName, ok := operation.Parameters["methodName"].(string)
-	if !ok {
-		return fmt.Errorf("methodName parameter is required for extract_method operation")
-	}
-
-	extractionResult, err := extractor.ExtractMethod(target.File, target.StartLine, target.EndLine, methodName)
-	if err != nil {
-		return fmt.Errorf("failed to extract method: %w", err)
-	}
-
-	result.Changes = append(result.Changes, &CodeChange{
-		Type:        "extract_method",
-		File:        target.File,
-		StartLine:   target.StartLine,
-		EndLine:     target.EndLine,
-		Description: fmt.Sprintf("Extracted method '%s'", methodName),
-		NewCode:     fmt.Sprintf("Method '%s' extracted with parameters: %v", methodName, extractionResult.Parameters),
-	})
-
-	return nil
-}
-
-// executeInlineMethod executes a method inlining operation
-func (o *Orchestrator) executeInlineMethod(operation *RefactoringOperation, target *TargetLocation, result *OperationResult) error {
-	// Implementation for method inlining
-	result.Changes = append(result.Changes, &CodeChange{
-		Type:        "inline_method",
-		File:        target.File,
-		StartLine:   target.StartLine,
-		EndLine:     target.EndLine,
-		Description: "Inlined method call",
-	})
-	return nil
-}
-
-// executeRenameVariable executes a variable renaming operation
-func (o *Orchestrator) executeRenameVariable(operation *RefactoringOperation, target *TargetLocation, result *OperationResult) error {
-	// Implementation for variable renaming
-	result.Changes = append(result.Changes, &CodeChange{
-		Type:        "rename_variable",
-		File:        target.File,
-		StartLine:   target.StartLine,
-		EndLine:     target.EndLine,
-		Description: "Renamed variable",
-	})
-	return nil
-}
 
 // commentBelongsToDecl returns true if a comment group should be associated with a declaration.
 // If the comment lies inside the declaration's tokens, or if it ends within one blank line above the declaration.

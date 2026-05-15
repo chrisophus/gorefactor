@@ -31,7 +31,7 @@ func ExtractMethod(filePath string, startLine, endLine int, methodName string) (
 	var (
 		block        *ast.BlockStmt
 		parentFunc   *ast.FuncDecl
-		minBlockSize int = 1<<31 - 1 // max int
+		minBlockSize = 1<<31 - 1 // max int
 	)
 	ast.Inspect(node, func(n ast.Node) bool {
 		if n == nil {

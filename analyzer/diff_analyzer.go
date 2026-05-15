@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -60,7 +61,7 @@ func (da *DiffAnalyzer) AnalyzeDiffFile(diffPath string) (*DiffAnalysis, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to open diff file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	return da.AnalyzeDiffReader(file)
 }
@@ -81,7 +82,11 @@ func (da *DiffAnalyzer) AnalyzeDiffReader(reader interface{}) (*DiffAnalysis, er
 	case *strings.Reader:
 		// Convert strings.Reader to string content
 		buf := make([]byte, r.Len())
-		r.ReadAt(buf, 0)
+		if len(buf) > 0 {
+			if _, err := r.ReadAt(buf, 0); err != nil {
+				return nil, fmt.Errorf("failed to read from reader: %w", err)
+			}
+		}
 		scanner = bufio.NewScanner(strings.NewReader(string(buf)))
 	default:
 		return nil, fmt.Errorf("unsupported reader type")
@@ -143,6 +148,8 @@ func (da *DiffAnalyzer) AnalyzeDiffReader(reader interface{}) (*DiffAnalysis, er
 
 	// Analyze the changes
 	changes := da.analyzeChanges(files)
+	// Consolidate related changes (e.g., multiple variable renames of the same variable)
+	changes = da.consolidateChanges(changes)
 	summary := da.generateSummary(changes)
 	plan := da.generateRefactoringPlan(changes)
 
@@ -214,6 +221,17 @@ func (da *DiffAnalyzer) analyzeChanges(files []*DiffFile) []*Change {
 func (da *DiffAnalyzer) analyzeHunk(filePath string, hunk *DiffHunk) []*Change {
 	var changes []*Change
 
+	// Check for modifications first (take priority over add/remove)
+	modifiedLines := da.getModifiedLines(hunk)
+	if len(modifiedLines) > 0 {
+		change := da.analyzeModifiedCode(filePath, hunk, modifiedLines)
+		if change != nil {
+			changes = append(changes, change)
+			// If we found a modification, don't analyze as separate add/remove
+			return changes
+		}
+	}
+
 	// Analyze added lines
 	addedLines := da.getAddedLines(hunk)
 	if len(addedLines) > 0 {
@@ -227,15 +245,6 @@ func (da *DiffAnalyzer) analyzeHunk(filePath string, hunk *DiffHunk) []*Change {
 	removedLines := da.getRemovedLines(hunk)
 	if len(removedLines) > 0 {
 		change := da.analyzeRemovedCode(filePath, hunk, removedLines)
-		if change != nil {
-			changes = append(changes, change)
-		}
-	}
-
-	// Analyze modified lines
-	modifiedLines := da.getModifiedLines(hunk)
-	if len(modifiedLines) > 0 {
-		change := da.analyzeModifiedCode(filePath, hunk, modifiedLines)
 		if change != nil {
 			changes = append(changes, change)
 		}
@@ -292,22 +301,6 @@ func (da *DiffAnalyzer) getModifiedLines(hunk *DiffHunk) [][]string {
 func (da *DiffAnalyzer) analyzeAddedCode(filePath string, hunk *DiffHunk, addedLines []string) *Change {
 	code := strings.Join(addedLines, "\n")
 
-	// Detect function addition
-	if da.isFunctionAddition(code) {
-		return &Change{
-			Type:        "function_addition",
-			File:        filePath,
-			Description: "Added new function",
-			StartLine:   hunk.StartLine,
-			EndLine:     hunk.EndLine,
-			Confidence:  0.9,
-			Details: map[string]interface{}{
-				"functionName": da.extractFunctionName(code),
-				"code":         code,
-			},
-		}
-	}
-
 	// Detect method addition (check this before function addition)
 	if da.isMethodAddition(code) {
 		return &Change{
@@ -320,6 +313,22 @@ func (da *DiffAnalyzer) analyzeAddedCode(filePath string, hunk *DiffHunk, addedL
 			Details: map[string]interface{}{
 				"methodName":   da.extractMethodName(code),
 				"receiverType": da.extractReceiverType(code),
+				"code":         code,
+			},
+		}
+	}
+
+	// Detect function addition
+	if da.isFunctionAddition(code) {
+		return &Change{
+			Type:        "function_addition",
+			File:        filePath,
+			Description: "Added new function",
+			StartLine:   hunk.StartLine,
+			EndLine:     hunk.EndLine,
+			Confidence:  0.9,
+			Details: map[string]interface{}{
+				"functionName": da.extractFunctionName(code),
 				"code":         code,
 			},
 		}
@@ -411,12 +420,14 @@ func (da *DiffAnalyzer) analyzeModifiedCode(filePath string, hunk *DiffHunk, mod
 		return nil
 	}
 
-	if len(modifiedLines) < 2 {
+	// Each element in modifiedLines is a [old, new] pair
+	pair := modifiedLines[0]
+	if len(pair) < 2 {
 		return nil
 	}
 
-	oldCode := strings.Join(modifiedLines[0], "\n")
-	newCode := strings.Join(modifiedLines[1], "\n")
+	oldCode := pair[0]
+	newCode := pair[1]
 
 	// Detect variable renaming
 	if da.isVariableRename(oldCode, newCode) {
@@ -490,18 +501,66 @@ func (da *DiffAnalyzer) isFunctionRemoval(code string) bool {
 }
 
 func (da *DiffAnalyzer) isVariableRename(oldCode, newCode string) bool {
-	// Simple heuristic: if the codes are similar but have different variable names
-	oldVars := da.extractVariables(oldCode)
-	newVars := da.extractVariables(newCode)
+	// Trim whitespace for comparison
+	oldCode = strings.TrimSpace(oldCode)
+	newCode = strings.TrimSpace(newCode)
 
-	if len(oldVars) == 1 && len(newVars) == 1 && oldVars[0] != newVars[0] {
-		// Check if the structure is similar
-		oldClean := da.removeVariableNames(oldCode)
-		newClean := da.removeVariableNames(newCode)
-		return oldClean == newClean
+	// Check if codes differ in exactly one identifier
+	oldIdents := da.extractIdentifiers(oldCode)
+	newIdents := da.extractIdentifiers(newCode)
+
+	// Count different identifiers
+	oldSet := make(map[string]bool)
+	newSet := make(map[string]bool)
+	for _, id := range oldIdents {
+		oldSet[id] = true
+	}
+	for _, id := range newIdents {
+		newSet[id] = true
+	}
+
+	// If they have the same identifiers except for one difference, it's likely a rename
+	oldOnly := []string{}
+	newOnly := []string{}
+
+	for id := range oldSet {
+		if !newSet[id] {
+			oldOnly = append(oldOnly, id)
+		}
+	}
+
+	for id := range newSet {
+		if !oldSet[id] {
+			newOnly = append(newOnly, id)
+		}
+	}
+
+	// Rename detected if exactly one identifier differs
+	if len(oldOnly) == 1 && len(newOnly) == 1 {
+		// Verify structure is similar by replacing the old identifier with the new one
+		renamedCode := strings.ReplaceAll(oldCode, oldOnly[0], newOnly[0])
+		if renamedCode == newCode {
+			return true
+		}
 	}
 
 	return false
+}
+
+// extractIdentifiers extracts all identifiers (variable names) from code
+func (da *DiffAnalyzer) extractIdentifiers(code string) []string {
+	re := regexp.MustCompile(`[a-zA-Z_][a-zA-Z0-9_]*`)
+	matches := re.FindAllString(code, -1)
+	// Deduplicate and return
+	seen := make(map[string]bool)
+	var result []string
+	for _, m := range matches {
+		if !seen[m] {
+			result = append(result, m)
+			seen[m] = true
+		}
+	}
+	return result
 }
 
 func (da *DiffAnalyzer) isFunctionModification(oldCode, newCode string) bool {
@@ -555,30 +614,81 @@ func (da *DiffAnalyzer) extractStructName(code string) string {
 }
 
 func (da *DiffAnalyzer) extractVariableName(code string) string {
+	// First try assignment (x :=)
 	re := regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*)\s*:=`)
 	matches := re.FindStringSubmatch(code)
 	if len(matches) > 1 {
 		return matches[1]
 	}
+
+	// Fall back to extracting the single identifier from the code
+	// (useful for variable uses like fmt.Println(varName))
+	idents := da.extractIdentifiers(code)
+	if len(idents) == 1 {
+		return idents[0]
+	}
+	// If multiple identifiers, return the last one (usually the variable in question)
+	if len(idents) > 1 {
+		return idents[len(idents)-1]
+	}
+
 	return ""
 }
 
-func (da *DiffAnalyzer) extractVariables(code string) []string {
-	re := regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*)\s*:=`)
-	matches := re.FindAllStringSubmatch(code, -1)
-	var vars []string
-	for _, match := range matches {
-		if len(match) > 1 {
-			vars = append(vars, match[1])
+// consolidateChanges consolidates related changes (e.g., multiple renames of the same variable)
+func (da *DiffAnalyzer) consolidateChanges(changes []*Change) []*Change {
+	if len(changes) <= 1 {
+		return changes
+	}
+
+	// Check if all changes are variable_rename with the same old/new names
+	if allVariableRenames(changes) {
+		// Get the first change's old/new names
+		oldName := changes[0].Details["oldName"]
+		newName := changes[0].Details["newName"]
+
+		// Check if all renames are the same
+		allSameRename := true
+		for _, change := range changes {
+			if change.Details["oldName"] != oldName || change.Details["newName"] != newName {
+				allSameRename = false
+				break
+			}
+		}
+
+		if allSameRename && len(changes) > 1 {
+			// Consolidate into single change with first and last line numbers
+			consolidated := &Change{
+				Type:        "variable_rename",
+				File:        changes[0].File,
+				Description: fmt.Sprintf("Renamed variable %v to %v", oldName, newName),
+				StartLine:   changes[0].StartLine,
+				EndLine:     changes[len(changes)-1].EndLine,
+				Confidence:  0.8,
+				Details: map[string]interface{}{
+					"oldName":     oldName,
+					"newName":     newName,
+					"occurrences": len(changes),
+				},
+			}
+			return []*Change{consolidated}
 		}
 	}
-	return vars
+
+	return changes
 }
 
-func (da *DiffAnalyzer) removeVariableNames(code string) string {
-	// Remove variable names to compare structure
-	re := regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*)\s*:=`)
-	return re.ReplaceAllString(code, "VAR :=")
+// allVariableRenames checks if all changes are variable_rename type
+func allVariableRenames(changes []*Change) bool {
+	if len(changes) == 0 {
+		return false
+	}
+	for _, change := range changes {
+		if change.Type != "variable_rename" {
+			return false
+		}
+	}
+	return true
 }
 
 // generateSummary generates a summary of the changes
@@ -595,8 +705,15 @@ func (da *DiffAnalyzer) generateSummary(changes []*Change) string {
 		changeTypes[change.Type]++
 	}
 
-	for changeType, count := range changeTypes {
-		summary.WriteString(fmt.Sprintf("- %d %s\n", count, changeType))
+	// Sort change types alphabetically for consistent output
+	var types []string
+	for changeType := range changeTypes {
+		types = append(types, changeType)
+	}
+	sort.Strings(types)
+
+	for _, changeType := range types {
+		summary.WriteString(fmt.Sprintf("- %d %s\n", changeTypes[changeType], changeType))
 	}
 
 	return summary.String()

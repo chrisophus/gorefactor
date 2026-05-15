@@ -43,7 +43,7 @@ func TestLoadPlan_ValidJSON(t *testing.T) {
 	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
-	defer os.Remove(tmpFile)
+	defer func() { _ = os.Remove(tmpFile) }()
 
 	orch := NewOrchestrator()
 	loadedPlan, err := orch.LoadPlan(tmpFile)
@@ -70,7 +70,7 @@ func TestLoadPlan_InvalidJSON(t *testing.T) {
 	if err := os.WriteFile(tmpFile, []byte("invalid json"), 0644); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
-	defer os.Remove(tmpFile)
+	defer func() { _ = os.Remove(tmpFile) }()
 
 	orch := NewOrchestrator()
 	_, err := orch.LoadPlan(tmpFile)
@@ -385,7 +385,7 @@ func TestSaveResult_ValidResult(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SaveResult() failed: %v", err)
 	}
-	defer os.Remove(tmpFile)
+	defer func() { _ = os.Remove(tmpFile) }()
 
 	// Verify the file was created and contains valid JSON
 	data, err := os.ReadFile(tmpFile)

@@ -27,7 +27,7 @@ func (p *Processor) processData(data []int) int {
 	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-	defer os.Remove(testFile)
+	defer func() { _ = os.Remove(testFile) }()
 
 	// Test cases
 	tests := []struct {
@@ -89,7 +89,7 @@ func complexFunction(x, y int) int {
 	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-	defer os.Remove(testFile)
+	defer func() { _ = os.Remove(testFile) }()
 
 	result, err := ExtractMethod(testFile, 6, 8, "calculateTemp")
 	if err != nil {

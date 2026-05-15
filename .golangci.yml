@@ -1,0 +1,44 @@
+version: "2"
+
+linters:
+  enable:
+    - cyclop
+    - funlen
+    - dupl
+    - errcheck
+    - gosec
+    - govet
+    - staticcheck
+    - unused
+    - gocritic
+
+  settings:
+    cyclop:
+      max-complexity: 15
+    funlen:
+      lines: 100
+      statements: 60
+    dupl:
+      threshold: 100
+    gosec:
+      excludes:
+        - G304  # file path from variable — intentional in a file-editing tool
+        - G306  # WriteFile 0644 — correct for source files (not secrets)
+        - G301  # MkdirAll 0755 — correct for project directories
+        - G401  # MD5 — used for code deduplication fingerprinting, not cryptography
+        - G501  # MD5 import — same rationale as G401
+        - G702  # path traversal taint — tool operates on user-specified files
+        - G703  # path traversal taint — same
+        - G122  # symlink TOCTOU in Walk — acceptable for a local dev tool
+        - G204  # subprocess with variable — intentional (goimports calls)
+        - G706  # log injection taint — log.Printf with CLI args is expected
+
+  exclusions:
+    rules:
+      - linters: [funlen, dupl, cyclop, errcheck, gosec]
+        path: _test\.go
+    paths:
+      - ^testfiles/
+      - ^skill/
+      - ^examples/
+      - ^move_by_plan\.go$

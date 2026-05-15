@@ -71,7 +71,7 @@ func (da *DiffAnalyzer) generateSummary(changes []*Change) string {
 	}
 
 	var summary strings.Builder
-	summary.WriteString(fmt.Sprintf("Detected %d changes:\n", len(changes)))
+	fmt.Fprintf(&summary, "Detected %d changes:\n", len(changes))
 
 	changeTypes := make(map[string]int)
 	for _, change := range changes {
@@ -86,7 +86,7 @@ func (da *DiffAnalyzer) generateSummary(changes []*Change) string {
 	sort.Strings(types)
 
 	for _, changeType := range types {
-		summary.WriteString(fmt.Sprintf("- %d %s\n", changeTypes[changeType], changeType))
+		fmt.Fprintf(&summary, "- %d %s\n", changeTypes[changeType], changeType)
 	}
 
 	return summary.String()

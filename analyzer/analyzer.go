@@ -4,7 +4,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"testing"
 )
 
 // ExtractionConfig holds parameters for tuning extraction recommendations
@@ -158,7 +157,7 @@ func AnalyzeBlock(filePath string, startLine, endLine int, config *ExtractionCon
 	for _, n := range nodesInRange {
 		switch node := n.(type) {
 		case *ast.BlockStmt:
-			analyzeBlock(node, info, nil)
+			analyzeBlock(node, info)
 		case *ast.AssignStmt:
 			// Track variable assignments
 			for _, lhs := range node.Lhs {
@@ -205,7 +204,7 @@ func AnalyzeBlock(filePath string, startLine, endLine int, config *ExtractionCon
 	return info, nil
 }
 
-func analyzeBlock(block *ast.BlockStmt, info *BlockInfo, t *testing.T) {
+func analyzeBlock(block *ast.BlockStmt, info *BlockInfo) {
 	// Track variables and their usage
 	readVars := make(map[string]bool)
 	writeVars := make(map[string]bool)
@@ -215,9 +214,6 @@ func analyzeBlock(block *ast.BlockStmt, info *BlockInfo, t *testing.T) {
 	maxNesting := 0
 
 	ast.Inspect(block, func(n ast.Node) bool {
-		if t != nil {
-			t.Logf("Visiting node type: %T", n)
-		}
 		switch node := n.(type) {
 		case *ast.Ident:
 			// Track variable reads

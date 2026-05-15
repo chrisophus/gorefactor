@@ -52,7 +52,7 @@ func (o *Orchestrator) executeMoveMethod(operation *RefactoringOperation, target
 
 	// Find the declaration to move using line numbers from the same FileSet
 	var declToMove ast.Decl
-	var declIndex int = -1
+	declIndex := -1
 	var declType string
 
 	for i, decl := range sourceNode.Decls {
@@ -172,8 +172,7 @@ func (o *Orchestrator) executeMoveMethod(operation *RefactoringOperation, target
 	// Run goimports on source file to fix imports
 	cmd := exec.Command("goimports", "-w", target.File)
 	if err := cmd.Run(); err != nil {
-		// Log but don't fail - goimports might not be available
-		// This is a best-effort operation
+		fmt.Fprintf(os.Stderr, "warning: goimports on %s: %v\n", target.File, err)
 	}
 
 	// Parse or create destination file
@@ -217,8 +216,7 @@ func (o *Orchestrator) executeMoveMethod(operation *RefactoringOperation, target
 	// Run goimports on destination file to fix imports
 	cmd = exec.Command("goimports", "-w", newFile)
 	if err := cmd.Run(); err != nil {
-		// Log but don't fail - goimports might not be available
-		// This is a best-effort operation
+		fmt.Fprintf(os.Stderr, "warning: goimports on %s: %v\n", newFile, err)
 	}
 
 	// Re-read the file after goimports may have modified it

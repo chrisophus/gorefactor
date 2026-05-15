@@ -1,0 +1,660 @@
+{
+  "version": "1.0",
+  "name": "split_long_files",
+  "description": "Break files over 500 lines into focused, smaller files. Six files exceed the limit: orchestrator.go (1059), orchestrator_test.go (1259), diff_analyzer.go (832), diff_analyzer_test.go (657), analyzer_test.go (561), symbol_analyzer.go (550).",
+  "operations": [
+
+    {
+      "type": "move_method",
+      "description": "Move RefactoringOperation type to types.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "typeName": "RefactoringOperation" },
+      "parameters": { "newFile": "orchestrator/types.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TargetSpecification type to types.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "typeName": "TargetSpecification" },
+      "parameters": { "newFile": "orchestrator/types.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move Condition type to types.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "typeName": "Condition" },
+      "parameters": { "newFile": "orchestrator/types.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move FallbackStrategy type to types.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "typeName": "FallbackStrategy" },
+      "parameters": { "newFile": "orchestrator/types.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move RefactoringPlan type to types.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "typeName": "RefactoringPlan" },
+      "parameters": { "newFile": "orchestrator/types.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move ExecutionResult type to types.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "typeName": "ExecutionResult" },
+      "parameters": { "newFile": "orchestrator/types.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move OperationResult type to types.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "typeName": "OperationResult" },
+      "parameters": { "newFile": "orchestrator/types.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move CodeChange type to types.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "typeName": "CodeChange" },
+      "parameters": { "newFile": "orchestrator/types.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move ExecutionStatistics type to types.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "typeName": "ExecutionStatistics" },
+      "parameters": { "newFile": "orchestrator/types.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move Orchestrator struct to types.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "typeName": "Orchestrator" },
+      "parameters": { "newFile": "orchestrator/types.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+
+    {
+      "type": "move_method",
+      "description": "Move TargetLocation type to targeting.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "typeName": "TargetLocation" },
+      "parameters": { "newFile": "orchestrator/targeting.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move findTarget method to targeting.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "methodName": "findTarget" },
+      "parameters": { "newFile": "orchestrator/targeting.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move findTargetBySemantics method to targeting.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "methodName": "findTargetBySemantics" },
+      "parameters": { "newFile": "orchestrator/targeting.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move calculateSemanticScore method to targeting.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "methodName": "calculateSemanticScore" },
+      "parameters": { "newFile": "orchestrator/targeting.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move nodeToString method to targeting.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "methodName": "nodeToString" },
+      "parameters": { "newFile": "orchestrator/targeting.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+
+    {
+      "type": "move_method",
+      "description": "Move executeExtractMethod to operations.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "methodName": "executeExtractMethod" },
+      "parameters": { "newFile": "orchestrator/operations.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move executeInlineMethod to operations.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "methodName": "executeInlineMethod" },
+      "parameters": { "newFile": "orchestrator/operations.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move executeRenameVariable to operations.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "methodName": "executeRenameVariable" },
+      "parameters": { "newFile": "orchestrator/operations.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move commentBelongsToDecl helper to operations.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "functionName": "commentBelongsToDecl" },
+      "parameters": { "newFile": "orchestrator/operations.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move executeMoveMethod to operations.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "methodName": "executeMoveMethod" },
+      "parameters": { "newFile": "orchestrator/operations.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move executeInsertCode to operations.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "methodName": "executeInsertCode" },
+      "parameters": { "newFile": "orchestrator/operations.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move executeCreateFile to operations.go",
+      "file": "orchestrator/orchestrator.go",
+      "target": { "methodName": "executeCreateFile" },
+      "parameters": { "newFile": "orchestrator/operations.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+
+    {
+      "type": "move_method",
+      "description": "Move TestFindTargetBySemantics_RegexPattern to targeting_test.go",
+      "file": "orchestrator/orchestrator_test.go",
+      "target": { "functionName": "TestFindTargetBySemantics_RegexPattern" },
+      "parameters": { "newFile": "orchestrator/targeting_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestFindTargetBySemantics_TypeDeclaration to targeting_test.go",
+      "file": "orchestrator/orchestrator_test.go",
+      "target": { "functionName": "TestFindTargetBySemantics_TypeDeclaration" },
+      "parameters": { "newFile": "orchestrator/targeting_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestFindTargetBySemantics_ConstDeclaration to targeting_test.go",
+      "file": "orchestrator/orchestrator_test.go",
+      "target": { "functionName": "TestFindTargetBySemantics_ConstDeclaration" },
+      "parameters": { "newFile": "orchestrator/targeting_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestFindTargetBySemantics_VarDeclaration to targeting_test.go",
+      "file": "orchestrator/orchestrator_test.go",
+      "target": { "functionName": "TestFindTargetBySemantics_VarDeclaration" },
+      "parameters": { "newFile": "orchestrator/targeting_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestCalculateSemanticScore_InvalidRegex_Fallback to targeting_test.go",
+      "file": "orchestrator/orchestrator_test.go",
+      "target": { "functionName": "TestCalculateSemanticScore_InvalidRegex_Fallback" },
+      "parameters": { "newFile": "orchestrator/targeting_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestFindTargetBySemantics_MultipleDeclarations to targeting_test.go",
+      "file": "orchestrator/orchestrator_test.go",
+      "target": { "functionName": "TestFindTargetBySemantics_MultipleDeclarations" },
+      "parameters": { "newFile": "orchestrator/targeting_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+
+    {
+      "type": "move_method",
+      "description": "Move TestInsertCode_FileCreation_AtBeginning to insertion_test.go",
+      "file": "orchestrator/orchestrator_test.go",
+      "target": { "functionName": "TestInsertCode_FileCreation_AtBeginning" },
+      "parameters": { "newFile": "orchestrator/insertion_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestExecuteInsertCode_NewFile_AtBeginning to insertion_test.go",
+      "file": "orchestrator/orchestrator_test.go",
+      "target": { "functionName": "TestExecuteInsertCode_NewFile_AtBeginning" },
+      "parameters": { "newFile": "orchestrator/insertion_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestInsertCode_EmptyFile to insertion_test.go",
+      "file": "orchestrator/orchestrator_test.go",
+      "target": { "functionName": "TestInsertCode_EmptyFile" },
+      "parameters": { "newFile": "orchestrator/insertion_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestInsertCode_CommentsOnly to insertion_test.go",
+      "file": "orchestrator/orchestrator_test.go",
+      "target": { "functionName": "TestInsertCode_CommentsOnly" },
+      "parameters": { "newFile": "orchestrator/insertion_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestInsertCode_PackageOnly to insertion_test.go",
+      "file": "orchestrator/orchestrator_test.go",
+      "target": { "functionName": "TestInsertCode_PackageOnly" },
+      "parameters": { "newFile": "orchestrator/insertion_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+
+    {
+      "type": "move_method",
+      "description": "Move TestExecuteCreateFile_NewFile to file_ops_test.go",
+      "file": "orchestrator/orchestrator_test.go",
+      "target": { "functionName": "TestExecuteCreateFile_NewFile" },
+      "parameters": { "newFile": "orchestrator/file_ops_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestExecuteCreateFile_ExistingFile_SkipFallback to file_ops_test.go",
+      "file": "orchestrator/orchestrator_test.go",
+      "target": { "functionName": "TestExecuteCreateFile_ExistingFile_SkipFallback" },
+      "parameters": { "newFile": "orchestrator/file_ops_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestExecutePlan_NewFileCreation integration test to file_ops_test.go",
+      "file": "orchestrator/orchestrator_test.go",
+      "target": { "functionName": "TestExecutePlan_NewFileCreation" },
+      "parameters": { "newFile": "orchestrator/file_ops_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+
+    {
+      "type": "move_method",
+      "description": "Move TestValidatePlan_ValidPlan to validation_test.go",
+      "file": "orchestrator/orchestrator_test.go",
+      "target": { "functionName": "TestValidatePlan_ValidPlan" },
+      "parameters": { "newFile": "orchestrator/validation_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestValidatePlan_InvalidPlan to validation_test.go",
+      "file": "orchestrator/orchestrator_test.go",
+      "target": { "functionName": "TestValidatePlan_InvalidPlan" },
+      "parameters": { "newFile": "orchestrator/validation_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestSaveResult_ValidResult to validation_test.go",
+      "file": "orchestrator/orchestrator_test.go",
+      "target": { "functionName": "TestSaveResult_ValidResult" },
+      "parameters": { "newFile": "orchestrator/validation_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestSaveResult_InvalidPath to validation_test.go",
+      "file": "orchestrator/orchestrator_test.go",
+      "target": { "functionName": "TestSaveResult_InvalidPath" },
+      "parameters": { "newFile": "orchestrator/validation_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestPlanSerialization to validation_test.go",
+      "file": "orchestrator/orchestrator_test.go",
+      "target": { "functionName": "TestPlanSerialization" },
+      "parameters": { "newFile": "orchestrator/validation_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestOperationValidation to validation_test.go",
+      "file": "orchestrator/orchestrator_test.go",
+      "target": { "functionName": "TestOperationValidation" },
+      "parameters": { "newFile": "orchestrator/validation_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+
+    {
+      "type": "move_method",
+      "description": "Move isFunctionAddition to diff_patterns.go",
+      "file": "analyzer/diff_analyzer.go",
+      "target": { "methodName": "isFunctionAddition" },
+      "parameters": { "newFile": "analyzer/diff_patterns.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move isMethodAddition to diff_patterns.go",
+      "file": "analyzer/diff_analyzer.go",
+      "target": { "methodName": "isMethodAddition" },
+      "parameters": { "newFile": "analyzer/diff_patterns.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move isInterfaceAddition to diff_patterns.go",
+      "file": "analyzer/diff_analyzer.go",
+      "target": { "methodName": "isInterfaceAddition" },
+      "parameters": { "newFile": "analyzer/diff_patterns.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move isStructAddition to diff_patterns.go",
+      "file": "analyzer/diff_analyzer.go",
+      "target": { "methodName": "isStructAddition" },
+      "parameters": { "newFile": "analyzer/diff_patterns.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move isFunctionRemoval to diff_patterns.go",
+      "file": "analyzer/diff_analyzer.go",
+      "target": { "methodName": "isFunctionRemoval" },
+      "parameters": { "newFile": "analyzer/diff_patterns.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move isVariableRename to diff_patterns.go",
+      "file": "analyzer/diff_analyzer.go",
+      "target": { "methodName": "isVariableRename" },
+      "parameters": { "newFile": "analyzer/diff_patterns.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move extractIdentifiers to diff_patterns.go",
+      "file": "analyzer/diff_analyzer.go",
+      "target": { "methodName": "extractIdentifiers" },
+      "parameters": { "newFile": "analyzer/diff_patterns.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move isFunctionModification to diff_patterns.go",
+      "file": "analyzer/diff_analyzer.go",
+      "target": { "methodName": "isFunctionModification" },
+      "parameters": { "newFile": "analyzer/diff_patterns.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move extractFunctionName to diff_patterns.go",
+      "file": "analyzer/diff_analyzer.go",
+      "target": { "methodName": "extractFunctionName" },
+      "parameters": { "newFile": "analyzer/diff_patterns.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move extractMethodName to diff_patterns.go",
+      "file": "analyzer/diff_analyzer.go",
+      "target": { "methodName": "extractMethodName" },
+      "parameters": { "newFile": "analyzer/diff_patterns.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move extractReceiverType to diff_patterns.go",
+      "file": "analyzer/diff_analyzer.go",
+      "target": { "methodName": "extractReceiverType" },
+      "parameters": { "newFile": "analyzer/diff_patterns.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move extractInterfaceName to diff_patterns.go",
+      "file": "analyzer/diff_analyzer.go",
+      "target": { "methodName": "extractInterfaceName" },
+      "parameters": { "newFile": "analyzer/diff_patterns.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move extractStructName to diff_patterns.go",
+      "file": "analyzer/diff_analyzer.go",
+      "target": { "methodName": "extractStructName" },
+      "parameters": { "newFile": "analyzer/diff_patterns.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move extractVariableName to diff_patterns.go",
+      "file": "analyzer/diff_analyzer.go",
+      "target": { "methodName": "extractVariableName" },
+      "parameters": { "newFile": "analyzer/diff_patterns.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+
+    {
+      "type": "move_method",
+      "description": "Move consolidateChanges to diff_plan_generator.go",
+      "file": "analyzer/diff_analyzer.go",
+      "target": { "methodName": "consolidateChanges" },
+      "parameters": { "newFile": "analyzer/diff_plan_generator.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move allVariableRenames helper to diff_plan_generator.go",
+      "file": "analyzer/diff_analyzer.go",
+      "target": { "functionName": "allVariableRenames" },
+      "parameters": { "newFile": "analyzer/diff_plan_generator.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move generateSummary to diff_plan_generator.go",
+      "file": "analyzer/diff_analyzer.go",
+      "target": { "methodName": "generateSummary" },
+      "parameters": { "newFile": "analyzer/diff_plan_generator.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move generateRefactoringPlan to diff_plan_generator.go",
+      "file": "analyzer/diff_analyzer.go",
+      "target": { "methodName": "generateRefactoringPlan" },
+      "parameters": { "newFile": "analyzer/diff_plan_generator.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move changeToOperation to diff_plan_generator.go",
+      "file": "analyzer/diff_analyzer.go",
+      "target": { "methodName": "changeToOperation" },
+      "parameters": { "newFile": "analyzer/diff_plan_generator.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+
+    {
+      "type": "move_method",
+      "description": "Move TestGenerateRefactoringPlan_ValidFallbackStrategies to diff_plan_test.go",
+      "file": "analyzer/diff_analyzer_test.go",
+      "target": { "functionName": "TestGenerateRefactoringPlan_ValidFallbackStrategies" },
+      "parameters": { "newFile": "analyzer/diff_plan_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestGenerateRefactoringPlan_Metadata to diff_plan_test.go",
+      "file": "analyzer/diff_analyzer_test.go",
+      "target": { "functionName": "TestGenerateRefactoringPlan_Metadata" },
+      "parameters": { "newFile": "analyzer/diff_plan_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestGenerateSummary to diff_plan_test.go",
+      "file": "analyzer/diff_analyzer_test.go",
+      "target": { "functionName": "TestGenerateSummary" },
+      "parameters": { "newFile": "analyzer/diff_plan_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestChangeToOperation_ValidOperationTypes to diff_plan_test.go",
+      "file": "analyzer/diff_analyzer_test.go",
+      "target": { "functionName": "TestChangeToOperation_ValidOperationTypes" },
+      "parameters": { "newFile": "analyzer/diff_plan_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestPlanSerialization to diff_plan_test.go",
+      "file": "analyzer/diff_analyzer_test.go",
+      "target": { "functionName": "TestPlanSerialization" },
+      "parameters": { "newFile": "analyzer/diff_plan_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestPlanValidation to diff_plan_test.go",
+      "file": "analyzer/diff_analyzer_test.go",
+      "target": { "functionName": "TestPlanValidation" },
+      "parameters": { "newFile": "analyzer/diff_plan_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+
+    {
+      "type": "move_method",
+      "description": "Move TestRecommendExtractions to recommendations_test.go",
+      "file": "analyzer/analyzer_test.go",
+      "target": { "functionName": "TestRecommendExtractions" },
+      "parameters": { "newFile": "analyzer/recommendations_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestRecommendExtractions_LargeFunction to recommendations_test.go",
+      "file": "analyzer/analyzer_test.go",
+      "target": { "functionName": "TestRecommendExtractions_LargeFunction" },
+      "parameters": { "newFile": "analyzer/recommendations_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestRecommendExtractions_ManyVariables to recommendations_test.go",
+      "file": "analyzer/analyzer_test.go",
+      "target": { "functionName": "TestRecommendExtractions_ManyVariables" },
+      "parameters": { "newFile": "analyzer/recommendations_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestRecommendExtractions_RealisticExtraction to recommendations_test.go",
+      "file": "analyzer/analyzer_test.go",
+      "target": { "functionName": "TestRecommendExtractions_RealisticExtraction" },
+      "parameters": { "newFile": "analyzer/recommendations_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move TestRecommendExtractionsWithConfig to recommendations_test.go",
+      "file": "analyzer/analyzer_test.go",
+      "target": { "functionName": "TestRecommendExtractionsWithConfig" },
+      "parameters": { "newFile": "analyzer/recommendations_test.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+
+    {
+      "type": "move_method",
+      "description": "Move useWalker type to symbol_walker.go",
+      "file": "analyzer/symbol_analyzer.go",
+      "target": { "typeName": "useWalker" },
+      "parameters": { "newFile": "analyzer/symbol_walker.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move inspectNode method to symbol_walker.go",
+      "file": "analyzer/symbol_analyzer.go",
+      "target": { "methodName": "inspectNode" },
+      "parameters": { "newFile": "analyzer/symbol_walker.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move visitCall method to symbol_walker.go",
+      "file": "analyzer/symbol_analyzer.go",
+      "target": { "methodName": "visitCall" },
+      "parameters": { "newFile": "analyzer/symbol_walker.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move visitAssign method to symbol_walker.go",
+      "file": "analyzer/symbol_analyzer.go",
+      "target": { "methodName": "visitAssign" },
+      "parameters": { "newFile": "analyzer/symbol_walker.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move visitField method to symbol_walker.go",
+      "file": "analyzer/symbol_analyzer.go",
+      "target": { "methodName": "visitField" },
+      "parameters": { "newFile": "analyzer/symbol_walker.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move visitReturn method to symbol_walker.go",
+      "file": "analyzer/symbol_analyzer.go",
+      "target": { "methodName": "visitReturn" },
+      "parameters": { "newFile": "analyzer/symbol_walker.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move visitDefer method to symbol_walker.go",
+      "file": "analyzer/symbol_analyzer.go",
+      "target": { "methodName": "visitDefer" },
+      "parameters": { "newFile": "analyzer/symbol_walker.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    },
+    {
+      "type": "move_method",
+      "description": "Move visitTypeAssert method to symbol_walker.go",
+      "file": "analyzer/symbol_analyzer.go",
+      "target": { "methodName": "visitTypeAssert" },
+      "parameters": { "newFile": "analyzer/symbol_walker.go" },
+      "fallback": { "type": "skip", "description": "Skip if not found" }
+    }
+
+  ]
+}

@@ -163,6 +163,8 @@ func (o *Orchestrator) executeOperation(operation *RefactoringOperation) *Operat
 		err = o.executeCreateFile(operation, result)
 	case "remove_code_block":
 		err = o.executeRemoveCodeBlock(operation, result)
+	case "replace_code":
+		err = o.executeReplaceCode(operation, result)
 	default:
 		err = fmt.Errorf("unknown operation type: %s", operation.Type)
 	}
@@ -312,7 +314,7 @@ func (o *Orchestrator) validatePlan(plan *RefactoringPlan) error {
 
 // validateOperation validates a single operation
 func (o *Orchestrator) validateOperation(operation *RefactoringOperation) error {
-	if operation.Type == "remove_code_block" {
+	if operation.Type == "remove_code_block" || operation.Type == "replace_code" {
 		if operation.File == "" {
 			return fmt.Errorf("operation file is required")
 		}

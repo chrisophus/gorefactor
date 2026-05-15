@@ -1,0 +1,46 @@
+{
+  "version": "1.0",
+  "name": "replace_code",
+  "description": "Add replace_code operation: replaces a statement matching a pattern in a function body with new code.",
+  "operations": [
+    {
+      "type": "insert_code",
+      "description": "Add ReplaceCodeBlock method to code_inserter.go",
+      "file": "orchestrator/code_inserter.go",
+      "parameters": {
+        "location": { "type": "at_end" },
+        "codeSnippet": "func (ci *CodeInserter) ReplaceCodeBlock(filePath string, location *InsertionLocation, codePattern string, replacementCode string) (*InsertionResult, error) {\n\tsrc, err := os.ReadFile(filePath)\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"failed to read file: %w\", err)\n\t}\n\tfset := token.NewFileSet()\n\tnode, err := parser.ParseFile(fset, filePath, src, parser.ParseComments)\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"failed to parse file: %w\", err)\n\t}\n\ttargetFunc := ci.findFunction(node, location.FunctionName, location.MethodName, location.ReceiverType)\n\tif targetFunc == nil {\n\t\tname := location.FunctionName\n\t\tif name == \"\" {\n\t\t\tname = location.MethodName\n\t\t}\n\t\treturn nil, fmt.Errorf(\"function not found: %s\", name)\n\t}\n\tif targetFunc.Body == nil {\n\t\treturn nil, fmt.Errorf(\"function %s has no body\", targetFunc.Name.Name)\n\t}\n\tnormPattern := stripWhitespace(codePattern)\n\tfoundIdx := -1\n\tfor i, stmt := range targetFunc.Body.List {\n\t\tstart := fset.Position(stmt.Pos()).Offset\n\t\tend := fset.Position(stmt.End()).Offset\n\t\tif start < 0 || end > len(src) || end <= start {\n\t\t\tcontinue\n\t\t}\n\t\tif strings.Contains(stripWhitespace(string(src[start:end])), normPattern) {\n\t\t\tfoundIdx = i\n\t\t\tbreak\n\t\t}\n\t}\n\tif foundIdx < 0 {\n\t\treturn nil, fmt.Errorf(\"no statement matching %q found in %s\", codePattern, targetFunc.Name.Name)\n\t}\n\treplacementStmts, err := ci.parseCodeSnippetAsStatements(replacementCode, fset)\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"failed to parse replacement code: %w\", err)\n\t}\n\tstartLine := fset.Position(targetFunc.Body.List[foundIdx].Pos()).Line\n\tendLine := fset.Position(targetFunc.Body.List[foundIdx].End()).Line\n\ttargetFunc.Body.List = append(\n\t\ttargetFunc.Body.List[:foundIdx],\n\t\tappend(replacementStmts, targetFunc.Body.List[foundIdx+1:]...)...,\n\t)\n\tif err := ci.writeFormattedFile(filePath, node, fset); err != nil {\n\t\treturn nil, err\n\t}\n\treturn &InsertionResult{\n\t\tFile:         filePath,\n\t\tLocation:     fmt.Sprintf(\"inside function %s\", targetFunc.Name.Name),\n\t\tStartLine:    startLine,\n\t\tEndLine:      endLine,\n\t\tDescription:  fmt.Sprintf(\"Replaced code matching %q in %s\", codePattern, targetFunc.Name.Name),\n\t\tInsertedCode: replacementCode,\n\t}, nil\n}"
+      }
+    },
+    {
+      "type": "insert_code",
+      "description": "Add executeReplaceCode method to operations.go",
+      "file": "orchestrator/operations.go",
+      "parameters": {
+        "location": { "type": "at_end" },
+        "codeSnippet": "func (o *Orchestrator) executeReplaceCode(operation *RefactoringOperation, result *OperationResult) error {\n\tcodePattern, _ := operation.Parameters[\"codePattern\"].(string)\n\tif codePattern == \"\" {\n\t\treturn fmt.Errorf(\"codePattern parameter is required for replace_code\")\n\t}\n\treplacementCode, _ := operation.Parameters[\"replacementCode\"].(string)\n\tif replacementCode == \"\" {\n\t\treturn fmt.Errorf(\"replacementCode parameter is required for replace_code\")\n\t}\n\tlocationMap, ok := operation.Parameters[\"location\"].(map[string]interface{})\n\tif !ok {\n\t\treturn fmt.Errorf(\"location parameter is required for replace_code\")\n\t}\n\tfuncName, _ := locationMap[\"functionName\"].(string)\n\tmethodName, _ := locationMap[\"methodName\"].(string)\n\treceiverType, _ := locationMap[\"receiverType\"].(string)\n\tci := NewCodeInserter()\n\tins, err := ci.ReplaceCodeBlock(operation.File, &InsertionLocation{\n\t\tFunctionName: funcName,\n\t\tMethodName:   methodName,\n\t\tReceiverType: receiverType,\n\t}, codePattern, replacementCode)\n\tif err != nil {\n\t\treturn err\n\t}\n\tresult.Changes = append(result.Changes, &CodeChange{\n\t\tType:        \"replace_code\",\n\t\tFile:        operation.File,\n\t\tStartLine:   ins.StartLine,\n\t\tEndLine:     ins.EndLine,\n\t\tDescription: ins.Description,\n\t\tNewCode:     ins.InsertedCode,\n\t})\n\treturn nil\n}"
+      }
+    },
+    {
+      "type": "remove_code_block",
+      "description": "Remove the remove_code_block-only guard from validateOperation",
+      "file": "orchestrator/orchestrator.go",
+      "parameters": {
+        "location": { "functionName": "validateOperation" },
+        "codePattern": "if operation.Type == \"remove_code_block\""
+      }
+    },
+    {
+      "type": "insert_code",
+      "description": "Insert broadened guard for remove_code_block and replace_code at start of validateOperation",
+      "file": "orchestrator/orchestrator.go",
+      "parameters": {
+        "location": {
+          "type": "inside_function",
+          "functionName": "validateOperation"
+        },
+        "codeSnippet": "if operation.Type == \"remove_code_block\" || operation.Type == \"replace_code\" {\n\tif operation.File == \"\" {\n\t\treturn fmt.Errorf(\"operation file is required\")\n\t}\n\treturn nil\n}"
+      }
+    }
+  ]
+}

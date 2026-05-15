@@ -432,3 +432,38 @@ func (o *Orchestrator) executeCreateFile(operation *RefactoringOperation, result
 
 	return nil
 }
+func (o *Orchestrator) executeReplaceCode(operation *RefactoringOperation, result *OperationResult) error {
+	codePattern, _ := operation.Parameters["codePattern"].(string)
+	if codePattern == "" {
+		return fmt.Errorf("codePattern parameter is required for replace_code")
+	}
+	replacementCode, _ := operation.Parameters["replacementCode"].(string)
+	if replacementCode == "" {
+		return fmt.Errorf("replacementCode parameter is required for replace_code")
+	}
+	locationMap, ok := operation.Parameters["location"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("location parameter is required for replace_code")
+	}
+	funcName, _ := locationMap["functionName"].(string)
+	methodName, _ := locationMap["methodName"].(string)
+	receiverType, _ := locationMap["receiverType"].(string)
+	ci := NewCodeInserter()
+	ins, err := ci.ReplaceCodeBlock(operation.File, &InsertionLocation{
+		FunctionName: funcName,
+		MethodName:   methodName,
+		ReceiverType: receiverType,
+	}, codePattern, replacementCode)
+	if err != nil {
+		return err
+	}
+	result.Changes = append(result.Changes, &CodeChange{
+		Type:        "replace_code",
+		File:        operation.File,
+		StartLine:   ins.StartLine,
+		EndLine:     ins.EndLine,
+		Description: ins.Description,
+		NewCode:     ins.InsertedCode,
+	})
+	return nil
+}

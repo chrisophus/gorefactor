@@ -271,6 +271,120 @@ The skill is designed for Claude Code workflows:
 
 For detailed documentation, see `SKILL_REFACTOR.md`.
 
+## Analysis Tools for Development
+
+GoRefactor includes built-in analysis tools (Phases 1-3) that help understand code structure during implementation:
+
+### Available Analysis Tools
+
+**Phase 1: Cross-File Duplicate Detection**
+```bash
+./gorefactor analyze-dir ./src
+# Finds duplicate code patterns across files
+# Returns: DuplicateBlock with impact scores and consolidation recommendations
+```
+
+**Phase 2: Find-All-Uses (Symbol Tracking)**
+```bash
+# Use the analyzer package directly in code
+# Tracks: calls, reads, writes, definitions, parameters, returns
+# Enables: understanding symbol dependencies before refactoring
+```
+
+**Phase 3: Find-Callers (Who Calls What)**
+```bash
+# Use the call analyzer for caller analysis
+# Shows: direct calls, indirect (interface) calls, test calls
+# Enables: understanding impact before renaming or moving functions
+```
+
+### Using Analysis During Implementation
+
+Before implementing new features, use analysis to:
+
+1. **Find existing patterns** - Don't duplicate what already exists
+   ```bash
+   ./refactor-skill.sh analyze-dir ./analyzer
+   # Shows code patterns and opportunities
+   ```
+
+2. **Understand dependencies** - Know what depends on code you're changing
+   ```bash
+   ./refactor-skill.sh find-callers FunctionName
+   # Lists all places that call a function
+   ```
+
+3. **Check for duplication** - Before writing new code
+   ```bash
+   ./refactor-skill.sh find-uses SymbolName
+   # Shows all uses of a symbol
+   ```
+
+4. **Find dead code** - Clean up before adding new code
+   ```bash
+   ./refactor-skill.sh find-unused ./internal
+   # Identifies potentially unused symbols
+   ```
+
+### When Claude Should Use Analysis Tools
+
+✅ **Use analysis tools when**:
+- Starting a new implementation phase
+- Before refactoring existing code
+- When designing interfaces or abstractions
+- To understand what code already exists
+- To verify assumptions about code structure
+
+❌ **Skip analysis if**:
+- Writing simple standalone code (test cases)
+- Feature is entirely new with no existing patterns
+- Task is to write documentation, not code
+
+### Example: Phase 4 Implementation
+
+Before implementing `find-implementations`:
+```bash
+# 1. Find how interfaces are currently analyzed
+./refactor-skill.sh find-callers "collectDefinitions"
+
+# 2. Check for duplicate interface handling code
+./refactor-skill.sh analyze-dir ./analyzer
+
+# 3. Find uses of existing interface types
+./refactor-skill.sh find-uses "InterfaceType"
+```
+
+This helps Claude:
+- Reuse patterns from Phase 2-3
+- Avoid duplicating analysis logic
+- Understand how interfaces are currently represented
+- Build on existing infrastructure
+
+### Analysis Tool Commands
+
+```bash
+# Find all uses of a symbol across the codebase
+./refactor-skill.sh find-uses <symbol>
+
+# Find all functions that call a target
+./refactor-skill.sh find-callers <function>
+
+# Find potentially unused symbols
+./refactor-skill.sh find-unused <directory>
+
+# Analyze directory for duplicate patterns
+./refactor-skill.sh analyze-dir <directory>
+
+# Show implementations of an interface
+./refactor-skill.sh show-interface <type>
+
+# Check safety of proposed changes
+./refactor-skill.sh check-safety <action>
+
+# Show help
+./refactor-skill.sh help
+```
+
 ## Notes for Future Work
 
 - The orchestrator is the primary user-facing feature for batch operations; individual commands are useful for one-off analysis

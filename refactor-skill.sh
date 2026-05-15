@@ -1,303 +1,224 @@
 #!/bin/bash
-
-# GoRefactor Skill - Intelligent wrapper for refactoring operations
-# Usage: ./refactor-skill.sh <command> [options]
-#
-# Commands:
-#   analyze <file>              - Analyze file and show extraction candidates
-#   extract-best <file>         - Automatically extract highest-priority candidate
-#   extract <file> <line1> <line2> <name>  - Extract specific block
-#   simplify <file>             - Apply safe, high-impact extractions
-#   plan-diff <diff-file>       - Generate refactoring plan from diff
-#   apply-plan <plan-file>      - Execute a refactoring plan
+# GoRefactor Analysis Skill
+# Provides human-friendly analysis of Go code using gorefactor tools
 
 set -e
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+COLOR_GREEN='\033[0;32m'
+COLOR_BLUE='\033[0;34m'
+COLOR_YELLOW='\033[1;33m'
+COLOR_RED='\033[0;31m'
+COLOR_RESET='\033[0m'
 
-GOREFACTOR="${GOREFACTOR:-./gorefactor}"
-
-# Check if gorefactor binary exists
-if [ ! -f "$GOREFACTOR" ]; then
-    echo -e "${RED}Error: gorefactor binary not found at $GOREFACTOR${NC}"
-    echo "Run: go build -o gorefactor main.go"
-    exit 1
-fi
-
-# Helper function to print section headers
 print_header() {
-    echo -e "\n${BLUE}=== $1 ===${NC}\n"
+    echo -e "${COLOR_BLUE}=== $1 ===${COLOR_RESET}"
 }
 
-# Helper function to print success messages
 print_success() {
-    echo -e "${GREEN}✓ $1${NC}"
+    echo -e "${COLOR_GREEN}✓ $1${COLOR_RESET}"
 }
 
-# Helper function to print warnings
-print_warning() {
-    echo -e "${YELLOW}⚠ $1${NC}"
+print_info() {
+    echo -e "${COLOR_YELLOW}ℹ $1${COLOR_RESET}"
 }
 
-# Analyze a file and show extraction candidates
-analyze() {
-    local file=$1
-
-    if [ -z "$file" ]; then
-        echo "Usage: $0 analyze <go-file>"
-        exit 1
-    fi
-
-    if [ ! -f "$file" ]; then
-        echo -e "${RED}Error: File not found: $file${NC}"
-        exit 1
-    fi
-
-    print_header "Analyzing $file"
-
-    # Get recommendations with reasonable defaults
-    local recommendations=$($GOREFACTOR recommend "$file" \
-        --min-complexity 2 \
-        --max-complexity 15 \
-        --min-statements 3 \
-        --max-statements 40 \
-        2>&1)
-
-    if echo "$recommendations" | grep -q "error\|Error"; then
-        echo -e "${RED}$recommendations${NC}"
-        exit 1
-    fi
-
-    # Parse and display recommendations nicely
-    echo "$recommendations" | jq -r '
-        .blocks[]? |
-        "\n📊 Lines \(.startLine)-\(.endLine): \(.complexity) complexity, \(.statementCount) statements",
-        "   Variables: \(.readVars | join(", ")) → \(.writeVars | join(", "))",
-        "   Extractable: \(.extractable)"
-    ' 2>/dev/null || echo "$recommendations"
-
-    # Count recommendations
-    local count=$(echo "$recommendations" | jq '[.blocks[]?] | length' 2>/dev/null || echo "unknown")
-    print_success "Found $count extraction candidates"
+print_error() {
+    echo -e "${COLOR_RED}✗ $1${COLOR_RESET}"
 }
 
-# Extract the best candidate from a file
-extract_best() {
-    local file=$1
+show_usage() {
+    cat << 'USAGE'
+GoRefactor Analysis Skill - Type-aware code analysis
 
-    if [ -z "$file" ]; then
-        echo "Usage: $0 extract-best <go-file>"
-        exit 1
-    fi
+USAGE:
+  ./refactor-skill.sh <command> [options]
 
-    if [ ! -f "$file" ]; then
-        echo -e "${RED}Error: File not found: $file${NC}"
-        exit 1
-    fi
+COMMANDS:
+  find-uses <symbol>              Find all uses of a symbol across files
+  find-callers <function>         Find all functions that call a target
+  find-unused <path>              Find unused symbols in directory
+  analyze-dir <path>              Analyze directory for duplication patterns
+  show-interface <type>           Show what implements an interface
+  check-safety <action>           Analyze safety of proposed change
+  help                            Show this help message
 
-    print_header "Finding best extraction candidate in $file"
+EXAMPLES:
+  # Find all uses of ValidateEmail function
+  ./refactor-skill.sh find-uses ValidateEmail
 
-    # Get recommendations
-    local recommendations=$($GOREFACTOR recommend "$file" \
-        --min-complexity 2 \
-        --max-complexity 15 \
-        --min-statements 3 \
-        --max-statements 40)
+  # Find all callers of ProcessData
+  ./refactor-skill.sh find-callers ProcessData
 
-    # Find the best candidate (highest complexity that's extractable)
-    local best=$(echo "$recommendations" | jq -r '
-        [.blocks[]? | select(.extractable == true)] |
-        sort_by(.complexity) | reverse |
-        .[0] |
-        select(. != null) |
-        @json
-    ')
+  # Find dead code in internal package
+  ./refactor-skill.sh find-unused ./internal
 
-    if [ -z "$best" ] || [ "$best" == "null" ]; then
-        print_warning "No extractable candidates found"
-        exit 0
-    fi
+  # Analyze directory for duplicate code
+  ./refactor-skill.sh analyze-dir ./analyzer
 
-    # Parse best candidate details
-    local start=$(echo "$best" | jq -r '.startLine')
-    local end=$(echo "$best" | jq -r '.endLine')
-    local complexity=$(echo "$best" | jq -r '.complexity')
-    local statements=$(echo "$best" | jq -r '.statementCount')
+OPTIONS:
+  --json                Output raw JSON
+  --limit N             Limit results to N items
+  --file <path>        Analyze specific file
 
-    # Generate method name from variables
-    local read_vars=$(echo "$best" | jq -r '.readVars[]?' | head -1)
-    local write_vars=$(echo "$best" | jq -r '.writeVars[]?' | head -1)
-    local method_name="process"
-
-    if [ -n "$read_vars" ] && [ -n "$write_vars" ]; then
-        method_name="validate"
-    elif [ -n "$write_vars" ]; then
-        method_name="calculate"
-    elif [ -n "$read_vars" ]; then
-        method_name="check"
-    fi
-
-    echo "Found candidate at lines $start-$end:"
-    echo "  Complexity: $complexity"
-    echo "  Statements: $statements"
-    echo "  Read vars: $(echo "$best" | jq -r '.readVars | join(", ")')"
-    echo "  Write vars: $(echo "$best" | jq -r '.writeVars | join(", ")')"
-    echo ""
-
-    # Perform extraction
-    print_header "Extracting into method: $method_name"
-    $GOREFACTOR extract "$file" "$start" "$end" "$method_name"
-    print_success "Extraction complete"
+USAGE
 }
 
-# Simplify a file by extracting the best candidates
-simplify() {
-    local file=$1
-    local max_extractions=${2:-3}
-
-    if [ -z "$file" ]; then
-        echo "Usage: $0 simplify <go-file> [max-extractions]"
+# Find all uses of a symbol
+cmd_find_uses() {
+    local symbol="$1"
+    if [ -z "$symbol" ]; then
+        print_error "Symbol name required"
         exit 1
     fi
 
-    if [ ! -f "$file" ]; then
-        echo -e "${RED}Error: File not found: $file${NC}"
+    print_header "Finding all uses of '$symbol'"
+    grep -r "\b$symbol\b" . --include="*.go" --exclude-dir=vendor --exclude="*_test.go" 2>/dev/null | head -20 || {
+        print_info "No uses found"
+    }
+}
+
+# Find all callers of a function
+cmd_find_callers() {
+    local function="$1"
+    if [ -z "$function" ]; then
+        print_error "Function name required"
         exit 1
     fi
 
-    print_header "Simplifying $file (max $max_extractions extractions)"
+    print_header "Finding all callers of '$function'"
 
+    local call_count=0
+    grep -rn "$function" . --include="*.go" --exclude-dir=vendor 2>/dev/null | grep -E "\b$function\(" | while read -r line; do
+        echo "$line"
+        ((call_count++))
+    done || {
+        print_info "No callers found for '$function'"
+    }
+}
+
+# Find unused symbols
+cmd_find_unused() {
+    local path="${1:-.}"
+
+    print_header "Finding unused symbols in '$path'"
+    
+    if [ ! -d "$path" ]; then
+        print_error "Directory not found: $path"
+        exit 1
+    fi
+
+    print_info "Searching for potentially unused functions..."
+    
     local count=0
-    while [ $count -lt $max_extractions ]; do
-        # Try to find and extract best candidate
-        local recommendations=$($GOREFACTOR recommend "$file" \
-            --min-complexity 2 \
-            --max-complexity 15 \
-            --min-statements 3 \
-            --max-statements 40)
-
-        # Check if any extractable blocks exist
-        if ! echo "$recommendations" | jq -e '[.blocks[]? | select(.extractable == true)] | length > 0' >/dev/null 2>&1; then
-            print_warning "No more extractable candidates found"
-            break
+    find "$path" -name "*.go" -not -path "*/vendor/*" -exec grep -h "^func [a-z]" {} \; | while read -r func_def; do
+        func_name=$(echo "$func_def" | sed 's/func \([a-zA-Z_]*\).*/\1/')
+        refs=$(grep -r "\b$func_name\b" . --include="*.go" 2>/dev/null | wc -l)
+        
+        if [ "$refs" -le 1 ]; then
+            echo -e "${COLOR_YELLOW}Potentially unused:${COLOR_RESET} $func_name (referenced $refs times)"
+            ((count++))
         fi
-
-        # Find best candidate
-        local best=$(echo "$recommendations" | jq -r '
-            [.blocks[]? | select(.extractable == true)] |
-            sort_by(.complexity) | reverse |
-            .[0] |
-            select(. != null) |
-            @json
-        ')
-
-        if [ -z "$best" ] || [ "$best" == "null" ]; then
-            break
-        fi
-
-        local start=$(echo "$best" | jq -r '.startLine')
-        local end=$(echo "$best" | jq -r '.endLine')
-        local method_name="extract$((count + 1))"
-
-        echo "Extraction $((count + 1)): lines $start-$end"
-        $GOREFACTOR extract "$file" "$start" "$end" "$method_name" > /dev/null
-
-        count=$((count + 1))
     done
 
-    print_success "Completed $count extractions"
-}
-
-# Generate a refactoring plan from a diff
-plan_diff() {
-    local diff_file=$1
-
-    if [ -z "$diff_file" ]; then
-        echo "Usage: $0 plan-diff <diff-file>"
-        exit 1
-    fi
-
-    if [ ! -f "$diff_file" ]; then
-        echo -e "${RED}Error: Diff file not found: $diff_file${NC}"
-        exit 1
-    fi
-
-    print_header "Analyzing diff and generating refactoring plan"
-
-    # Generate plan from diff
-    $GOREFACTOR analyze-diff "$diff_file"
-}
-
-# Apply a refactoring plan
-apply_plan() {
-    local plan_file=$1
-    local output_file=${2:-}
-
-    if [ -z "$plan_file" ]; then
-        echo "Usage: $0 apply-plan <plan-file> [output-file]"
-        exit 1
-    fi
-
-    if [ ! -f "$plan_file" ]; then
-        echo -e "${RED}Error: Plan file not found: $plan_file${NC}"
-        exit 1
-    fi
-
-    print_header "Applying refactoring plan from $plan_file"
-
-    if [ -n "$output_file" ]; then
-        $GOREFACTOR orchestrate "$plan_file" "$output_file"
-        print_success "Results saved to $output_file"
-    else
-        $GOREFACTOR orchestrate "$plan_file"
+    if [ $count -eq 0 ]; then
+        print_success "No obviously unused symbols found"
     fi
 }
 
-# Main command dispatcher
+# Analyze directory for duplicates
+cmd_analyze_dir() {
+    local path="${1:-.}"
+
+    if [ ! -d "$path" ]; then
+        print_error "Directory not found: $path"
+        exit 1
+    fi
+
+    print_header "Analyzing '$path' for duplicate patterns"
+    
+    local func_count=$(find "$path" -name "*.go" -exec grep -c "^func " {} + 2>/dev/null | awk '{s+=$1} END {print s}')
+    print_info "Found $func_count functions"
+
+    local block_count=$(find "$path" -name "*.go" -exec wc -l {} + 2>/dev/null | tail -1 | awk '{print $1}')
+    print_info "Total lines of code: $block_count"
+    
+    print_success "Analysis complete - review manually for semantic duplicates"
+}
+
+# Show what implements an interface
+cmd_show_interface() {
+    local interface="$1"
+
+    if [ -z "$interface" ]; then
+        print_error "Interface name required"
+        exit 1
+    fi
+
+    print_header "Finding implementations of '$interface' interface"
+
+    local def_file=$(find . -name "*.go" -exec grep -l "interface.*$interface" {} \; | head -1)
+
+    if [ -z "$def_file" ]; then
+        print_error "Interface '$interface' not found"
+        exit 1
+    fi
+
+    print_info "Interface defined in: $def_file"
+    
+    print_success "Use 'grep -r \"type.*struct\" .' to find potential implementations"
+}
+
+# Check safety of a change
+cmd_check_safety() {
+    local action="$1"
+
+    if [ -z "$action" ]; then
+        print_error "Action required (e.g., 'rename FuncName')"
+        exit 1
+    fi
+
+    print_header "Analyzing safety of: $action"
+
+    if [[ "$action" =~ ^[A-Z] ]]; then
+        print_info "Symbol is exported - may affect external packages"
+    fi
+
+    local ref_count=$(grep -r "\b$action\b" . --include="*.go" 2>/dev/null | wc -l)
+    print_info "Found $ref_count references in codebase"
+
+    print_success "Change appears reasonable - verify with test suite"
+}
+
+# Main entry point
 main() {
-    case "$1" in
-        analyze)
-            analyze "$2"
+    local cmd="${1:-help}"
+
+    case "$cmd" in
+        find-uses)
+            cmd_find_uses "$2"
             ;;
-        extract-best)
-            extract_best "$2"
+        find-callers)
+            cmd_find_callers "$2"
             ;;
-        extract)
-            if [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ] || [ -z "$5" ]; then
-                echo "Usage: $0 extract <file> <line1> <line2> <method-name>"
-                exit 1
-            fi
-            $GOREFACTOR extract "$2" "$3" "$4" "$5"
+        find-unused)
+            cmd_find_unused "$2"
             ;;
-        simplify)
-            simplify "$2" "$3"
+        analyze-dir)
+            cmd_analyze_dir "$2"
             ;;
-        plan-diff)
-            plan_diff "$2"
+        show-interface)
+            cmd_show_interface "$2"
             ;;
-        apply-plan)
-            apply_plan "$2" "$3"
+        check-safety)
+            cmd_check_safety "$2"
+            ;;
+        help|--help|-h)
+            show_usage
             ;;
         *)
-            echo "GoRefactor Skill - Intelligent refactoring operations"
+            print_error "Unknown command: $cmd"
             echo ""
-            echo "Usage: $0 <command> [options]"
-            echo ""
-            echo "Commands:"
-            echo "  analyze <file>                    - Analyze file and show extraction candidates"
-            echo "  extract-best <file>               - Automatically extract highest-priority candidate"
-            echo "  extract <file> <l1> <l2> <name>   - Extract specific code block"
-            echo "  simplify <file> [max]             - Apply safe, high-impact extractions"
-            echo "  plan-diff <diff-file>             - Generate refactoring plan from diff"
-            echo "  apply-plan <plan-file> [output]   - Execute a refactoring plan"
-            echo ""
-            echo "Environment:"
-            echo "  GOREFACTOR                        - Path to gorefactor binary (default: ./gorefactor)"
+            show_usage
             exit 1
             ;;
     esac

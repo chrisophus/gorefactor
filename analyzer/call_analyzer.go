@@ -3,7 +3,7 @@ package analyzer
 import (
 	"fmt"
 	"go/ast"
-	"io/ioutil"
+	"os"
 	"strings"
 )
 
@@ -408,7 +408,7 @@ func (ca *CallAnalyzer) typeExprToString(expr ast.Expr) string {
 
 // getCodeSnippet extracts a code snippet from a file
 func (ca *CallAnalyzer) getCodeSnippet(file string, line int) string {
-	content, err := ioutil.ReadFile(file)
+	content, err := os.ReadFile(file)
 	if err != nil {
 		return ""
 	}

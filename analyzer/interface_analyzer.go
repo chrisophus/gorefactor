@@ -3,7 +3,6 @@ package analyzer
 import (
 	"fmt"
 	"go/ast"
-	"io/ioutil"
 	"strings"
 )
 
@@ -449,19 +448,4 @@ func (ia *InterfaceAnalyzer) extractFuncTypeSignature(fn *ast.FuncType) string {
 	}
 
 	return sig.String()
-}
-
-// getCodeSnippet extracts a code snippet from a file
-func (ia *InterfaceAnalyzer) getCodeSnippet(file string, line int) string {
-	content, err := ioutil.ReadFile(file)
-	if err != nil {
-		return ""
-	}
-
-	lines := strings.Split(string(content), "\n")
-	if line > 0 && line <= len(lines) {
-		return strings.TrimSpace(lines[line-1])
-	}
-
-	return ""
 }

@@ -5,7 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"io/ioutil"
+	"os"
 	"strings"
 )
 
@@ -107,7 +107,7 @@ func (ua *UseAnalyzer) Parse() error {
 			continue
 		}
 
-		content, err := ioutil.ReadFile(filePath)
+		content, err := os.ReadFile(filePath)
 		if err != nil {
 			continue
 		}
@@ -364,7 +364,7 @@ func (ua *UseAnalyzer) buildDefinitionKey(name, receiver string) string {
 // getCodeSnippet extracts surrounding code context
 func (ua *UseAnalyzer) getCodeSnippet(line int) string {
 	if _, exists := ua.fileASTs[ua.currentFile]; exists {
-		content, _ := ioutil.ReadFile(ua.currentFile)
+		content, _ := os.ReadFile(ua.currentFile)
 		lines := strings.Split(string(content), "\n")
 		if line > 0 && line <= len(lines) {
 			return strings.TrimSpace(lines[line-1])
@@ -388,8 +388,6 @@ func (uw *useWalker) inspectNode(node ast.Node) bool {
 	switch n := node.(type) {
 	case *ast.CallExpr:
 		uw.visitCall(n)
-	case *ast.Ident:
-		uw.visitIdent(n)
 	case *ast.AssignStmt:
 		uw.visitAssign(n)
 	case *ast.Field:
@@ -451,14 +449,6 @@ func (uw *useWalker) visitCall(call *ast.CallExpr) {
 				})
 			}
 		}
-	}
-}
-
-// visitIdent handles identifier references
-func (uw *useWalker) visitIdent(ident *ast.Ident) {
-	if ident.Name == uw.query.Name {
-		// Skip definitions - we only want uses
-		// This will be refined to better distinguish definition vs use
 	}
 }
 

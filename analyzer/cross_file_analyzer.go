@@ -6,7 +6,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -57,7 +56,7 @@ func FindDuplicateBlocks(files []string) ([]DuplicateBlock, error) {
 			continue
 		}
 
-		fileContent, err := ioutil.ReadFile(filePath)
+		fileContent, err := os.ReadFile(filePath)
 		if err != nil {
 			continue
 		}

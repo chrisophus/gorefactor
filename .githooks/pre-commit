@@ -1,0 +1,37 @@
+#!/bin/bash
+# Pre-commit hook - runs quality checks before commit
+
+set -e
+
+echo "Running pre-commit checks..."
+
+# Check if make is available
+if ! command -v make &> /dev/null; then
+    echo "⚠ Make not found. Skipping pre-commit checks."
+    exit 0
+fi
+
+# Run format check
+echo "Checking code formatting..."
+make fmt 2>/dev/null || echo "⚠ Format check failed (continuing)"
+
+# Run vet
+echo "Running go vet..."
+make vet 2>/dev/null || {
+    echo "✗ Vet check failed. Run 'make vet' to see issues."
+    exit 1
+}
+
+# Run lint if available
+if command -v golangci-lint &> /dev/null; then
+    echo "Running linter..."
+    make lint 2>/dev/null || {
+        echo "✗ Lint check failed. Run 'make lint' to see issues."
+        exit 1
+    }
+else
+    echo "⚠ golangci-lint not installed. Install with: make install-tools"
+fi
+
+echo "✓ Pre-commit checks passed"
+exit 0

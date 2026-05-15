@@ -53,43 +53,102 @@ Main commands in `main.go`:
 
 ## Development Commands
 
-### Building
+### Quality Gates & Build
+
+**All builds run quality checks first.** Use the Makefile for consistency:
 
 ```bash
-# Build the binary
-go build -o gorefactor main.go
+# Setup development environment
+make dev-setup          # Install tools + format code
 
-# Build with specific output location
-go build -o ./bin/gorefactor main.go
+# Full build (runs tests, lint, fmt, vet first)
+make build
+
+# Run individual checks
+make test               # Run tests with coverage
+make lint               # Run golangci-lint
+make fmt                # Format code
+make vet                # Run go vet
+make check              # Run all checks in sequence
+
+# Check code quality
+make coverage           # Generate coverage report (HTML)
+make ci                 # CI: All checks for pull requests
+
+# Code analysis (using refactor-skill)
+make analyze-dir        # Find patterns and duplication
+make find-symbol SYMBOL=FunctionName  # Find uses
+make find-callers FUNC=FunctionName   # Find callers
+```
+
+### Quality Standards
+
+GoRefactor uses **golangci-lint** for code quality with these standards:
+
+- **Cyclomatic Complexity**: Max 15 (catch overly complex functions)
+- **Code Duplication**: Flag blocks >100 lines
+- **Error Checking**: Enforce error handling
+- **Type Safety**: Catch type assertion errors
+- **Security**: Use gosec for security issues
+- **Simplification**: Identify unnecessary code
+
+See `.golangci.yml` for all enabled linters.
+
+### Pre-Commit Hooks
+
+Automatic checks run before every commit:
+
+```bash
+# Install pre-commit hook
+ln -s ../../.githooks/pre-commit .git/hooks/pre-commit
+
+# Bypass hooks if needed (not recommended)
+git commit --no-verify
 ```
 
 ### Testing
 
 ```bash
-# Run all tests
-go test ./...
+# Run all tests with coverage
+go test ./... -v -race -coverprofile=coverage.out
 
 # Run tests for specific package
-go test ./analyzer
-go test ./parser
-go test ./extractor
-go test ./orchestrator
+go test ./analyzer -v
+go test ./parser -v
+go test ./extractor -v
+go test ./orchestrator -v
 
-# Run tests with verbose output
-go test -v ./...
-
-# Run a specific test
+# Run specific test
 go test -v -run TestAnalyzeBlock ./analyzer
+
+# Watch tests on file changes (requires watchexec)
+make watch-test
 ```
 
-### Running Commands Locally
+### Building
 
 ```bash
+# Full build (runs quality checks first)
+make build
+
+# Quick build (skip checks - not recommended)
+go build -o gorefactor main.go
+
 # After building, run commands like:
 ./gorefactor parse path/to/file.go
 ./gorefactor analyze-diff diff.patch
 ./gorefactor orchestrate plan.json
 ```
+
+### Continuous Integration
+
+GitHub Actions automatically runs on push/PR:
+- vet check (catch obvious bugs)
+- golangci-lint (code quality)
+- unit tests (with coverage upload)
+- build verification
+
+See `.github/workflows/ci.yml` for CI configuration.
 
 ## Key Architectural Concepts
 

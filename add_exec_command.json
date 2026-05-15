@@ -1,0 +1,16 @@
+{
+  "version": "1.0",
+  "name": "add_exec_command",
+  "description": "Add exec subcommand that accepts a single operation or array of operations as inline JSON or from stdin",
+  "operations": [
+    {
+      "type": "insert_code",
+      "description": "Add execOperation function to main.go",
+      "file": "main.go",
+      "parameters": {
+        "location": { "type": "at_end" },
+        "codeSnippet": "func execOperation(args []string) error {\n\tvar data []byte\n\tvar err error\n\n\tif len(args) == 0 || args[0] == \"-\" || args[0] == \"-stdin\" {\n\t\tdata, err = io.ReadAll(os.Stdin)\n\t\tif err != nil {\n\t\t\treturn fmt.Errorf(\"failed to read stdin: %w\", err)\n\t\t}\n\t} else {\n\t\tdata = []byte(args[0])\n\t}\n\n\ttrimmed := bytes.TrimSpace(data)\n\tvar ops []*orchestrator.RefactoringOperation\n\tif len(trimmed) > 0 && trimmed[0] == '[' {\n\t\tif err := json.Unmarshal(data, &ops); err != nil {\n\t\t\treturn fmt.Errorf(\"failed to parse operations: %w\", err)\n\t\t}\n\t} else {\n\t\tvar op orchestrator.RefactoringOperation\n\t\tif err := json.Unmarshal(data, &op); err != nil {\n\t\t\treturn fmt.Errorf(\"failed to parse operation: %w\", err)\n\t\t}\n\t\tops = []*orchestrator.RefactoringOperation{&op}\n\t}\n\n\torch := orchestrator.NewOrchestrator()\n\tresult, err := orch.ExecuteOperations(ops)\n\tif err != nil {\n\t\treturn err\n\t}\n\n\tencoder := json.NewEncoder(os.Stdout)\n\tencoder.SetIndent(\"\", \"  \")\n\tif encErr := encoder.Encode(result); encErr != nil {\n\t\treturn encErr\n\t}\n\tif !result.Success {\n\t\treturn fmt.Errorf(\"one or more operations failed\")\n\t}\n\treturn nil\n}"
+      }
+    }
+  ]
+}

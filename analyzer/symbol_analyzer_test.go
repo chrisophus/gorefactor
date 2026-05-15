@@ -1,7 +1,6 @@
 package analyzer
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,7 +8,7 @@ import (
 
 func TestFindAllUsesFunction(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create a test file with function definition and uses
 	testFile := filepath.Join(tmpDir, "test.go")
@@ -32,7 +31,9 @@ func main() {
 	}
 }
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	analyzer := NewUseAnalyzer([]string{testFile})
 	query := SymbolQuery{Name: "ValidateEmail"}
@@ -58,7 +59,7 @@ func main() {
 
 func TestFindAllUsesMethod(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "test.go")
 	content := `package main
@@ -89,7 +90,9 @@ func Test() {
 	ov.Validate("data")
 }
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	analyzer := NewUseAnalyzer([]string{testFile})
 
@@ -117,7 +120,7 @@ func Test() {
 
 func TestFindSymbolDefinition(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "test.go")
 	content := `package main
@@ -132,7 +135,9 @@ func (v *Validator) Check(s string) bool {
 	return len(s) > 0
 }
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	analyzer := NewUseAnalyzer([]string{testFile})
 
@@ -177,7 +182,7 @@ func (v *Validator) Check(s string) bool {
 
 func TestGetSymbolType(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "test.go")
 	content := `package main
@@ -192,7 +197,9 @@ type MyInterface interface {
 
 var globalVar int
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	analyzer := NewUseAnalyzer([]string{testFile})
 
@@ -269,7 +276,7 @@ func TestFilterUsesByContext(t *testing.T) {
 
 func TestCrossFileAnalysis(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// File 1: Function definition
 	file1 := filepath.Join(tmpDir, "validators.go")
@@ -279,7 +286,9 @@ func ValidateEmail(email string) bool {
 	return len(email) > 0
 }
 `
-	ioutil.WriteFile(file1, []byte(content1), 0644)
+	if err := os.WriteFile(file1, []byte(content1), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	// File 2: Function use
 	file2 := filepath.Join(tmpDir, "service.go")
@@ -291,7 +300,9 @@ func ProcessUser(user User) {
 	}
 }
 `
-	ioutil.WriteFile(file2, []byte(content2), 0644)
+	if err := os.WriteFile(file2, []byte(content2), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	// File 3: Another use
 	file3 := filepath.Join(tmpDir, "handler.go")
@@ -304,7 +315,9 @@ func HandleRequest(req Request) {
 	}
 }
 `
-	ioutil.WriteFile(file3, []byte(content3), 0644)
+	if err := os.WriteFile(file3, []byte(content3), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	analyzer := NewUseAnalyzer([]string{file1, file2, file3})
 	query := SymbolQuery{Name: "ValidateEmail"}
@@ -333,7 +346,7 @@ func HandleRequest(req Request) {
 
 func TestMultipleMethodShadowing(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "test.go")
 	content := `package main
@@ -358,7 +371,9 @@ func UseB(b *TypeB) {
 	b.Process()
 }
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	analyzer := NewUseAnalyzer([]string{testFile})
 
@@ -380,7 +395,7 @@ func UseB(b *TypeB) {
 
 func TestMethodDefinitionCapture(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "test.go")
 	content := `package main
@@ -393,7 +408,9 @@ func (s *Service) GetName() string {
 	return s.name
 }
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	analyzer := NewUseAnalyzer([]string{testFile})
 
@@ -417,7 +434,7 @@ func (s *Service) GetName() string {
 
 // Helper function to create temporary test directory
 func createTempTestDir(t *testing.T) string {
-	tmpDir, err := ioutil.TempDir("", "gorefactor-test-*")
+	tmpDir, err := os.MkdirTemp("", "gorefactor-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}

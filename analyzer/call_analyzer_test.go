@@ -1,7 +1,6 @@
 package analyzer
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,7 +8,7 @@ import (
 
 func TestFindCallersDirect(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create test file with function and direct callers
 	testFile := filepath.Join(tmpDir, "test.go")
@@ -35,7 +34,9 @@ func main() {
 	Helper()
 }
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	ca := NewCallAnalyzer([]string{testFile})
 	analysis, err := ca.FindCallers("Helper", "")
@@ -70,7 +71,7 @@ func main() {
 
 func TestFindCallersCrossFile(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// File 1: Define function
 	file1 := filepath.Join(tmpDir, "lib.go")
@@ -80,7 +81,9 @@ func Process() {
 	// Does something
 }
 `
-	ioutil.WriteFile(file1, []byte(content1), 0644)
+	if err := os.WriteFile(file1, []byte(content1), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	// File 2: Call from first file
 	file2 := filepath.Join(tmpDir, "service1.go")
@@ -90,7 +93,9 @@ func ServiceA() {
 	Process()
 }
 `
-	ioutil.WriteFile(file2, []byte(content2), 0644)
+	if err := os.WriteFile(file2, []byte(content2), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	// File 3: Call from second file
 	file3 := filepath.Join(tmpDir, "service2.go")
@@ -100,7 +105,9 @@ func ServiceB() {
 	Process()
 }
 `
-	ioutil.WriteFile(file3, []byte(content3), 0644)
+	if err := os.WriteFile(file3, []byte(content3), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	ca := NewCallAnalyzer([]string{file1, file2, file3})
 	analysis, err := ca.FindCallers("Process", "")
@@ -127,7 +134,7 @@ func ServiceB() {
 
 func TestFindCallersMethodCalls(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "test.go")
 	content := `package main
@@ -148,7 +155,9 @@ func CheckPhone() {
 	v.Validate("1234567890")
 }
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	ca := NewCallAnalyzer([]string{testFile})
 	// Note: Without type inference, we search by method name only
@@ -173,7 +182,7 @@ func CheckPhone() {
 
 func TestFindCallersTestCode(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Production file
 	prodFile := filepath.Join(tmpDir, "lib.go")
@@ -187,7 +196,9 @@ func Caller1() {
 	DoWork()
 }
 `
-	ioutil.WriteFile(prodFile, []byte(prodContent), 0644)
+	if err := os.WriteFile(prodFile, []byte(prodContent), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	// Test file
 	testFile := filepath.Join(tmpDir, "lib_test.go")
@@ -199,7 +210,9 @@ func TestDoWork(t *testing.T) {
 	DoWork()
 }
 `
-	ioutil.WriteFile(testFile, []byte(testContent), 0644)
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	ca := NewCallAnalyzer([]string{prodFile, testFile})
 	analysis, err := ca.FindCallers("DoWork", "")
@@ -224,7 +237,7 @@ func TestDoWork(t *testing.T) {
 
 func TestIsCallableFrom(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "test.go")
 	content := `package main
@@ -241,7 +254,9 @@ func Caller2() {
 	// Doesn't call Target
 }
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	ca := NewCallAnalyzer([]string{testFile})
 
@@ -268,7 +283,7 @@ func Caller2() {
 
 func TestFindCallChainSimple(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "test.go")
 	content := `package main
@@ -289,7 +304,9 @@ func main() {
 	A()
 }
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	ca := NewCallAnalyzer([]string{testFile})
 	// Test that we can find callers of C (which is B)
@@ -311,7 +328,7 @@ func main() {
 
 func TestDetectCycleInCallGraph(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "test.go")
 	content := `package main
@@ -328,7 +345,9 @@ func C() {
 	A() // Creates cycle!
 }
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	ca := NewCallAnalyzer([]string{testFile})
 	chain, err := ca.FindCallChain("A", "", "B", "", 5)
@@ -345,7 +364,7 @@ func C() {
 
 func TestCallSiteInformation(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "test.go")
 	content := `package main
@@ -356,7 +375,9 @@ func Caller() {
 	Helper()
 }
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	ca := NewCallAnalyzer([]string{testFile})
 	analysis, err := ca.FindCallers("Helper", "")
@@ -391,7 +412,7 @@ func Caller() {
 
 func TestBuilderCallerHierarchy(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "test.go")
 	content := `package main
@@ -410,7 +431,9 @@ func Entry() {
 	Level2()
 }
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	ca := NewCallAnalyzer([]string{testFile})
 	hierarchy, err := ca.BuildCallerHierarchy("Base", "", 5)
@@ -435,7 +458,7 @@ func Entry() {
 
 func TestMultipleCallsToSameFunction(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "test.go")
 	content := `package main
@@ -448,7 +471,9 @@ func Caller() {
 	Target()
 }
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	ca := NewCallAnalyzer([]string{testFile})
 	analysis, err := ca.FindCallers("Target", "")
@@ -472,7 +497,7 @@ func Caller() {
 
 func TestExportedStatus(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "test.go")
 	content := `package main
@@ -486,7 +511,9 @@ func Caller() {
 	unexportedFunc()
 }
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	ca := NewCallAnalyzer([]string{testFile})
 

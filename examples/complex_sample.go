@@ -57,7 +57,7 @@ func (s *OrderService) ProcessOrder(customerID string, items []Item, shippingAdd
 
 	// Tax calculation - could be extracted
 	taxRate := 0.08
-	if strings.Contains(shippingAddress, "TX") || strings.Contains(shippingAddress, "TX") {
+	if strings.Contains(shippingAddress, "TX") || strings.Contains(shippingAddress, "CA") {
 		taxRate = 0.0625
 	}
 	tax := int(float64(finalPrice) * taxRate)

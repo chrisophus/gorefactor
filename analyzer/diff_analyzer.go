@@ -60,7 +60,7 @@ func (da *DiffAnalyzer) AnalyzeDiffFile(diffPath string) (*DiffAnalysis, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to open diff file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	return da.AnalyzeDiffReader(file)
 }
@@ -81,7 +81,9 @@ func (da *DiffAnalyzer) AnalyzeDiffReader(reader interface{}) (*DiffAnalysis, er
 	case *strings.Reader:
 		// Convert strings.Reader to string content
 		buf := make([]byte, r.Len())
-		r.ReadAt(buf, 0)
+		if _, err := r.ReadAt(buf, 0); err != nil {
+			return nil, fmt.Errorf("failed to read from reader: %w", err)
+		}
 		scanner = bufio.NewScanner(strings.NewReader(string(buf)))
 	default:
 		return nil, fmt.Errorf("unsupported reader type")

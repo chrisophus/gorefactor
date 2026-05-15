@@ -413,7 +413,7 @@ func analyzeDiff(args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to create output file: %w", err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		encoder := json.NewEncoder(f)
 		encoder.SetIndent("", "  ")
 		if err := encoder.Encode(analysis.Plan); err != nil {

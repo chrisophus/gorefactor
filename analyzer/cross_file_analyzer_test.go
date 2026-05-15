@@ -4,7 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"io/ioutil"
+	
 	"os"
 	"path/filepath"
 	"strings"
@@ -229,11 +229,11 @@ func TestEstimateSavings(t *testing.T) {
 
 func TestFindGoFiles(t *testing.T) {
 	// Create a temporary directory structure
-	tmpDir, err := ioutil.TempDir("", "gorefactor-test-*")
+	tmpDir, err := os.MkdirTemp("", "gorefactor-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create test files
 	goFile1 := filepath.Join(tmpDir, "main.go")
@@ -242,13 +242,27 @@ func TestFindGoFiles(t *testing.T) {
 	hiddenDir := filepath.Join(tmpDir, ".hidden")
 	vendorDir := filepath.Join(tmpDir, "vendor")
 
-	ioutil.WriteFile(goFile1, []byte("package main"), 0644)
-	ioutil.WriteFile(goFile2, []byte("package main"), 0644)
-	ioutil.WriteFile(textFile, []byte("text"), 0644)
-	os.Mkdir(hiddenDir, 0755)
-	os.Mkdir(vendorDir, 0755)
-	ioutil.WriteFile(filepath.Join(hiddenDir, "hidden.go"), []byte("package main"), 0644)
-	ioutil.WriteFile(filepath.Join(vendorDir, "dep.go"), []byte("package main"), 0644)
+	if err := os.WriteFile(goFile1, []byte("package main"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	if err := os.WriteFile(goFile2, []byte("package main"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	if err := os.WriteFile(textFile, []byte("text"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	if err := os.Mkdir(hiddenDir, 0755); err != nil {
+		t.Fatalf("Failed to create directory: %v", err)
+	}
+	if err := os.Mkdir(vendorDir, 0755); err != nil {
+		t.Fatalf("Failed to create directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hiddenDir, "hidden.go"), []byte("package main"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vendorDir, "dep.go"), []byte("package main"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	files, err := findGoFiles(tmpDir)
 	if err != nil {
@@ -278,11 +292,11 @@ func TestFindGoFiles(t *testing.T) {
 
 func TestFindDuplicateBlocks(t *testing.T) {
 	// Create a temporary directory with test files
-	tmpDir, err := ioutil.TempDir("", "gorefactor-dup-test-*")
+	tmpDir, err := os.MkdirTemp("", "gorefactor-dup-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// File 1: Contains duplicate pattern
 	file1 := filepath.Join(tmpDir, "service1.go")
@@ -296,7 +310,9 @@ func ProcessData() {
 	return x
 }
 `
-	ioutil.WriteFile(file1, []byte(content1), 0644)
+	if err := os.WriteFile(file1, []byte(content1), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	// File 2: Contains same pattern
 	file2 := filepath.Join(tmpDir, "service2.go")
@@ -310,7 +326,9 @@ func CalculateSum() {
 	return total
 }
 `
-	ioutil.WriteFile(file2, []byte(content2), 0644)
+	if err := os.WriteFile(file2, []byte(content2), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	// File 3: Contains different code
 	file3 := filepath.Join(tmpDir, "utils.go")
@@ -321,7 +339,9 @@ func Different() {
 	return name
 }
 `
-	ioutil.WriteFile(file3, []byte(content3), 0644)
+	if err := os.WriteFile(file3, []byte(content3), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	duplicates, err := FindDuplicateBlocks([]string{file1, file2, file3})
 	if err != nil {
@@ -340,11 +360,11 @@ func Different() {
 
 func TestAnalyzeCrossFile(t *testing.T) {
 	// Create a temporary directory
-	tmpDir, err := ioutil.TempDir("", "gorefactor-analyze-*")
+	tmpDir, err := os.MkdirTemp("", "gorefactor-analyze-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create a simple Go file
 	testFile := filepath.Join(tmpDir, "test.go")
@@ -358,7 +378,9 @@ func Helper() {
 	y := 10
 }
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	analysis, err := AnalyzeCrossFile(tmpDir)
 	if err != nil {

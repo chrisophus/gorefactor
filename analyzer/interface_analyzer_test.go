@@ -1,7 +1,6 @@
 package analyzer
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,7 +8,7 @@ import (
 
 func TestFindImplementations(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "test.go")
 	content := `package main
@@ -34,7 +33,9 @@ func (w *Writer) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	ia := NewInterfaceAnalyzer([]string{testFile})
 	analysis, err := ia.FindImplementations("Reader")
@@ -69,7 +70,7 @@ func (w *Writer) Write(p []byte) (int, error) {
 
 func TestVerifyInterfaceImpl(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "test.go")
 	content := `package main
@@ -95,7 +96,9 @@ func (pr *PartialReader) Read(p []byte) (int, error) {
 	return 0, nil
 }
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	ia := NewInterfaceAnalyzer([]string{testFile})
 
@@ -130,7 +133,7 @@ func (pr *PartialReader) Read(p []byte) (int, error) {
 
 func TestFindInterfaceUsers(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "test.go")
 	content := `package main
@@ -146,7 +149,9 @@ func ProcessReader(r Reader) {
 
 var myReader Reader
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	ia := NewInterfaceAnalyzer([]string{testFile})
 
@@ -169,7 +174,7 @@ var myReader Reader
 
 func TestMultipleImplementations(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "test.go")
 	content := `package main
@@ -196,7 +201,9 @@ func (nw *NetworkWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	ia := NewInterfaceAnalyzer([]string{testFile})
 	analysis, err := ia.FindImplementations("Writer")
@@ -226,7 +233,7 @@ func (nw *NetworkWriter) Write(p []byte) (int, error) {
 
 func TestInterfaceInfo(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "test.go")
 	content := `package main
@@ -236,7 +243,9 @@ type Reader interface {
 	Close() error
 }
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	ia := NewInterfaceAnalyzer([]string{testFile})
 	analysis, err := ia.FindImplementations("Reader")
@@ -267,7 +276,7 @@ type Reader interface {
 
 func TestPartialImplementation(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	testFile := filepath.Join(tmpDir, "test.go")
 	content := `package main
@@ -283,7 +292,9 @@ func (p *PartialRW) Read(b []byte) (int, error) {
 	return 0, nil
 }
 `
-	ioutil.WriteFile(testFile, []byte(content), 0644)
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	ia := NewInterfaceAnalyzer([]string{testFile})
 	analysis, err := ia.FindImplementations("ReadWriter")
@@ -306,7 +317,7 @@ func (p *PartialRW) Read(b []byte) (int, error) {
 
 func TestInterfaceInMultipleFiles(t *testing.T) {
 	tmpDir := createTempTestDir(t)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// File 1: Interface definition
 	file1 := filepath.Join(tmpDir, "interface.go")
@@ -316,7 +327,9 @@ type Reader interface {
 	Read(p []byte) (n int, err error)
 }
 `
-	ioutil.WriteFile(file1, []byte(content1), 0644)
+	if err := os.WriteFile(file1, []byte(content1), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	// File 2: First implementation
 	file2 := filepath.Join(tmpDir, "impl1.go")
@@ -328,7 +341,9 @@ func (br *BufferReader) Read(p []byte) (int, error) {
 	return len(p), nil
 }
 `
-	ioutil.WriteFile(file2, []byte(content2), 0644)
+	if err := os.WriteFile(file2, []byte(content2), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	// File 3: Second implementation
 	file3 := filepath.Join(tmpDir, "impl2.go")
@@ -340,7 +355,9 @@ func (fr *FileReader) Read(p []byte) (int, error) {
 	return len(p), nil
 }
 `
-	ioutil.WriteFile(file3, []byte(content3), 0644)
+	if err := os.WriteFile(file3, []byte(content3), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
 
 	ia := NewInterfaceAnalyzer([]string{file1, file2, file3})
 	analysis, err := ia.FindImplementations("Reader")

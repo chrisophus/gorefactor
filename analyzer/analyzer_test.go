@@ -26,7 +26,7 @@ func processData(data []int) int {
 	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-	defer os.Remove(testFile)
+	defer func() { _ = os.Remove(testFile) }()
 
 	// Test cases
 	tests := []struct {
@@ -100,7 +100,7 @@ func complexFunction(x, y int) int {
 	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-	defer os.Remove(testFile)
+	defer func() { _ = os.Remove(testFile) }()
 
 	recommendations, err := RecommendExtractions(testFile, "", DefaultConfig())
 	if err != nil {
@@ -153,7 +153,7 @@ func bigFunction(a, b, c, d, e int, arr []int) int {
 	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-	defer os.Remove(testFile)
+	defer func() { _ = os.Remove(testFile) }()
 
 	recommendations, err := RecommendExtractions(testFile, "", DefaultConfig())
 	if err != nil {
@@ -223,7 +223,7 @@ func manyVars(a, b, c, d, e, f, g, h, i, j int) int {
 	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-	defer os.Remove(testFile)
+	defer func() { _ = os.Remove(testFile) }()
 
 	recommendations, err := RecommendExtractions(testFile, "", DefaultConfig())
 	if err != nil {
@@ -258,7 +258,7 @@ func complexFunction(a, b, c, d, e int, arr []int) int {
 	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-	defer os.Remove(testFile)
+	defer func() { _ = os.Remove(testFile) }()
 
 	recommendations, err := RecommendExtractions(testFile, "", DefaultConfig())
 	if err != nil {
@@ -337,7 +337,7 @@ func manyStatementsFunction(x int) int {
 	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-	defer os.Remove(testFile)
+	defer func() { _ = os.Remove(testFile) }()
 
 	tests := []struct {
 		name          string
@@ -466,7 +466,7 @@ func testFunction(x, y int) int {
 	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-	defer os.Remove(testFile)
+	defer func() { _ = os.Remove(testFile) }()
 
 	tests := []struct {
 		name          string

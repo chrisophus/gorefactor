@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -704,8 +705,15 @@ func (da *DiffAnalyzer) generateSummary(changes []*Change) string {
 		changeTypes[change.Type]++
 	}
 
-	for changeType, count := range changeTypes {
-		summary.WriteString(fmt.Sprintf("- %d %s\n", count, changeType))
+	// Sort change types alphabetically for consistent output
+	var types []string
+	for changeType := range changeTypes {
+		types = append(types, changeType)
+	}
+	sort.Strings(types)
+
+	for _, changeType := range types {
+		summary.WriteString(fmt.Sprintf("- %d %s\n", changeTypes[changeType], changeType))
 	}
 
 	return summary.String()

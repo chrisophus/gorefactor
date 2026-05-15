@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"gorefactor/analyzer"
 	"gorefactor/extractor"

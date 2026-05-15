@@ -274,6 +274,8 @@ func (o *Orchestrator) executeOperation(operation *RefactoringOperation) *Operat
 		err = o.executeInsertCode(operation, result)
 	case "create_file":
 		err = o.executeCreateFile(operation, result)
+	case "remove_code_block":
+		err = o.executeRemoveCodeBlock(operation, result)
 	default:
 		err = fmt.Errorf("unknown operation type: %s", operation.Type)
 	}
@@ -294,6 +296,15 @@ func (o *Orchestrator) executeOperation(operation *RefactoringOperation) *Operat
 	}
 
 	return result
+}
+func (o *Orchestrator) ExecuteOperations(ops []*RefactoringOperation) (*ExecutionResult, error) {
+	plan := &RefactoringPlan{
+		Version:    "1.0",
+		Name:       "_exec",
+		Operations: ops,
+	}
+	o.plans["_exec"] = plan
+	return o.ExecutePlan("_exec")
 }
 
 // findTarget uses resilient targeting to locate the target for refactoring
@@ -1009,6 +1020,36 @@ func (o *Orchestrator) executeCreateFile(operation *RefactoringOperation, result
 
 	return nil
 }
+func (o *Orchestrator) executeRemoveCodeBlock(operation *RefactoringOperation, result *OperationResult) error {
+	codePattern, _ := operation.Parameters["codePattern"].(string)
+	if codePattern == "" {
+		return fmt.Errorf("codePattern parameter is required for remove_code_block")
+	}
+	locationMap, ok := operation.Parameters["location"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("location parameter is required for remove_code_block")
+	}
+	funcName, _ := locationMap["functionName"].(string)
+	methodName, _ := locationMap["methodName"].(string)
+	receiverType, _ := locationMap["receiverType"].(string)
+	ci := NewCodeInserter()
+	ins, err := ci.RemoveCodeBlock(operation.File, &InsertionLocation{
+		FunctionName: funcName,
+		MethodName:   methodName,
+		ReceiverType: receiverType,
+	}, codePattern)
+	if err != nil {
+		return err
+	}
+	result.Changes = append(result.Changes, &CodeChange{
+		Type:        "remove_code_block",
+		File:        operation.File,
+		StartLine:   ins.StartLine,
+		EndLine:     ins.EndLine,
+		Description: ins.Description,
+	})
+	return nil
+}
 
 // validatePlan validates a refactoring plan
 func (o *Orchestrator) validatePlan(plan *RefactoringPlan) error {
@@ -1030,6 +1071,13 @@ func (o *Orchestrator) validatePlan(plan *RefactoringPlan) error {
 
 // validateOperation validates a single operation
 func (o *Orchestrator) validateOperation(operation *RefactoringOperation) error {
+	if operation.Type == "remove_code_block" {
+		if operation.File == "" {
+			return fmt.Errorf("operation file is required")
+		}
+		return nil
+	}
+
 	if operation.Type == "" {
 		return fmt.Errorf("operation type is required")
 	}

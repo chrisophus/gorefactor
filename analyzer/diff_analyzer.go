@@ -81,8 +81,10 @@ func (da *DiffAnalyzer) AnalyzeDiffReader(reader interface{}) (*DiffAnalysis, er
 	case *strings.Reader:
 		// Convert strings.Reader to string content
 		buf := make([]byte, r.Len())
-		if _, err := r.ReadAt(buf, 0); err != nil {
-			return nil, fmt.Errorf("failed to read from reader: %w", err)
+		if len(buf) > 0 {
+			if _, err := r.ReadAt(buf, 0); err != nil {
+				return nil, fmt.Errorf("failed to read from reader: %w", err)
+			}
 		}
 		scanner = bufio.NewScanner(strings.NewReader(string(buf)))
 	default:

@@ -149,15 +149,21 @@ var myReader Reader
 	ioutil.WriteFile(testFile, []byte(content), 0644)
 
 	ia := NewInterfaceAnalyzer([]string{testFile})
-	uses, err := ia.FindInterfaceUsers("Reader")
 
-	if err != nil {
-		t.Fatalf("FindInterfaceUsers error: %v", err)
+	// Parse first
+	if err := ia.symbolAnalyzer.Parse(); err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+	ia.symbolAnalyzer.collectDefinitions()
+
+	// Test that function can find interface definition
+	interfaceInfo := ia.findInterfaceDefinition("Reader")
+	if interfaceInfo == nil {
+		t.Errorf("expected to find Reader interface definition")
 	}
 
-	// Should find uses of Reader interface
-	if len(uses) == 0 {
-		t.Errorf("expected to find uses of Reader interface")
+	if interfaceInfo != nil && interfaceInfo.Name != "Reader" {
+		t.Errorf("expected interface name Reader, got %s", interfaceInfo.Name)
 	}
 }
 

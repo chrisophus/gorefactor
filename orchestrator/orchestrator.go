@@ -159,6 +159,8 @@ func (o *Orchestrator) executeOperation(operation *RefactoringOperation) *Operat
 		err = o.executeRemoveCodeBlock(operation, result)
 	case "replace_code":
 		err = o.executeReplaceCode(operation, result)
+	case "delete_declaration":
+		err = o.executeDeleteDeclaration(operation, target, result)
 	default:
 		err = fmt.Errorf("unknown operation type: %s", operation.Type)
 	}

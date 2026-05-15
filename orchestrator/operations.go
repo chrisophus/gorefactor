@@ -414,3 +414,51 @@ func (o *Orchestrator) executeReplaceCode(operation *RefactoringOperation, resul
 	})
 	return nil
 }
+func (o *Orchestrator) executeDeleteDeclaration(operation *RefactoringOperation, target *TargetLocation, result *OperationResult) error {
+	src, err := os.ReadFile(operation.File)
+	if err != nil {
+		return fmt.Errorf("failed to read file: %w", err)
+	}
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, operation.File, src, parser.ParseComments)
+	if err != nil {
+		return fmt.Errorf("failed to parse file: %w", err)
+	}
+	removeIdx := -1
+	for i, decl := range node.Decls {
+		start := fset.Position(decl.Pos()).Line
+		end := fset.Position(decl.End()).Line
+		if start <= target.StartLine && end >= target.EndLine {
+			removeIdx = i
+			break
+		}
+	}
+	if removeIdx < 0 {
+		return fmt.Errorf("declaration not found at lines %d-%d in %s", target.StartLine, target.EndLine, operation.File)
+	}
+	startLine := fset.Position(node.Decls[removeIdx].Pos()).Line
+	endLine := fset.Position(node.Decls[removeIdx].End()).Line
+	node.Decls = append(node.Decls[:removeIdx], node.Decls[removeIdx+1:]...)
+	var buf bytes.Buffer
+	if err := format.Node(&buf, fset, node); err != nil {
+		return fmt.Errorf("failed to format file: %w", err)
+	}
+	normalized, nErr := format.Source(buf.Bytes())
+	if nErr != nil {
+		normalized = buf.Bytes()
+	}
+	if err := os.WriteFile(operation.File, normalized, 0644); err != nil {
+		return fmt.Errorf("failed to write file: %w", err)
+	}
+	if err := exec.Command("goimports", "-w", operation.File).Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: goimports on %s: %v\n", operation.File, err)
+	}
+	result.Changes = append(result.Changes, &CodeChange{
+		Type:        "delete_declaration",
+		File:        operation.File,
+		StartLine:   startLine,
+		EndLine:     endLine,
+		Description: fmt.Sprintf("Deleted declaration at lines %d-%d from %s", startLine, endLine, operation.File),
+	})
+	return nil
+}

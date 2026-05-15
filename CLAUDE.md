@@ -194,6 +194,83 @@ Conditions allow operations to execute only when code meets certain criteria (e.
 - Push to origin with `git push -u origin <branch-name>`
 - The repository is at `/home/user/gorefactor`
 
+## GoRefactor Skill for Intelligent Refactoring
+
+The repository includes a dedicated skill for efficient code refactoring that Claude Code can use:
+
+### Interfaces
+
+**Go Binary (`skill-refactor`)**: Structured JSON interface for Claude Code integration
+```bash
+./skill-refactor analyze path/to/file.go        # JSON recommendations
+./skill-refactor refactor path/to/file.go 3     # Auto-apply top 3 refactorings
+./skill-refactor extract file.go <start> <end> <method>  # Extract specific block
+```
+
+**Bash Wrapper (`refactor-skill.sh`)**: Human-friendly CLI with colored output
+```bash
+./refactor-skill.sh analyze path/to/file.go     # Show extraction candidates
+./refactor-skill.sh extract-best path/to/file.go
+./refactor-skill.sh simplify path/to/file.go 3
+```
+
+### When to Use the Skill
+
+Use when:
+- Reducing function complexity (many nested conditions, long logic blocks)
+- Extracting methods from dense functions (>30 lines with multiple concerns)
+- Analyzing code structure to understand refactoring opportunities
+- Batch refactoring multiple files with consistent patterns
+
+Avoid when:
+- Renaming for semantic clarity (LLM is better at meaningful names)
+- Changing code behavior or logic
+- Making architectural changes (requires understanding business intent)
+- Working with test code
+
+### How It Works
+
+The skill:
+1. Analyzes code complexity using metrics (control structures, statements, variable dependencies)
+2. Ranks extraction candidates by priority (1-10 scale)
+3. Generates intelligent method names based on code characteristics
+4. Optionally applies safe, high-impact refactorings automatically
+
+Priority factors:
+- Sweet spot complexity (3-10)
+- Clear inputs/outputs (has read and write variables)
+- Maintainable size (≤ 20 statements)
+- Extractability (valid AST, proper dependencies)
+
+### Examples
+
+**Analyze a file**:
+```bash
+./skill-refactor analyze service.go
+# Output: JSON with priority-ranked extraction candidates
+```
+
+**Auto-refactor the top 3 candidates**:
+```bash
+./skill-refactor refactor service.go
+# Modifies file in-place, applies highest-value extractions
+```
+
+**Extract a specific block**:
+```bash
+./skill-refactor extract service.go 45 62 validatePayment
+```
+
+### Integration
+
+The skill is designed for Claude Code workflows:
+1. Call `analyze` to find refactoring opportunities
+2. Review JSON output to understand recommendations
+3. Use `refactor` to apply automatically, or `extract` for specific blocks
+4. Verify the results maintain intended behavior
+
+For detailed documentation, see `SKILL_REFACTOR.md`.
+
 ## Notes for Future Work
 
 - The orchestrator is the primary user-facing feature for batch operations; individual commands are useful for one-off analysis

@@ -6,6 +6,9 @@ skill-refactor
 *.so
 *.dylib
 
+# Runtime snapshots and state
+.gorefactor/
+
 # Generated templates (created by generate-templates command)
 test_templates/
 templates/

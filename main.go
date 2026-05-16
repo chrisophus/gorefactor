@@ -1,16 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
 
-	"gorefactor/analyzer"
 	"gorefactor/orchestrator"
 	"gorefactor/parser"
 )
@@ -67,6 +61,51 @@ func getCommands() map[string]Command {
 			Name:        "exec",
 			Description: "Execute a single operation from inline JSON or stdin (supports piping)",
 			Run:         execOperation,
+		},
+		"format": {
+			Name:        "format",
+			Description: "Format Go files (gofmt + goimports) in-place; pass dir/file paths or default '.'",
+			Run:         formatCommand,
+		},
+		"split": {
+			Name:        "split",
+			Description: "Auto-split a Go file over the line limit into multiple files [--max N] [--dry-run]",
+			Run:         splitCommand,
+		},
+		"lint": {
+			Name:        "lint",
+			Description: "Run structural lints (file size, duplicates) [--fix] [--json] [--max N]",
+			Run:         lintCommand,
+		},
+		"create": {
+			Name:        "create",
+			Description: "Create a new file with content from arg or stdin",
+			Run:         createCommand,
+		},
+		"insert": {
+			Name:        "insert",
+			Description: "Insert code into a file at a location (at-end | at-beginning | before:Func | after:Func | inside:Func)",
+			Run:         insertCommand,
+		},
+		"replace": {
+			Name:        "replace",
+			Description: "Replace a code pattern inside a function/method (AST: pattern must be a full statement)",
+			Run:         replaceCommand,
+		},
+		"replace-text": {
+			Name:        "replace-text",
+			Description: "Replace literal text inside a function/method body (safe text find/replace)",
+			Run:         replaceTextCommand,
+		},
+		"delete": {
+			Name:        "delete",
+			Description: "Delete a declaration (function, method, or type) from a file",
+			Run:         deleteCommand,
+		},
+		"rename": {
+			Name:        "rename",
+			Description: "Rename an unexported symbol across the package",
+			Run:         renameCommand,
 		},
 	}
 }
@@ -144,15 +183,14 @@ func listFunctions(args []string) error {
 		return err
 	}
 
-	// Output functions and methods
 	fmt.Println("Functions:")
 	for _, fn := range info.Functions {
-		fmt.Printf("  %s\n", fn.Name)
+		fmt.Printf("  %s (lines %d-%d, %d lines)\n", fn.Name, fn.StartLine, fn.EndLine, fn.EndLine-fn.StartLine+1)
 	}
 
 	fmt.Println("\nMethods:")
 	for _, m := range info.Methods {
-		fmt.Printf("  %s.%s\n", m.Receiver, m.Name)
+		fmt.Printf("  %s.%s (lines %d-%d, %d lines)\n", m.Receiver, m.Name, m.StartLine, m.EndLine, m.EndLine-m.StartLine+1)
 	}
 
 	return nil
@@ -177,502 +215,5 @@ func generateTemplates(args []string) error {
 	fmt.Println("\nAvailable templates:")
 	tg.PrintTemplateHelp()
 
-	return nil
-}
-
-func recommendExtractions(args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("missing file path")
-	}
-
-	// Check for help flag
-	if args[0] == "--help" {
-		printUsage()
-		return nil
-	}
-
-	// Create default config
-	config := analyzer.DefaultConfig()
-	var functionName string
-
-	// Parse optional configuration flags
-	for i := 1; i < len(args); i++ {
-		switch args[i] {
-		case "--help":
-			printUsage()
-			return nil
-		case "--min-complexity":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --min-complexity")
-			}
-			val, err := strconv.Atoi(args[i+1])
-			if err != nil {
-				return fmt.Errorf("invalid value for --min-complexity: %v", err)
-			}
-			config.MinComplexity = val
-			i++
-		case "--max-complexity":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --max-complexity")
-			}
-			val, err := strconv.Atoi(args[i+1])
-			if err != nil {
-				return fmt.Errorf("invalid value for --max-complexity: %v", err)
-			}
-			config.MaxComplexity = val
-			i++
-		case "--max-read-vars":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --max-read-vars")
-			}
-			val, err := strconv.Atoi(args[i+1])
-			if err != nil {
-				return fmt.Errorf("invalid value for --max-read-vars: %v", err)
-			}
-			config.MaxReadVars = val
-			i++
-		case "--max-write-vars":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --max-write-vars")
-			}
-			val, err := strconv.Atoi(args[i+1])
-			if err != nil {
-				return fmt.Errorf("invalid value for --max-write-vars: %v", err)
-			}
-			config.MaxWriteVars = val
-			i++
-		case "--min-statements":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --min-statements")
-			}
-			val, err := strconv.Atoi(args[i+1])
-			if err != nil {
-				return fmt.Errorf("invalid value for --min-statements: %v", err)
-			}
-			config.MinStatements = val
-			i++
-		case "--max-statements":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --max-statements")
-			}
-			val, err := strconv.Atoi(args[i+1])
-			if err != nil {
-				return fmt.Errorf("invalid value for --max-statements: %v", err)
-			}
-			config.MaxStatements = val
-			i++
-		case "--num-leading-stmts":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --num-leading-stmts")
-			}
-			val, err := strconv.Atoi(args[i+1])
-			if err != nil {
-				return fmt.Errorf("invalid value for --num-leading-stmts: %v", err)
-			}
-			config.NumLeadingStmts = val
-			i++
-		case "--function":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --function")
-			}
-			functionName = args[i+1]
-			i++
-		}
-	}
-
-	recommendations, err := analyzer.RecommendExtractions(args[0], functionName, config)
-	if err != nil {
-		return err
-	}
-
-	// Output as JSON
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(recommendations)
-}
-
-func orchestrateRefactoring(args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("missing plan file path")
-	}
-
-	planFile := args[0]
-	outputFile := ""
-	if len(args) > 1 {
-		outputFile = args[1]
-	}
-
-	// Create orchestrator
-	orch := orchestrator.NewOrchestrator()
-
-	// Load the plan
-	plan, err := orch.LoadPlan(planFile)
-	if err != nil {
-		return fmt.Errorf("failed to load plan: %w", err)
-	}
-
-	fmt.Printf("Loaded plan: %s\n", plan.Name)
-	fmt.Printf("Description: %s\n", plan.Description)
-	fmt.Printf("Operations: %d\n", len(plan.Operations))
-
-	// Execute the plan
-	result, err := orch.ExecutePlan(plan.Name)
-	if err != nil {
-		return fmt.Errorf("failed to execute plan: %w", err)
-	}
-
-	// Output results
-	fmt.Printf("\nExecution completed at: %s\n", result.Executed.Format("2006-01-02 15:04:05"))
-	fmt.Printf("Success: %t\n", result.Success)
-	fmt.Printf("Statistics:\n")
-	fmt.Printf("  Total operations: %d\n", result.Statistics.TotalOperations)
-	fmt.Printf("  Successful: %d\n", result.Statistics.SuccessfulOperations)
-	fmt.Printf("  Failed: %d\n", result.Statistics.FailedOperations)
-	fmt.Printf("  Fallback used: %d\n", result.Statistics.FallbackUsed)
-	fmt.Printf("  Total changes: %d\n", result.Statistics.TotalChanges)
-
-	if len(result.Errors) > 0 {
-		fmt.Printf("\nErrors:\n")
-		for _, err := range result.Errors {
-			fmt.Printf("  - %s\n", err)
-		}
-	}
-
-	if len(result.Warnings) > 0 {
-		fmt.Printf("\nWarnings:\n")
-		for _, warning := range result.Warnings {
-			fmt.Printf("  - %s\n", warning)
-		}
-	}
-
-	// Save result to file if specified
-	if outputFile != "" {
-		if err := orch.SaveResult(result, outputFile); err != nil {
-			return fmt.Errorf("failed to save result: %w", err)
-		}
-		fmt.Printf("\nResult saved to: %s\n", outputFile)
-	} else {
-		// Output as JSON to stdout
-		encoder := json.NewEncoder(os.Stdout)
-		encoder.SetIndent("", "  ")
-		return encoder.Encode(result)
-	}
-
-	return nil
-}
-
-func analyzeDiff(args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("missing diff file path")
-	}
-
-	diffPath := args[0]
-	outputPath := ""
-	if len(args) > 1 {
-		outputPath = args[1]
-	}
-
-	// Create diff analyzer
-	da := analyzer.NewDiffAnalyzer()
-
-	// Analyze the diff
-	analysis, err := da.AnalyzeDiffFile(diffPath)
-	if err != nil {
-		return fmt.Errorf("failed to analyze diff: %w", err)
-	}
-
-	// Output results
-	fmt.Printf("Diff Analysis Summary:\n")
-	fmt.Printf("%s\n", analysis.Summary)
-	fmt.Printf("\nDetected Changes:\n")
-	for i, change := range analysis.Changes {
-		fmt.Printf("  %d. %s (confidence: %.2f)\n", i+1, change.Description, change.Confidence)
-		fmt.Printf("     File: %s, Lines: %d-%d\n", change.File, change.StartLine, change.EndLine)
-	}
-
-	if analysis.Plan != nil && len(analysis.Plan.Operations) > 0 {
-		fmt.Printf("\nGenerated Refactoring Plan:\n")
-		fmt.Printf("  Operations: %d\n", len(analysis.Plan.Operations))
-		for i, op := range analysis.Plan.Operations {
-			fmt.Printf("  %d. %s (%s)\n", i+1, op.Description, op.Type)
-		}
-	}
-
-	// Save plan to file if specified
-	if outputPath != "" {
-		// Save the generated plan as JSON
-		f, err := os.Create(outputPath)
-		if err != nil {
-			return fmt.Errorf("failed to create output file: %w", err)
-		}
-		defer func() { _ = f.Close() }()
-		encoder := json.NewEncoder(f)
-		encoder.SetIndent("", "  ")
-		if err := encoder.Encode(analysis.Plan); err != nil {
-			return fmt.Errorf("failed to write plan: %w", err)
-		}
-		fmt.Printf("\nPlan saved to: %s\n", outputPath)
-	} else {
-		// Output as JSON to stdout
-		encoder := json.NewEncoder(os.Stdout)
-		encoder.SetIndent("", "  ")
-		return encoder.Encode(analysis)
-	}
-
-	return nil
-}
-
-func analyzeFileSizes(args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("usage: analyze-file-sizes <directory> [--max-size N] [--format json|text]")
-	}
-
-	directory := args[0]
-	maxSize := 300
-	format := "text"
-
-	// Parse optional arguments
-	for i := 1; i < len(args); i++ {
-		switch args[i] {
-		case "--max-size":
-			if i+1 < len(args) {
-				size, err := strconv.Atoi(args[i+1])
-				if err != nil {
-					return fmt.Errorf("invalid max-size: %w", err)
-				}
-				maxSize = size
-				i++
-			}
-		case "--format":
-			if i+1 < len(args) {
-				format = args[i+1]
-				i++
-			}
-		}
-	}
-
-	// Find all Go files
-	files, err := findGoFiles(directory)
-	if err != nil {
-		return fmt.Errorf("failed to find Go files: %w", err)
-	}
-
-	if len(files) == 0 {
-		fmt.Println("No Go files found in directory")
-		return nil
-	}
-
-	// Analyze each file
-	var issues []*analyzer.FileSizeIssue
-	for _, file := range files {
-		issue, err := analyzer.AnalyzeFileSize(file, maxSize)
-		if err != nil {
-			// Log but don't fail
-			fmt.Fprintf(os.Stderr, "Warning: failed to analyze %s: %v\n", file, err)
-			continue
-		}
-		issues = append(issues, issue)
-	}
-
-	// Output results
-	if format == "json" {
-		encoder := json.NewEncoder(os.Stdout)
-		encoder.SetIndent("", "  ")
-		return encoder.Encode(issues)
-	}
-
-	// Text format (linter-style)
-	oversized := 0
-	for _, issue := range issues {
-		if issue.IsOversized {
-			oversized++
-			fmt.Printf("%s: %d lines (max: %d) - %d lines over limit\n",
-				issue.FilePath, issue.LineCount, issue.MaxRecommended, issue.OverageSize)
-
-			// Show extraction hints
-			if len(issue.ExtractionHints) > 0 {
-				fmt.Println("  Extraction candidates:")
-				for _, hint := range issue.ExtractionHints {
-					fmt.Printf("    - %s (lines %d-%d, %d lines, complexity %d, priority %d/10)\n",
-						hint.FunctionName, hint.StartLine, hint.EndLine, hint.LineCount, hint.Complexity, hint.Priority)
-				}
-			}
-		}
-	}
-
-	// Summary
-	fmt.Printf("\nSummary: %d/%d files exceed %d lines\n", oversized, len(issues), maxSize)
-
-	if oversized > 0 {
-		return fmt.Errorf("found %d oversized file(s)", oversized)
-	}
-
-	return nil
-}
-
-func findGoFiles(directory string) ([]string, error) {
-	var files []string
-	err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() && strings.HasSuffix(path, ".go") {
-			files = append(files, path)
-		}
-		return nil
-	})
-	return files, err
-}
-
-func moveCode(args []string) error {
-	if len(args) < 3 {
-		return fmt.Errorf("usage: move <source-file> <target-name> <destination-file>\n\nExamples:\n  gorefactor move service.go GetUser utils.go\n  gorefactor move handler.go Handler:Process helpers.go")
-	}
-
-	sourceFile := args[0]
-	targetName := args[1]
-	destFile := args[2]
-
-	// Parse target name - could be "FunctionName" or "Receiver:MethodName"
-	var functionName, receiverType string
-	if strings.Contains(targetName, ":") {
-		parts := strings.Split(targetName, ":")
-		receiverType = parts[0]
-		functionName = parts[1]
-	} else if strings.Contains(targetName, ".") {
-		parts := strings.Split(targetName, ".")
-		receiverType = parts[0]
-		functionName = parts[1]
-	} else {
-		functionName = targetName
-	}
-
-	// Create a refactoring plan and execute it
-	plan := &orchestrator.RefactoringPlan{
-		Version:     "1.0",
-		Name:        "move_operation",
-		Description: fmt.Sprintf("Move %s to %s", targetName, destFile),
-		Operations: []*orchestrator.RefactoringOperation{
-			{
-				Type:        "move_method",
-				Description: fmt.Sprintf("Move %s from %s to %s", targetName, sourceFile, destFile),
-				File:        sourceFile,
-				Target: &orchestrator.TargetSpecification{
-					FunctionName: functionName,
-					MethodName:   functionName,
-					ReceiverType: receiverType,
-				},
-				Parameters: map[string]interface{}{
-					"newFile": destFile,
-				},
-			},
-		},
-	}
-
-	// Execute the plan
-	orch := orchestrator.NewOrchestrator()
-	orch.RegisterPlan(plan)
-
-	result, err := orch.ExecutePlan(plan.Name)
-	if err != nil {
-		return fmt.Errorf("failed to move code: %w", err)
-	}
-
-	// Output results
-	if result.Success {
-		fmt.Printf("✓ Successfully moved %s to %s\n", targetName, destFile)
-		for _, change := range result.Operations[0].Changes {
-			fmt.Printf("  %s: %s (lines %d-%d)\n", change.Type, change.Description, change.StartLine, change.EndLine)
-		}
-	} else {
-		fmt.Printf("✗ Failed to move %s\n", targetName)
-		for _, err := range result.Errors {
-			fmt.Printf("  Error: %s\n", err)
-		}
-		return fmt.Errorf("move operation failed")
-	}
-
-	return nil
-}
-
-func execOperation(args []string) error {
-	var data []byte
-	var err error
-
-	if len(args) == 0 || args[0] == "-" || args[0] == "-stdin" {
-		data, err = io.ReadAll(os.Stdin)
-		if err != nil {
-			return fmt.Errorf("failed to read stdin: %w", err)
-		}
-	} else {
-		data = []byte(args[0])
-	}
-
-	trimmed := bytes.TrimSpace(data)
-	var ops []*orchestrator.RefactoringOperation
-	if len(trimmed) > 0 && trimmed[0] == '[' {
-		if err := json.Unmarshal(data, &ops); err != nil {
-			return fmt.Errorf("failed to parse operations: %w", err)
-		}
-	} else {
-		var op orchestrator.RefactoringOperation
-		if err := json.Unmarshal(data, &op); err != nil {
-			return fmt.Errorf("failed to parse operation: %w", err)
-		}
-		ops = []*orchestrator.RefactoringOperation{&op}
-	}
-
-	orch := orchestrator.NewOrchestrator()
-	result, err := orch.ExecuteOperations(ops)
-	if err != nil {
-		return err
-	}
-
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
-	if encErr := encoder.Encode(result); encErr != nil {
-		return encErr
-	}
-	if !result.Success {
-		return fmt.Errorf("one or more operations failed")
-	}
-	return nil
-}
-
-func undoRefactoring(args []string) error {
-	var snapshotDir string
-	if len(args) == 0 {
-		snapshots, err := orchestrator.ListSnapshots()
-		if err != nil {
-			return fmt.Errorf("failed to list snapshots: %w", err)
-		}
-		if len(snapshots) == 0 {
-			return fmt.Errorf("no snapshots found in .gorefactor/snapshots/")
-		}
-		snapshotDir = snapshots[len(snapshots)-1]
-	} else {
-		arg := args[0]
-		if strings.HasSuffix(arg, ".json") {
-			orch := orchestrator.NewOrchestrator()
-			plan, err := orch.LoadPlan(arg)
-			if err != nil {
-				return fmt.Errorf("failed to load plan: %w", err)
-			}
-			snapshotDir = orchestrator.SnapshotDir(plan.Name)
-		} else if info, err := os.Stat(arg); err == nil && info.IsDir() {
-			snapshotDir = arg
-		} else {
-			snapshotDir = orchestrator.SnapshotDir(arg)
-		}
-	}
-	if _, err := os.Stat(snapshotDir); err != nil {
-		return fmt.Errorf("snapshot not found: %s (run orchestrate first to create one)", snapshotDir)
-	}
-	fmt.Printf("Restoring from snapshot: %s\n", snapshotDir)
-	count, err := orchestrator.RestoreSnapshot(snapshotDir)
-	if err != nil {
-		return fmt.Errorf("restore failed: %w", err)
-	}
-	fmt.Printf("Restored %d file(s).\n", count)
 	return nil
 }

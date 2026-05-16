@@ -3,9 +3,6 @@ package orchestrator
 import (
 	"encoding/json"
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"os"
 	"time"
 )
@@ -123,73 +120,6 @@ func (o *Orchestrator) ExecuteOperations(ops []*RefactoringOperation) (*Executio
 	return o.ExecutePlan("_exec")
 }
 
-// checkConditions verifies that all conditions are met
-func (o *Orchestrator) checkConditions(conditions []*Condition) bool {
-	if len(conditions) == 0 {
-		return true
-	}
-
-	for _, condition := range conditions {
-		if !o.evaluateCondition(condition) {
-			return false
-		}
-	}
-	return true
-}
-
-// evaluateCondition evaluates a single condition
-func (o *Orchestrator) evaluateCondition(condition *Condition) bool {
-	// This is a simplified implementation
-	// In a real implementation, you'd evaluate the condition based on the current code state
-	return true
-}
-
-// executeFallback executes a fallback strategy
-func (o *Orchestrator) executeFallback(fallback *FallbackStrategy, filePath string) (*TargetLocation, error) {
-	switch fallback.Type {
-	case "skip":
-		return nil, fmt.Errorf("fallback strategy: skip")
-	case "use_default":
-		// Use a default target (e.g., first function in file)
-		return o.findDefaultTarget(filePath)
-	default:
-		return nil, fmt.Errorf("unknown fallback strategy: %s", fallback.Type)
-	}
-}
-
-// findDefaultTarget finds a default target when fallback is needed
-func (o *Orchestrator) findDefaultTarget(filePath string) (*TargetLocation, error) {
-	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
-	if err != nil {
-		return nil, err
-	}
-
-	var firstFunc *ast.FuncDecl
-	ast.Inspect(node, func(n ast.Node) bool {
-		if firstFunc == nil {
-			if funcDecl, ok := n.(*ast.FuncDecl); ok {
-				firstFunc = funcDecl
-				return false
-			}
-		}
-		return true
-	})
-
-	if firstFunc != nil {
-		startLine := fset.Position(firstFunc.Pos()).Line
-		endLine := fset.Position(firstFunc.End()).Line
-		return &TargetLocation{
-			File:      filePath,
-			StartLine: startLine,
-			EndLine:   endLine,
-			Function:  firstFunc.Name.Name,
-		}, nil
-	}
-
-	return nil, fmt.Errorf("no functions found in file")
-}
-
 func (o *Orchestrator) executeRemoveCodeBlock(operation *RefactoringOperation, result *OperationResult) error {
 	codePattern, _ := operation.Parameters["codePattern"].(string)
 	if codePattern == "" {
@@ -221,76 +151,6 @@ func (o *Orchestrator) executeRemoveCodeBlock(operation *RefactoringOperation, r
 	return nil
 }
 
-// validatePlan validates a refactoring plan
-func (o *Orchestrator) validatePlan(plan *RefactoringPlan) error {
-	if plan.Name == "" {
-		return fmt.Errorf("plan name is required")
-	}
-	if len(plan.Operations) == 0 {
-		return fmt.Errorf("plan must contain at least one operation")
-	}
-
-	for i, operation := range plan.Operations {
-		if err := o.validateOperation(operation); err != nil {
-			return fmt.Errorf("operation %d: %w", i+1, err)
-		}
-	}
-
-	return nil
-}
-
-// validateOperation validates a single operation
-func (o *Orchestrator) validateOperation(operation *RefactoringOperation) error {
-	if operation.Type == "remove_code_block" || operation.Type == "replace_code" {
-		if operation.File == "" {
-			return fmt.Errorf("operation file is required")
-		}
-		return nil
-	}
-
-	if operation.Type == "" {
-		return fmt.Errorf("operation type is required")
-	}
-	if operation.File == "" {
-		return fmt.Errorf("operation file is required")
-	}
-	// Target is optional for insert_code and create_file operations
-	if operation.Target == nil && operation.Type != "insert_code" && operation.Type != "create_file" {
-		return fmt.Errorf("operation target is required for operation type: %s", operation.Type)
-	}
-
-	return nil
-}
-
-// SaveResult saves an execution result to a JSON file
-func (o *Orchestrator) SaveResult(result *ExecutionResult, filePath string) error {
-	data, err := json.MarshalIndent(result, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal result: %w", err)
-	}
-
-	if err := os.WriteFile(filePath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write result file: %w", err)
-	}
-
-	return nil
-}
-func (o *Orchestrator) isNewFileAtBeginning(operation *RefactoringOperation) bool {
-	if operation.Type != "insert_code" {
-		return false
-	}
-	locationData, ok := operation.Parameters["location"].(map[string]interface{})
-	if !ok {
-		return false
-	}
-	locationType, _ := locationData["type"].(string)
-	if locationType != "at_beginning" {
-		return false
-	}
-	_, err := os.Stat(operation.File)
-	return os.IsNotExist(err)
-}
-
 func (o *Orchestrator) dispatchOperation(operation *RefactoringOperation, target *TargetLocation, result *OperationResult) error {
 	switch operation.Type {
 	case "move_method":
@@ -311,21 +171,7 @@ func (o *Orchestrator) dispatchOperation(operation *RefactoringOperation, target
 		return fmt.Errorf("unknown operation type: %s", operation.Type)
 	}
 }
-func (o *Orchestrator) finalizeResult(result *OperationResult, err error) *OperationResult {
-	if err != nil {
-		result.Success = false
-		result.Error = err.Error()
-		return result
-	}
-	result.Success = true
-	if !result.Applied && result.Message == "" {
-		result.Applied = true
-	}
-	if result.Message == "" {
-		result.Message = "Operation completed successfully"
-	}
-	return result
-}
+
 func (o *Orchestrator) executeOperation(operation *RefactoringOperation) *OperationResult {
 	result := &OperationResult{
 		Operation: operation,

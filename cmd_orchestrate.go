@@ -1,0 +1,78 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"gorefactor/orchestrator"
+	"os"
+)
+
+func orchestrateRefactoring(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("missing plan file path")
+	}
+
+	planFile := args[0]
+	outputFile := ""
+	if len(args) > 1 {
+		outputFile = args[1]
+	}
+
+	// Create orchestrator
+	orch := orchestrator.NewOrchestrator()
+
+	// Load the plan
+	plan, err := orch.LoadPlan(planFile)
+	if err != nil {
+		return fmt.Errorf("failed to load plan: %w", err)
+	}
+
+	fmt.Printf("Loaded plan: %s\n", plan.Name)
+	fmt.Printf("Description: %s\n", plan.Description)
+	fmt.Printf("Operations: %d\n", len(plan.Operations))
+
+	// Execute the plan
+	result, err := orch.ExecutePlan(plan.Name)
+	if err != nil {
+		return fmt.Errorf("failed to execute plan: %w", err)
+	}
+
+	// Output results
+	fmt.Printf("\nExecution completed at: %s\n", result.Executed.Format("2006-01-02 15:04:05"))
+	fmt.Printf("Success: %t\n", result.Success)
+	fmt.Printf("Statistics:\n")
+	fmt.Printf("  Total operations: %d\n", result.Statistics.TotalOperations)
+	fmt.Printf("  Successful: %d\n", result.Statistics.SuccessfulOperations)
+	fmt.Printf("  Failed: %d\n", result.Statistics.FailedOperations)
+	fmt.Printf("  Fallback used: %d\n", result.Statistics.FallbackUsed)
+	fmt.Printf("  Total changes: %d\n", result.Statistics.TotalChanges)
+
+	if len(result.Errors) > 0 {
+		fmt.Printf("\nErrors:\n")
+		for _, err := range result.Errors {
+			fmt.Printf("  - %s\n", err)
+		}
+	}
+
+	if len(result.Warnings) > 0 {
+		fmt.Printf("\nWarnings:\n")
+		for _, warning := range result.Warnings {
+			fmt.Printf("  - %s\n", warning)
+		}
+	}
+
+	// Save result to file if specified
+	if outputFile != "" {
+		if err := orch.SaveResult(result, outputFile); err != nil {
+			return fmt.Errorf("failed to save result: %w", err)
+		}
+		fmt.Printf("\nResult saved to: %s\n", outputFile)
+	} else {
+		// Output as JSON to stdout
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(result)
+	}
+
+	return nil
+}

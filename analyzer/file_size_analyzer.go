@@ -13,22 +13,22 @@ const DefaultMaxFileSize = 300
 
 // FileSizeIssue represents a finding about file size
 type FileSizeIssue struct {
-	FilePath        string `json:"filePath"`
-	LineCount       int    `json:"lineCount"`
-	MaxRecommended  int    `json:"maxRecommended"`
-	IsOversized     bool   `json:"isOversized"`
-	OverageSize     int    `json:"overageSize"`
+	FilePath        string            `json:"filePath"`
+	LineCount       int               `json:"lineCount"`
+	MaxRecommended  int               `json:"maxRecommended"`
+	IsOversized     bool              `json:"isOversized"`
+	OverageSize     int               `json:"overageSize"`
 	ExtractionHints []*ExtractionHint `json:"extractionHints"`
 }
 
 // ExtractionHint suggests a function that could be extracted to reduce file size
 type ExtractionHint struct {
-	FunctionName  string `json:"functionName"`
-	StartLine     int    `json:"startLine"`
-	EndLine       int    `json:"endLine"`
-	LineCount     int    `json:"lineCount"`
-	Complexity    int    `json:"complexity"`
-	Priority      int    `json:"priority"` // 1-10, higher = more important to extract
+	FunctionName string `json:"functionName"`
+	StartLine    int    `json:"startLine"`
+	EndLine      int    `json:"endLine"`
+	LineCount    int    `json:"lineCount"`
+	Complexity   int    `json:"complexity"`
+	Priority     int    `json:"priority"` // 1-10, higher = more important to extract
 }
 
 // AnalyzeFileSize analyzes whether a file exceeds recommended size and suggests extractions

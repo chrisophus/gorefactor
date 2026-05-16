@@ -44,7 +44,7 @@ lint: ## Run golangci-lint
 fmt: ## Format code
 	@echo "$(BLUE)Formatting code...$(NC)"
 	go fmt ./...
-	goimports -w .
+	@if [ -x ./gorefactor ]; then ./gorefactor format .; else go run . format .; fi
 	@echo "$(GREEN)✓ Code formatted$(NC)"
 
 vet: ## Run go vet

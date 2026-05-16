@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -61,10 +63,23 @@ func getCommands() map[string]Command {
 			Description: "Move a function or method to a different file",
 			Run:         moveCode,
 		},
+		"exec": {
+			Name:        "exec",
+			Description: "Execute a single operation from inline JSON or stdin (supports piping)",
+			Run:         execOperation,
+		},
 	}
 }
 
 func main() {
+	if len(os.Args) >= 2 && os.Args[1] == "undo" {
+		if err := undoRefactoring(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	if len(os.Args) < 2 {
 		printUsage()
 		os.Exit(1)
@@ -577,5 +592,87 @@ func moveCode(args []string) error {
 		return fmt.Errorf("move operation failed")
 	}
 
+	return nil
+}
+
+func execOperation(args []string) error {
+	var data []byte
+	var err error
+
+	if len(args) == 0 || args[0] == "-" || args[0] == "-stdin" {
+		data, err = io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("failed to read stdin: %w", err)
+		}
+	} else {
+		data = []byte(args[0])
+	}
+
+	trimmed := bytes.TrimSpace(data)
+	var ops []*orchestrator.RefactoringOperation
+	if len(trimmed) > 0 && trimmed[0] == '[' {
+		if err := json.Unmarshal(data, &ops); err != nil {
+			return fmt.Errorf("failed to parse operations: %w", err)
+		}
+	} else {
+		var op orchestrator.RefactoringOperation
+		if err := json.Unmarshal(data, &op); err != nil {
+			return fmt.Errorf("failed to parse operation: %w", err)
+		}
+		ops = []*orchestrator.RefactoringOperation{&op}
+	}
+
+	orch := orchestrator.NewOrchestrator()
+	result, err := orch.ExecuteOperations(ops)
+	if err != nil {
+		return err
+	}
+
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	if encErr := encoder.Encode(result); encErr != nil {
+		return encErr
+	}
+	if !result.Success {
+		return fmt.Errorf("one or more operations failed")
+	}
+	return nil
+}
+
+func undoRefactoring(args []string) error {
+	var snapshotDir string
+	if len(args) == 0 {
+		snapshots, err := orchestrator.ListSnapshots()
+		if err != nil {
+			return fmt.Errorf("failed to list snapshots: %w", err)
+		}
+		if len(snapshots) == 0 {
+			return fmt.Errorf("no snapshots found in .gorefactor/snapshots/")
+		}
+		snapshotDir = snapshots[len(snapshots)-1]
+	} else {
+		arg := args[0]
+		if strings.HasSuffix(arg, ".json") {
+			orch := orchestrator.NewOrchestrator()
+			plan, err := orch.LoadPlan(arg)
+			if err != nil {
+				return fmt.Errorf("failed to load plan: %w", err)
+			}
+			snapshotDir = orchestrator.SnapshotDir(plan.Name)
+		} else if info, err := os.Stat(arg); err == nil && info.IsDir() {
+			snapshotDir = arg
+		} else {
+			snapshotDir = orchestrator.SnapshotDir(arg)
+		}
+	}
+	if _, err := os.Stat(snapshotDir); err != nil {
+		return fmt.Errorf("snapshot not found: %s (run orchestrate first to create one)", snapshotDir)
+	}
+	fmt.Printf("Restoring from snapshot: %s\n", snapshotDir)
+	count, err := orchestrator.RestoreSnapshot(snapshotDir)
+	if err != nil {
+		return fmt.Errorf("restore failed: %w", err)
+	}
+	fmt.Printf("Restored %d file(s).\n", count)
 	return nil
 }

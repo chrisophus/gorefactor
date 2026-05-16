@@ -51,6 +51,94 @@ Main commands in `main.go`:
 - `generate-templates`: Create example JSON plan templates
 - `analyze-diff`: Generate refactoring plan from git diff
 
+## Token Efficiency & Operation Selection
+
+**Core Principle**: Use GoRefactor for structural transformations where the LLM identifies _what_ to change and the tool determines _where_ and executes deterministically. Avoid operations where the LLM must read entire files and output significant code.
+
+### When to Use GoRefactor (Token-Efficient)
+
+These operations require minimal LLM context and produce no code output:
+
+**Structural targeting operations** (no code I/O):
+- ✅ **Move/copy functions** - `move_method`, `move_function`: Target by name, no code reading/writing
+- ✅ **Delete code** - `delete_block`: Just needs location (function name, line range)
+- ✅ **Rename symbols** - `rename_variable`, `rename_function`: Semantic targeting with find-and-replace
+- ✅ **Simple insertions** - `insert_code` at known locations: `before_function`, `after_function`, at package level
+
+**Analysis-driven operations** (LLM reads output, not input):
+- ✅ **Method extraction** - LLM identifies which block, orchestrator extracts and infers parameters/returns
+- ✅ **Apply consistent patterns** - Single plan targets multiple files; one LLM decision, many tool executions
+- ✅ **Batch refactoring** - Process 10 similar changes with one orchestration plan
+
+**Efficiency formula**:
+```
+Token savings = (1 - (complexity of planning / complexity of implementation)) × code_size
+```
+- Moving a 200-line function: Plan in 100 tokens, execute instantly (99.5% savings)
+- Extracting a method: Identify block in 50 tokens, tool infers signature (95%+ savings)
+- Applying pattern to 5 files: One plan, five executions (80%+ savings)
+
+### When to Use Claude (Let the LLM Handle It)
+
+These require semantic understanding and full-code generation:
+
+**Logic-level changes** (needs reasoning):
+- ❌ **Rewriting algorithms** - Requires understanding intent, evaluating tradeoffs, outputting new logic
+- ❌ **Bug fixes** - Needs to understand what's wrong and why, often requires full context
+- ❌ **New features** - Requires writing new code with domain logic
+- ❌ **Complex refactoring** - Changing behavior while maintaining semantics requires human reasoning
+- ❌ **Conditional edits** - "If X then do Y, else do Z" decisions need semantic judgment
+
+**Context-dependent changes**:
+- ❌ **Renaming for clarity** - LLM picks better names based on semantic meaning
+- ❌ **Architectural changes** - Requires understanding design goals and tradeoffs
+- ❌ **Error handling** - Adding proper error paths requires domain knowledge
+- ❌ **Type changes** - Converting int to string needs understanding of implications
+
+### Decision Matrix
+
+| Operation | Token Cost | Tool | Reasoning |
+|-----------|-----------|------|-----------|
+| Move method to new file | ~5-10 tokens | GoRefactor | Target by name, no code I/O |
+| Rename variable everywhere | ~5-10 tokens | GoRefactor | Semantic targeting, find-replace |
+| Delete unused function | ~5 tokens | GoRefactor | Just needs location |
+| Extract method (identify block) | ~20-50 tokens | GoRefactor + Claude | LLM identifies, tool extracts |
+| Rewrite inefficient loop | ~500+ tokens | Claude | Full code read/write + reasoning |
+| Fix race condition | ~200+ tokens | Claude | Needs semantic understanding |
+| Add error handling | ~100+ tokens | Claude | Requires domain knowledge |
+| Move function between packages | ~10 tokens | GoRefactor | Semantic targeting, tool handles imports |
+
+### Workflow: Maximizing Token Efficiency
+
+1. **Analyze with tool** (free): `./gorefactor recommend`, `analyze-diff` → get JSON recommendations
+2. **LLM reviews briefly** (~50 tokens): Scan JSON, decide which operations to execute
+3. **Create one plan** (~100 tokens): Batch multiple operations together
+4. **Tool executes** (zero tokens): `orchestrate plan.json` applies all changes
+5. **LLM verifies** (~100 tokens): Read test output, spot-check changes
+
+Total for 5 changes: ~250 tokens. Doing it manually: 1000+ tokens.
+
+### Examples
+
+**✅ Efficient: Moving related functions to a new file**
+```json
+{
+  "operations": [
+    { "type": "move_method", "target": { "functionName": "Helper1" }, "newFile": "helpers.go" },
+    { "type": "move_method", "target": { "functionName": "Helper2" }, "newFile": "helpers.go" },
+    { "type": "move_method", "target": { "functionName": "Helper3" }, "newFile": "helpers.go" }
+  ]
+}
+```
+LLM: "These three functions belong together" (50 tokens) → Tool moves all three (instant)
+
+**❌ Inefficient: Have LLM rewrite error handling**
+```
+"Rewrite all error handling to use wrapping instead of the old pattern"
+```
+LLM must: read entire file → understand all errors → write new code for each → output full file (500+ tokens)
+Better: Have Claude write one corrected function, extract pattern, use GoRefactor to apply elsewhere
+
 ## Development Commands
 
 ### Quality Gates & Build
@@ -275,17 +363,18 @@ The repository includes a dedicated skill for efficient code refactoring that Cl
 
 ### When to Use the Skill
 
-Use when:
-- Reducing function complexity (many nested conditions, long logic blocks)
-- Extracting methods from dense functions (>30 lines with multiple concerns)
-- Analyzing code structure to understand refactoring opportunities
-- Batch refactoring multiple files with consistent patterns
+**Use when** (token-efficient operations):
+- ✅ Analyzing code structure to find extraction opportunities (tool reads, you review JSON)
+- ✅ Extracting high-complexity blocks (LLM picks block, tool infers signature)
+- ✅ Batch refactoring multiple files with same pattern (one decision, many executions)
+- ✅ Finding complexity hotspots (tool analyzes, you decide priorities)
 
-Avoid when:
-- Renaming for semantic clarity (LLM is better at meaningful names)
-- Changing code behavior or logic
-- Making architectural changes (requires understanding business intent)
-- Working with test code
+**Avoid when** (better for LLM):
+- ❌ Renaming for semantic clarity - LLM understands intent better
+- ❌ Changing code logic or behavior - Requires reasoning
+- ❌ Architectural decisions - Needs business context
+- ❌ Complex interdependencies - Better with human judgment
+- ❌ Test code - Often needs domain-specific knowledge
 
 ### How It Works
 

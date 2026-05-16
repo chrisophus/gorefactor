@@ -15,6 +15,21 @@ func (ua *UseAnalyzer) typeExprToString(expr ast.Expr) string {
 		return "*" + ua.typeExprToString(e.X)
 	case *ast.SelectorExpr:
 		return ua.typeExprToString(e.X) + "." + e.Sel.Name
+	case *ast.ArrayType:
+		if e.Len == nil {
+			return "[]" + ua.typeExprToString(e.Elt)
+		}
+		return "[...]" + ua.typeExprToString(e.Elt)
+	case *ast.MapType:
+		return "map[" + ua.typeExprToString(e.Key) + "]" + ua.typeExprToString(e.Value)
+	case *ast.ChanType:
+		return "chan " + ua.typeExprToString(e.Value)
+	case *ast.Ellipsis:
+		return "..." + ua.typeExprToString(e.Elt)
+	case *ast.InterfaceType:
+		return "interface{}"
+	case *ast.FuncType:
+		return "func(...)"
 	default:
 		return ""
 	}

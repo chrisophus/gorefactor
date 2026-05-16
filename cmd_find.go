@@ -139,7 +139,7 @@ func findImplementationsCommand(args []string) error {
 	}
 	fmt.Printf("Interface %s (%d methods, defined at %s:%d):\n", res.Interface.Name, len(res.Interface.Methods), res.Interface.File, res.Interface.Line)
 	for _, m := range res.Interface.Methods {
-		fmt.Printf("  %s\n", m.Signature)
+		fmt.Printf("  %s%s\n", m.Name, m.Signature)
 	}
 	fmt.Printf("\n%d implementation(s):\n", len(res.Implementations))
 	for _, impl := range res.Implementations {

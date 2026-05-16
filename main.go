@@ -122,6 +122,11 @@ func getCommands() map[string]Command {
 			Description: "Find all types that implement an interface [--in path] [--json]",
 			Run:         findImplementationsCommand,
 		},
+		"inspect": {
+			Name:        "inspect",
+			Description: "One-page summary of a Go file: decls, sizes, lint issues, extraction candidates",
+			Run:         inspectCommand,
+		},
 	}
 }
 

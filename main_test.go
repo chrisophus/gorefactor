@@ -247,3 +247,10 @@ func TestCheckUntestedPackages(t *testing.T) {
 		t.Fatalf("expected 0 issues after adding test, got %d", len(issues))
 	}
 }
+func TestInspectCommand(t *testing.T) {
+	dir := t.TempDir()
+	writeTempGo(t, dir, "a.go", "package x\n\nfunc Foo() int { return 1 }\nfunc Bar() int { return 2 }\n")
+	if err := inspectCommand([]string{filepath.Join(dir, "a.go")}); err != nil {
+		t.Fatalf("inspectCommand: %v", err)
+	}
+}

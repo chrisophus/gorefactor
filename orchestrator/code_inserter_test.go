@@ -10,7 +10,7 @@ import (
 func TestCodeInserter_InsertCode_NewFile_AtBeginning(t *testing.T) {
 	inserter := NewCodeInserter()
 	tmpFile := "test_code_inserter_new.go"
-	defer os.Remove(tmpFile)
+	defer func() { _ = os.Remove(tmpFile) }()
 
 	codeSnippet := `package main
 
@@ -64,7 +64,7 @@ func main() {
 func TestCodeInserter_InsertCode_ExistingFile_AtEnd(t *testing.T) {
 	inserter := NewCodeInserter()
 	tmpFile := "test_code_inserter_existing.go"
-	defer os.Remove(tmpFile)
+	defer func() { _ = os.Remove(tmpFile) }()
 
 	// Create existing file
 	existingContent := `package main
@@ -110,7 +110,7 @@ func existing() {}
 func TestCodeInserter_InsertCode_ExistingFile_AtBeginning(t *testing.T) {
 	inserter := NewCodeInserter()
 	tmpFile := "test_code_inserter_beginning.go"
-	defer os.Remove(tmpFile)
+	defer func() { _ = os.Remove(tmpFile) }()
 
 	// Create existing file
 	existingContent := `package main
@@ -157,7 +157,7 @@ func existing() {}
 func TestCodeInserter_InsertCode_BeforeFunction(t *testing.T) {
 	inserter := NewCodeInserter()
 	tmpFile := "test_code_inserter_before.go"
-	defer os.Remove(tmpFile)
+	defer func() { _ = os.Remove(tmpFile) }()
 
 	// Create existing file
 	existingContent := `package main
@@ -208,7 +208,7 @@ func target() {}
 func TestCodeInserter_InsertCode_AfterFunction(t *testing.T) {
 	inserter := NewCodeInserter()
 	tmpFile := "test_code_inserter_after.go"
-	defer os.Remove(tmpFile)
+	defer func() { _ = os.Remove(tmpFile) }()
 
 	// Create existing file
 	existingContent := `package main
@@ -259,7 +259,7 @@ func target() {}
 func TestCodeInserter_InsertCode_NonExistentFunction(t *testing.T) {
 	inserter := NewCodeInserter()
 	tmpFile := "test_code_inserter_nonexistent.go"
-	defer os.Remove(tmpFile)
+	defer func() { _ = os.Remove(tmpFile) }()
 
 	// Create existing file
 	existingContent := `package main
@@ -292,7 +292,7 @@ func existing() {}
 func TestCodeInserter_InsertCode_InvalidLocationType(t *testing.T) {
 	inserter := NewCodeInserter()
 	tmpFile := "test_code_inserter_invalid.go"
-	defer os.Remove(tmpFile)
+	defer func() { _ = os.Remove(tmpFile) }()
 
 	codeSnippet := `package main
 `
@@ -315,7 +315,7 @@ func TestCodeInserter_InsertCode_InvalidLocationType(t *testing.T) {
 func TestCodeInserter_InsertCode_PackageNameExtraction(t *testing.T) {
 	inserter := NewCodeInserter()
 	tmpFile := "test_code_inserter_package.go"
-	defer os.Remove(tmpFile)
+	defer func() { _ = os.Remove(tmpFile) }()
 
 	codeSnippet := `package testpkg
 

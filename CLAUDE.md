@@ -6,6 +6,45 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 GoRefactor is a command-line tool for analyzing and refactoring Go code. It focuses on method extraction and intelligent code analysis through a sophisticated JSON-based orchestration system. The tool provides both interactive commands and batch refactoring capabilities through resilient, semantic-based code targeting.
 
+## Using gorefactor instead of Write/Edit on .go files
+
+**Default rule for this repo**: when modifying any `.go` file, prefer a gorefactor command over `Write` or `Edit`. This is the project's harness — gorefactor parses the AST, infers types, runs goimports, and only writes back well-formed code, so the failure mode is "command rejects the change" rather than "file silently breaks." It's also far cheaper in tokens.
+
+Mapping of common edits to commands (run `./gorefactor` for the full list):
+
+| Want to… | Use |
+|----------|-----|
+| Create a new .go file | `gorefactor create <path> -` (reads stdin) |
+| Add a function/type to a file | `gorefactor insert <file> at-end -` |
+| Add a function right after another | `gorefactor insert <file> after:Func -` |
+| Add a helper inside a function | `gorefactor insert <file> inside:Func -` |
+| Move a function/method to a new file | `gorefactor move <src> <Func> <dest>` |
+| Replace a complete statement | `gorefactor replace <file> <Func> <old> <new>` |
+| Replace partial text inside a function | `gorefactor replace-text <file> <Func> <old> <new>` |
+| Delete a function/method | `gorefactor delete <file> <Func>` |
+| Rename an unexported symbol | `gorefactor rename <file> <old> <new>` |
+| Split a file that grew too large | `gorefactor split <file>` |
+| Check what calls a function (before refactor) | `gorefactor find-callers <Func>` |
+| Check where a symbol is used | `gorefactor find-uses <Symbol>` |
+| Find interface implementations | `gorefactor find-implementations <Iface>` |
+| Detect file-size / duplicate / extract issues | `gorefactor lint .` |
+| Autofix file-size issues | `gorefactor lint . --fix` |
+
+**When `Edit`/`Write` is OK**: non-Go files (Markdown, YAML, JSON, Makefile, go.mod), git operations, completely-new packages with multiple files where stdin-pipe friction outweighs the benefit. For .go file mutations, fall back to `Edit` only when none of the above commands apply and document why.
+
+**Receiver-method syntax**: methods are referenced as `Receiver:Method` everywhere (e.g. `CodeInserter:InsertCode`). Pointer receivers work without `*` in the locator.
+
+**Stdin convention**: any command that takes content accepts `-` as the last argument to read from stdin (UNIX convention). This avoids quoting issues with multi-line code.
+
+## Harness pattern
+
+gorefactor itself is structured as a harness in the sense of [Fowler's harness-engineering article](https://martinfowler.com/articles/harness-engineering.html):
+
+- **Guides** (feedforward): the direct-op commands (`create`/`insert`/`replace`/etc.) refuse to produce malformed Go because they parse before they write. The LLM cannot accidentally introduce a syntax error via these paths.
+- **Sensors** (feedback): `lint` aggregates `file-size` / `duplicate-block` / `extract-candidate` / `untested-package` checks and (where safe) autofixes via `--fix`. Run it as a final gate after a refactor batch — anything not under control surfaces here.
+
+When adding new capabilities to gorefactor, add a corresponding lint rule (sensor) so the agent self-detects when the new rule has been violated, and an autofix path (guide → sensor → autofix) when there's a single safe transformation.
+
 ## Architecture
 
 ### High-Level Design
@@ -41,15 +80,37 @@ The codebase is organized into four core packages:
 
 ### Command Structure
 
-Main commands in `main.go`:
+Main commands in `main.go` (registered in `getCommands()`):
 
-- `parse`: Parse a Go file → outputs JSON structure
-- `list-functions`: Extract function/method list from a file
-- `recommend`: Analyze file and recommend extraction candidates
-- `extract`: Extract a specific code block into a method
-- `orchestrate`: Execute JSON refactoring plan (primary batch operation)
-- `generate-templates`: Create example JSON plan templates
-- `analyze-diff`: Generate refactoring plan from git diff
+**Analysis (read-only sensors)**
+- `parse <file.go>`: Parse a Go file → JSON structure
+- `list-functions <file.go>`: List functions/methods with their **line counts**
+- `recommend <file.go>`: JSON of extractable code blocks (with complexity scores)
+- `analyze-diff <diff.patch>`: Generate a refactoring plan from a git diff
+- `analyze-file-sizes <dir>`: Find files over the size limit with extraction hints
+- `find-callers <Func|Receiver:Method> [--in path] [--json]`: All callers of a target
+- `find-uses <Symbol|Receiver:Method> [--in path] [--json]`: All uses of a symbol
+- `find-implementations <Interface> [--in path] [--json]`: Types that satisfy an interface
+
+**Mutation (direct CLI — no orchestrator JSON needed)**
+- `create <path> [content|-]`: Create a new .go file (auto-runs goimports). `-` reads stdin.
+- `insert <file> <at-end|at-beginning|before:Func|after:Func|inside:Func> [content|-]`: Insert code.
+- `replace <file> <Func|Receiver:Method> <old-stmt> <new-stmt>`: AST-aware replacement (pattern must be a complete statement).
+- `replace-text <file> <Func|Receiver:Method> <old-text> <new-text>`: Literal text replace inside a function body (use this when the pattern isn't a full statement).
+- `delete <file> <Func|Receiver:Method>`: Delete a declaration.
+- `rename <file> <old> <new>`: Rename unexported symbol across the package (use gopls for exported).
+- `move <source-file> <Func|Receiver:Method> <dest-file>`: Move a declaration between files.
+
+**Automation**
+- `lint [path] [--fix] [--json] [--max N]`: Structural linter. Rules: `file-size`, `duplicate-block`, `extract-candidate`, `untested-package`. `--fix` autofixes `file-size` via `split`.
+- `split <file> [--max N] [--dry-run]`: Auto-split an oversized file by grouping methods on same receiver / functions sharing a CamelCase prefix.
+- `format [path ...]`: In-process gofmt+goimports. Replaces external `goimports` dependency.
+
+**Plans**
+- `orchestrate <plan.json>`: Execute a refactoring plan
+- `exec`: Execute a single op from inline JSON or stdin
+- `undo`: Roll back the last refactoring (uses snapshots in `.gorefactor/`)
+- `generate-templates <dir>`: Generate example plan templates
 
 ## Token Efficiency & Operation Selection
 

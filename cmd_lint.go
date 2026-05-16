@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"gorefactor/analyzer"
 )
 
 type lintIssue struct {
@@ -53,9 +51,13 @@ func lintCommand(args []string) error {
 	var issues []lintIssue
 	for _, f := range files {
 		issues = append(issues, checkFileSize(f, maxSize)...)
+		issues = append(issues, checkExtractable(f, 8)...)
 	}
 	if dups := checkDuplicates(root); len(dups) > 0 {
 		issues = append(issues, dups...)
+	}
+	if untested := checkUntestedPackages(root); len(untested) > 0 {
+		issues = append(issues, untested...)
 	}
 
 	if jsonOut {
@@ -115,49 +117,6 @@ func collectGoFiles(root string) ([]string, error) {
 		return nil
 	})
 	return files, err
-}
-
-func checkFileSize(file string, maxSize int) []lintIssue {
-	issue, err := analyzer.AnalyzeFileSize(file, maxSize)
-	if err != nil || !issue.IsOversized {
-		return nil
-	}
-	sev := "warning"
-	if issue.OverageSize > maxSize/2 {
-		sev = "error"
-	}
-	return []lintIssue{{
-		File:       file,
-		Rule:       "file-size",
-		Severity:   sev,
-		Message:    fmt.Sprintf("%d lines (limit %d, over by %d)", issue.LineCount, issue.MaxRecommended, issue.OverageSize),
-		AutoFix:    "split file",
-		AutoFixCmd: fmt.Sprintf("gorefactor split %s --max %d", file, maxSize),
-	}}
-}
-
-func checkDuplicates(root string) []lintIssue {
-	result, err := analyzer.AnalyzeCrossFile(root)
-	if err != nil || result == nil {
-		return nil
-	}
-	var out []lintIssue
-	for _, d := range result.DuplicateBlocks {
-		if d.ImpactScore < 5 {
-			continue
-		}
-		locs := make([]string, 0, len(d.Locations))
-		for _, l := range d.Locations {
-			locs = append(locs, fmt.Sprintf("%s:%d-%d", l.File, l.StartLine, l.EndLine))
-		}
-		out = append(out, lintIssue{
-			File:     d.Locations[0].File,
-			Rule:     "duplicate-block",
-			Severity: "warning",
-			Message:  fmt.Sprintf("%d-stmt block duplicated in %d places (impact %d): %s", d.StatementCount, len(d.Locations), d.ImpactScore, strings.Join(locs, ", ")),
-		})
-	}
-	return out
 }
 
 func applyAutoFixes(issues []lintIssue, maxSize int) (applied, failed int) {

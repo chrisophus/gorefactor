@@ -11,7 +11,7 @@ import (
 )
 
 func readContentArg(args []string, idx int) (string, error) {
-	if idx < len(args) {
+	if idx < len(args) && args[idx] != "-" {
 		return args[idx], nil
 	}
 	b, err := io.ReadAll(os.Stdin)

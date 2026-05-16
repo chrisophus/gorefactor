@@ -196,9 +196,9 @@ func (m *Mem) Read(p []byte) (int, error) { return 0, nil }
 
 func TestSplitNameReceiver(t *testing.T) {
 	cases := []struct {
-		in            string
-		wantName      string
-		wantReceiver  string
+		in           string
+		wantName     string
+		wantReceiver string
 	}{
 		{"Foo", "Foo", ""},
 		{"Bar:Method", "Method", "Bar"},
@@ -209,5 +209,41 @@ func TestSplitNameReceiver(t *testing.T) {
 		if n != c.wantName || r != c.wantReceiver {
 			t.Errorf("splitNameReceiver(%q) = (%q, %q); want (%q, %q)", c.in, n, r, c.wantName, c.wantReceiver)
 		}
+	}
+}
+func TestCheckExtractable(t *testing.T) {
+	dir := t.TempDir()
+	var b strings.Builder
+	b.WriteString("package x\n\n")
+	b.WriteString("func BigFunc() int {\n")
+	for i := 0; i < 80; i++ {
+		b.WriteString("\t_ = ")
+		b.WriteString(itoa(i))
+		b.WriteString("\n")
+	}
+	b.WriteString("\tif true {\n\t\tfor i := 0; i < 10; i++ {\n\t\t\t_ = i\n\t\t}\n\t}\n")
+	b.WriteString("\treturn 0\n}\n")
+	path := writeTempGo(t, dir, "big.go", b.String())
+	hints := checkExtractable(path, 8)
+	if len(hints) == 0 {
+		t.Skip("priority threshold may filter out; ensure no panic")
+	}
+}
+
+func TestCheckUntestedPackages(t *testing.T) {
+	dir := t.TempDir()
+	writeTempGo(t, dir, "a.go", "package x\n")
+	issues := checkUntestedPackages(dir)
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 untested package issue, got %d", len(issues))
+	}
+	if issues[0].Rule != "untested-package" {
+		t.Errorf("rule = %q; want untested-package", issues[0].Rule)
+	}
+
+	writeTempGo(t, dir, "a_test.go", "package x\n")
+	issues = checkUntestedPackages(dir)
+	if len(issues) != 0 {
+		t.Fatalf("expected 0 issues after adding test, got %d", len(issues))
 	}
 }

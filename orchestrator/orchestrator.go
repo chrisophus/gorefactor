@@ -17,6 +17,15 @@ func NewOrchestrator() *Orchestrator {
 	}
 }
 
+// RegisterPlan registers a refactoring plan for execution
+func (o *Orchestrator) RegisterPlan(plan *RefactoringPlan) error {
+	if err := o.validatePlan(plan); err != nil {
+		return fmt.Errorf("invalid plan: %w", err)
+	}
+	o.plans[plan.Name] = plan
+	return nil
+}
+
 // LoadPlan loads a refactoring plan from a JSON file
 func (o *Orchestrator) LoadPlan(filePath string) (*RefactoringPlan, error) {
 	data, err := os.ReadFile(filePath)

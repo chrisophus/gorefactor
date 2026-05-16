@@ -160,3 +160,54 @@ func itoa(i int) string {
 	}
 	return string(digits)
 }
+
+func TestFindCallersCommand(t *testing.T) {
+	dir := t.TempDir()
+	writeTempGo(t, dir, "a.go", "package x\n\nfunc Helper() int { return 1 }\n\nfunc User() int { return Helper() + Helper() }\n")
+	if err := findCallersCommand([]string{"Helper", "--in", dir}); err != nil {
+		t.Fatalf("findCallersCommand: %v", err)
+	}
+}
+
+func TestFindUsesCommand(t *testing.T) {
+	dir := t.TempDir()
+	writeTempGo(t, dir, "a.go", "package x\n\nvar count = 0\n\nfunc Inc() { count++ }\nfunc Get() int { return count }\n")
+	if err := findUsesCommand([]string{"count", "--in", dir}); err != nil {
+		t.Fatalf("findUsesCommand: %v", err)
+	}
+}
+
+func TestFindImplementationsCommand(t *testing.T) {
+	dir := t.TempDir()
+	writeTempGo(t, dir, "a.go", `package x
+
+type Reader interface {
+	Read(p []byte) (int, error)
+}
+
+type Mem struct{}
+
+func (m *Mem) Read(p []byte) (int, error) { return 0, nil }
+`)
+	if err := findImplementationsCommand([]string{"Reader", "--in", dir}); err != nil {
+		t.Fatalf("findImplementationsCommand: %v", err)
+	}
+}
+
+func TestSplitNameReceiver(t *testing.T) {
+	cases := []struct {
+		in            string
+		wantName      string
+		wantReceiver  string
+	}{
+		{"Foo", "Foo", ""},
+		{"Bar:Method", "Method", "Bar"},
+		{"*Bar:Method", "Method", "*Bar"},
+	}
+	for _, c := range cases {
+		n, r := splitNameReceiver(c.in)
+		if n != c.wantName || r != c.wantReceiver {
+			t.Errorf("splitNameReceiver(%q) = (%q, %q); want (%q, %q)", c.in, n, r, c.wantName, c.wantReceiver)
+		}
+	}
+}

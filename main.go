@@ -107,6 +107,21 @@ func getCommands() map[string]Command {
 			Description: "Rename an unexported symbol across the package",
 			Run:         renameCommand,
 		},
+		"find-callers": {
+			Name:        "find-callers",
+			Description: "Find all callers of a function or method [--in path] [--json]",
+			Run:         findCallersCommand,
+		},
+		"find-uses": {
+			Name:        "find-uses",
+			Description: "Find all uses of a symbol [--in path] [--json]",
+			Run:         findUsesCommand,
+		},
+		"find-implementations": {
+			Name:        "find-implementations",
+			Description: "Find all types that implement an interface [--in path] [--json]",
+			Run:         findImplementationsCommand,
+		},
 	}
 }
 

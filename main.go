@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"gorefactor/analyzer"
-	"gorefactor/extractor"
 	"gorefactor/orchestrator"
 	"gorefactor/parser"
 )
@@ -36,11 +35,6 @@ func getCommands() map[string]Command {
 			Name:        "recommend",
 			Description: "Recommend code blocks for method extraction",
 			Run:         recommendExtractions,
-		},
-		"extract": {
-			Name:        "extract",
-			Description: "Extract a method from a code block",
-			Run:         extractMethod,
 		},
 		"orchestrate": {
 			Name:        "orchestrate",
@@ -280,35 +274,6 @@ func recommendExtractions(args []string) error {
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(recommendations)
-}
-
-func extractMethod(args []string) error {
-	if len(args) < 4 {
-		return fmt.Errorf("missing required arguments: file path, start line, end line, and method name")
-	}
-
-	filePath := args[0]
-	startLine, err := strconv.Atoi(args[1])
-	if err != nil {
-		return fmt.Errorf("invalid start line: %v", err)
-	}
-
-	endLine, err := strconv.Atoi(args[2])
-	if err != nil {
-		return fmt.Errorf("invalid end line: %v", err)
-	}
-
-	methodName := args[3]
-
-	result, err := extractor.ExtractMethod(filePath, startLine, endLine, methodName)
-	if err != nil {
-		return err
-	}
-
-	// Output as JSON
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(result)
 }
 
 func orchestrateRefactoring(args []string) error {

@@ -35,11 +35,7 @@ linters:
         - G301  # MkdirAll 0755 — correct for project directories
         - G401  # MD5 — used for code deduplication fingerprinting, not cryptography
         - G501  # MD5 import — same rationale as G401
-        - G702  # path traversal taint — tool operates on user-specified files
-        - G703  # path traversal taint — same
-        - G122  # symlink TOCTOU in Walk — acceptable for a local dev tool
         - G204  # subprocess with variable — intentional (goimports calls)
-        - G706  # log injection taint — log.Printf with CLI args is expected
 
   exclusions:
     rules:
@@ -70,6 +66,10 @@ linters:
       # go/packages is tracked separately.
       - linters: [staticcheck]
         text: "SA1019.*parser.ParseDir"
+      # Path-traversal taint warnings for a refactoring CLI that operates
+      # on user-specified files are not a real threat model.
+      - linters: [gosec]
+        text: "G703|G122"
     paths:
       - ^testfiles/
       - ^skill/

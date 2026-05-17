@@ -42,13 +42,23 @@ type CrossFileAnalysis struct {
 // Returns deduplicated blocks found in multiple files, sorted by impact
 // Note: Files that cannot be read or parsed are skipped silently
 func FindDuplicateBlocks(files []string) ([]DuplicateBlock, error) {
-	// Map of normalized code hash -> list of locations
 	codeMap := make(map[string][]Location)
-	// Map of hash -> original code block
 	codeBlocks := make(map[string]string)
-	// Map of hash -> block metadata
 	blockMetadata := make(map[string]BlockMetadata)
 
+	processDuplicateBlocksFromFiles(files, codeMap, codeBlocks, blockMetadata)
+	duplicates := buildAndSortDuplicates(codeMap, codeBlocks, blockMetadata)
+
+	return duplicates, nil
+}
+
+// BlockMetadata stores information about a code block
+type BlockMetadata struct {
+	StatementCount int
+	Complexity     int
+}
+
+func processDuplicateBlocksFromFiles(files []string, codeMap map[string][]Location, codeBlocks map[string]string, blockMetadata map[string]BlockMetadata) {
 	for _, filePath := range files {
 		if !strings.HasSuffix(filePath, ".go") {
 			continue
@@ -56,20 +66,15 @@ func FindDuplicateBlocks(files []string) ([]DuplicateBlock, error) {
 
 		fileContent, err := os.ReadFile(filePath)
 		if err != nil {
-			// Skip files that cannot be read (e.g., permission denied)
-			// This is acceptable as we're looking for patterns, not comprehensive coverage
 			continue
 		}
 
 		fset := token.NewFileSet()
 		node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 		if err != nil {
-			// Skip files that cannot be parsed (e.g., syntax errors)
-			// This is acceptable as we're looking for patterns, not comprehensive coverage
 			continue
 		}
 
-		// Extract all function/method bodies as potential duplicates
 		ast.Inspect(node, func(n ast.Node) bool {
 			switch d := n.(type) {
 			case *ast.FuncDecl:
@@ -80,8 +85,9 @@ func FindDuplicateBlocks(files []string) ([]DuplicateBlock, error) {
 			return true
 		})
 	}
+}
 
-	// Build list of duplicates (blocks appearing in 2+ files)
+func buildAndSortDuplicates(codeMap map[string][]Location, codeBlocks map[string]string, blockMetadata map[string]BlockMetadata) []DuplicateBlock {
 	var duplicates []DuplicateBlock
 	seen := make(map[string]bool)
 
@@ -103,18 +109,11 @@ func FindDuplicateBlocks(files []string) ([]DuplicateBlock, error) {
 		duplicates = append(duplicates, block)
 	}
 
-	// Sort by impact score (descending)
 	sort.Slice(duplicates, func(i, j int) bool {
 		return duplicates[i].ImpactScore > duplicates[j].ImpactScore
 	})
 
-	return duplicates, nil
-}
-
-// BlockMetadata stores information about a code block
-type BlockMetadata struct {
-	StatementCount int
-	Complexity     int
+	return duplicates
 }
 
 // extractBlocksFromFunc extracts code blocks from a function body
@@ -123,13 +122,15 @@ func extractBlocksFromFunc(fn *ast.FuncDecl, filePath string, fset *token.FileSe
 		return
 	}
 
-	// Split file once to avoid O(n) splits for each block extraction
 	fileLines := strings.Split(fileContent, "\n")
+	extractFullFunctionBody(fn, filePath, fset, fileLines, codeMap, codeBlocks, blockMetadata)
+	extractIndividualBlocks(fn, filePath, fset, fileLines, codeMap, codeBlocks, blockMetadata)
+}
 
+func extractFullFunctionBody(fn *ast.FuncDecl, filePath string, fset *token.FileSet, fileLines []string, codeMap map[string][]Location, codeBlocks map[string]string, blockMetadata map[string]BlockMetadata) {
 	startLine := fset.Position(fn.Body.Pos()).Line
 	endLine := fset.Position(fn.Body.End()).Line
 
-	// Extract the full function body
 	code := extractCodeFromLinesSlice(fileLines, startLine, endLine)
 	if code != "" {
 		normalized := NormalizeCode(code)
@@ -146,12 +147,12 @@ func extractBlocksFromFunc(fn *ast.FuncDecl, filePath string, fset *token.FileSe
 			Complexity:     countControlStructures(fn.Body),
 		}
 	}
+}
 
-	// Also extract individual blocks within the function
+func extractIndividualBlocks(fn *ast.FuncDecl, filePath string, fset *token.FileSet, fileLines []string, codeMap map[string][]Location, codeBlocks map[string]string, blockMetadata map[string]BlockMetadata) {
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
 		switch block := n.(type) {
 		case *ast.BlockStmt:
-			// Skip the function body itself (already extracted)
 			if block == fn.Body {
 				return true
 			}
@@ -159,7 +160,6 @@ func extractBlocksFromFunc(fn *ast.FuncDecl, filePath string, fset *token.FileSe
 			bStartLine := fset.Position(block.Pos()).Line
 			bEndLine := fset.Position(block.End()).Line
 
-			// Only extract substantial blocks
 			if bEndLine-bStartLine >= 2 {
 				code := extractCodeFromLinesSlice(fileLines, bStartLine, bEndLine)
 				if code != "" {

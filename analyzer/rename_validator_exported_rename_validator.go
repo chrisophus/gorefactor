@@ -13,36 +13,52 @@ func (v *ExportedRenameValidator) ValidateRename(oldName, newName string) (*Rena
 		Warnings:   make([]string, 0),
 	}
 
-	// Check if new name is valid Go identifier
-	if !isValidIdentifier(newName) {
-		validation.SafeToRename = false
-		validation.Warnings = append(validation.Warnings, fmt.Sprintf("Invalid identifier: %s", newName))
+	if !v.validateIdentifierAndBuiltins(newName, validation) {
 		return validation, nil
 	}
 
-	// Check if new name conflicts with built-ins
-	if isBuiltinName(newName) {
-		validation.SafeToRename = false
-		validation.Warnings = append(validation.Warnings, fmt.Sprintf("Conflicts with builtin: %s", newName))
-		return validation, nil
-	}
-
-	// Find all occurrences of the symbol
-	var targetFile string
-	var targetLine int
 	refs := v.findSymbolReferences(oldName)
-
 	if len(refs) == 0 {
 		validation.SafeToRename = false
 		validation.Warnings = append(validation.Warnings, fmt.Sprintf("Symbol not found: %s", oldName))
 		return validation, nil
 	}
 
-	// Categorize references
+	targetFile := v.categorizeReferences(refs, validation)
+	validation.TargetFile = targetFile
+
+	v.warnIfExportedSymbol(validation)
+	validation.ReferringSymbols = v.getReferringSymbols(oldName)
+
+	validation.SafeToRename = len(validation.Warnings) == 0 && len(refs) > 0
+	validation.CanRenameInPackage = true
+
+	return validation, nil
+}
+
+func (v *ExportedRenameValidator) validateIdentifierAndBuiltins(newName string, validation *RenameValidation) bool {
+	if !isValidIdentifier(newName) {
+		validation.SafeToRename = false
+		validation.Warnings = append(validation.Warnings, fmt.Sprintf("Invalid identifier: %s", newName))
+		return false
+	}
+
+	if isBuiltinName(newName) {
+		validation.SafeToRename = false
+		validation.Warnings = append(validation.Warnings, fmt.Sprintf("Conflicts with builtin: %s", newName))
+		return false
+	}
+
+	return true
+}
+
+func (v *ExportedRenameValidator) categorizeReferences(refs []*SymbolUse, validation *RenameValidation) string {
+	var targetFile string
+
 	for _, ref := range refs {
-		if ref.Type == "definition" {
+		if ref.Type == TypeFunction {
 			targetFile = ref.File
-			targetLine = ref.Line
+			validation.TargetLine = ref.Line
 		}
 		if strings.HasSuffix(ref.File, "_test.go") {
 			validation.TestReferences++
@@ -51,28 +67,15 @@ func (v *ExportedRenameValidator) ValidateRename(oldName, newName string) (*Rena
 		}
 	}
 
-	validation.TargetFile = targetFile
-	validation.TargetLine = targetLine
+	return targetFile
+}
 
-	// For exported symbols, warn if there are external references
-	// (This is conservative; actual external package detection requires more context)
+func (v *ExportedRenameValidator) warnIfExportedSymbol(validation *RenameValidation) {
 	if validation.IsExported && validation.InternalReferences > 0 {
 		validation.CanRenameInPackage = true
 		validation.Warnings = append(validation.Warnings,
 			"Symbol is exported; external packages may reference it")
 	}
-
-	// Collect referring symbols
-	validation.ReferringSymbols = v.getReferringSymbols(oldName)
-
-	// Safe to rename if:
-	// - Symbol exists
-	// - New name is valid
-	// - No conflicts
-	validation.SafeToRename = len(validation.Warnings) == 0 && len(refs) > 0
-	validation.CanRenameInPackage = true
-
-	return validation, nil
 }
 
 // findSymbolReferences finds all references to a symbol

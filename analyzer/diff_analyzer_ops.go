@@ -10,72 +10,19 @@ import (
 func (da *DiffAnalyzer) analyzeAddedCode(filePath string, hunk *DiffHunk, addedLines []string) *Change {
 	code := strings.Join(addedLines, "\n")
 
-	// Detect method addition (check this before function addition)
-	if da.isMethodAddition(code) {
-		return &Change{
-			Type:        "method_addition",
-			File:        filePath,
-			Description: "Added new method",
-			StartLine:   hunk.StartLine,
-			EndLine:     hunk.EndLine,
-			Confidence:  0.9,
-			Details: map[string]interface{}{
-				"methodName":   da.extractMethodName(code),
-				"receiverType": da.extractReceiverType(code),
-				"code":         code,
-			},
-		}
+	if change := da.detectMethodAdditionChange(filePath, hunk, code); change != nil {
+		return change
+	}
+	if change := da.detectFunctionAdditionChange(filePath, hunk, code); change != nil {
+		return change
+	}
+	if change := da.detectInterfaceAdditionChange(filePath, hunk, code); change != nil {
+		return change
+	}
+	if change := da.detectStructAdditionChange(filePath, hunk, code); change != nil {
+		return change
 	}
 
-	// Detect function addition
-	if da.isFunctionAddition(code) {
-		return &Change{
-			Type:        "function_addition",
-			File:        filePath,
-			Description: "Added new function",
-			StartLine:   hunk.StartLine,
-			EndLine:     hunk.EndLine,
-			Confidence:  0.9,
-			Details: map[string]interface{}{
-				"functionName": da.extractFunctionName(code),
-				"code":         code,
-			},
-		}
-	}
-
-	// Detect interface addition
-	if da.isInterfaceAddition(code) {
-		return &Change{
-			Type:        "interface_addition",
-			File:        filePath,
-			Description: "Added new interface",
-			StartLine:   hunk.StartLine,
-			EndLine:     hunk.EndLine,
-			Confidence:  0.9,
-			Details: map[string]interface{}{
-				"interfaceName": da.extractInterfaceName(code),
-				"code":          code,
-			},
-		}
-	}
-
-	// Detect struct addition
-	if da.isStructAddition(code) {
-		return &Change{
-			Type:        "struct_addition",
-			File:        filePath,
-			Description: "Added new struct",
-			StartLine:   hunk.StartLine,
-			EndLine:     hunk.EndLine,
-			Confidence:  0.9,
-			Details: map[string]interface{}{
-				"structName": da.extractStructName(code),
-				"code":       code,
-			},
-		}
-	}
-
-	// Detect code insertion
 	return &Change{
 		Type:        "code_insertion",
 		File:        filePath,
@@ -129,7 +76,6 @@ func (da *DiffAnalyzer) analyzeModifiedCode(filePath string, hunk *DiffHunk, mod
 		return nil
 	}
 
-	// Each element in modifiedLines is a [old, new] pair
 	pair := modifiedLines[0]
 	if len(pair) < 2 {
 		return nil
@@ -138,42 +84,13 @@ func (da *DiffAnalyzer) analyzeModifiedCode(filePath string, hunk *DiffHunk, mod
 	oldCode := pair[0]
 	newCode := pair[1]
 
-	// Detect variable renaming
-	if da.isVariableRename(oldCode, newCode) {
-		return &Change{
-			Type:        "variable_rename",
-			File:        filePath,
-			Description: "Renamed variable",
-			StartLine:   hunk.StartLine,
-			EndLine:     hunk.EndLine,
-			Confidence:  0.8,
-			Details: map[string]interface{}{
-				"oldName": da.extractVariableName(oldCode),
-				"newName": da.extractVariableName(newCode),
-				"oldCode": oldCode,
-				"newCode": newCode,
-			},
-		}
+	if change := da.detectVariableRenameChange(filePath, hunk, oldCode, newCode); change != nil {
+		return change
+	}
+	if change := da.detectFunctionModificationChange(filePath, hunk, oldCode, newCode); change != nil {
+		return change
 	}
 
-	// Detect function modification
-	if da.isFunctionModification(oldCode, newCode) {
-		return &Change{
-			Type:        "function_modification",
-			File:        filePath,
-			Description: "Modified function",
-			StartLine:   hunk.StartLine,
-			EndLine:     hunk.EndLine,
-			Confidence:  0.8,
-			Details: map[string]interface{}{
-				"functionName": da.extractFunctionName(oldCode),
-				"oldCode":      oldCode,
-				"newCode":      newCode,
-			},
-		}
-	}
-
-	// Generic code modification
 	return &Change{
 		Type:        "code_modification",
 		File:        filePath,
@@ -249,6 +166,118 @@ func (da *DiffAnalyzer) createExtractMethodOperation(change *Change) *orchestrat
 		Fallback: &orchestrator.FallbackStrategy{
 			Type:        "skip",
 			Description: "Skip if function not found",
+		},
+	}
+}
+
+func (da *DiffAnalyzer) detectMethodAdditionChange(filePath string, hunk *DiffHunk, code string) *Change {
+	if !da.isMethodAddition(code) {
+		return nil
+	}
+	return &Change{
+		Type:        "method_addition",
+		File:        filePath,
+		Description: "Added new method",
+		StartLine:   hunk.StartLine,
+		EndLine:     hunk.EndLine,
+		Confidence:  0.9,
+		Details: map[string]interface{}{
+			"methodName":   da.extractMethodName(code),
+			"receiverType": da.extractReceiverType(code),
+			"code":         code,
+		},
+	}
+}
+
+func (da *DiffAnalyzer) detectFunctionAdditionChange(filePath string, hunk *DiffHunk, code string) *Change {
+	if !da.isFunctionAddition(code) {
+		return nil
+	}
+	return &Change{
+		Type:        "function_addition",
+		File:        filePath,
+		Description: "Added new function",
+		StartLine:   hunk.StartLine,
+		EndLine:     hunk.EndLine,
+		Confidence:  0.9,
+		Details: map[string]interface{}{
+			"functionName": da.extractFunctionName(code),
+			"code":         code,
+		},
+	}
+}
+
+func (da *DiffAnalyzer) detectInterfaceAdditionChange(filePath string, hunk *DiffHunk, code string) *Change {
+	if !da.isInterfaceAddition(code) {
+		return nil
+	}
+	return &Change{
+		Type:        "interface_addition",
+		File:        filePath,
+		Description: "Added new interface",
+		StartLine:   hunk.StartLine,
+		EndLine:     hunk.EndLine,
+		Confidence:  0.9,
+		Details: map[string]interface{}{
+			"interfaceName": da.extractInterfaceName(code),
+			"code":          code,
+		},
+	}
+}
+
+func (da *DiffAnalyzer) detectStructAdditionChange(filePath string, hunk *DiffHunk, code string) *Change {
+	if !da.isStructAddition(code) {
+		return nil
+	}
+	return &Change{
+		Type:        "struct_addition",
+		File:        filePath,
+		Description: "Added new struct",
+		StartLine:   hunk.StartLine,
+		EndLine:     hunk.EndLine,
+		Confidence:  0.9,
+		Details: map[string]interface{}{
+			"structName": da.extractStructName(code),
+			"code":       code,
+		},
+	}
+}
+
+func (da *DiffAnalyzer) detectVariableRenameChange(filePath string, hunk *DiffHunk, oldCode, newCode string) *Change {
+	if !da.isVariableRename(oldCode, newCode) {
+		return nil
+	}
+	return &Change{
+		Type:        "variable_rename",
+		File:        filePath,
+		Description: "Renamed variable",
+		StartLine:   hunk.StartLine,
+		EndLine:     hunk.EndLine,
+		Confidence:  0.8,
+		Details: map[string]interface{}{
+			"oldName": da.extractVariableName(oldCode),
+			"newName": da.extractVariableName(newCode),
+			"oldCode": oldCode,
+			"newCode": newCode,
+		},
+	}
+}
+
+func (da *DiffAnalyzer) detectFunctionModificationChange(filePath string, hunk *DiffHunk, oldCode, newCode string) *Change {
+	if !da.isFunctionModification(oldCode, newCode) {
+		return nil
+	}
+	return &Change{
+		Type:        "function_modification",
+		File:        filePath,
+		Description: "Modified function",
+		StartLine:   hunk.StartLine,
+		EndLine:     hunk.EndLine,
+		Confidence:  0.8,
+		Details: map[string]interface{}{
+			"functionName": da.extractFunctionName(oldCode),
+			"oldCode":      oldCode,
+			"newCode":      newCode,
 		},
 	}
 }

@@ -24,7 +24,7 @@ linters:
     cyclop:
       max-complexity: 12
     funlen:
-      lines: 75
+      lines: 50
       statements: 50
     dupl:
       threshold: 100

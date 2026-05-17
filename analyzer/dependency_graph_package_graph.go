@@ -63,6 +63,42 @@ func (pg *PackageGraph) processSubdirectories(baseDir, pkgPrefix string, subdirs
 	return nil
 }
 
+func (pg *PackageGraph) extractPackageMetadata(pkg *ast.Package, pkgPath string, info *PackageInfo) {
+	importsSet := make(map[string]bool)
+	var funcCount, typeCount int
+
+	for _, file := range pkg.Files {
+
+		for _, decl := range file.Decls {
+			switch d := decl.(type) {
+			case *ast.FuncDecl:
+				funcCount++
+			case *ast.GenDecl:
+				if d.Tok == token.TYPE {
+					typeCount += len(d.Specs)
+				}
+			}
+		}
+
+		for _, imp := range file.Imports {
+			impPath := strings.Trim(imp.Path.Value, "\"")
+			if !importsSet[impPath] {
+				importsSet[impPath] = true
+				info.Imports = append(info.Imports, impPath)
+
+				pg.edges[pkgPath] = append(pg.edges[pkgPath], &ImportEdge{
+					From:   pkgPath,
+					To:     impPath,
+					Direct: true,
+				})
+			}
+		}
+	}
+
+	info.Functions = funcCount
+	info.Types = typeCount
+}
+
 // parsePackageDir parses Go files in a directory and extracts import information
 func (pg *PackageGraph) parsePackageDir(dir string, files []string, pkgPath string) error {
 	pkgs, err := parser.ParseDir(pg.fset, dir, nil, parser.ImportsOnly)
@@ -79,43 +115,7 @@ func (pg *PackageGraph) parsePackageDir(dir string, files []string, pkgPath stri
 			Files:   len(pkg.Files),
 		}
 
-		importsSet := make(map[string]bool)
-		var funcCount, typeCount int
-
-		for _, file := range pkg.Files {
-			// Count top-level declarations
-			for _, decl := range file.Decls {
-				switch d := decl.(type) {
-				case *ast.FuncDecl:
-					funcCount++
-				case *ast.GenDecl:
-					if d.Tok == token.TYPE {
-						typeCount += len(d.Specs)
-					}
-				}
-			}
-
-			// Extract imports
-			for _, imp := range file.Imports {
-				impPath := strings.Trim(imp.Path.Value, "\"")
-				if !importsSet[impPath] {
-					importsSet[impPath] = true
-					info.Imports = append(info.Imports, impPath)
-
-					// Create import edge
-					pg.edges[pkgPath] = append(pg.edges[pkgPath], &ImportEdge{
-						From:   pkgPath,
-						To:     impPath,
-						Direct: true,
-					})
-				}
-			}
-		}
-
-		info.Functions = funcCount
-		info.Types = typeCount
-
-		// Register package
+		pg.extractPackageMetadata(pkg, pkgPath, info)
 		pg.packages[pkgPath] = info
 	}
 

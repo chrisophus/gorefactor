@@ -391,3 +391,60 @@ func normalizeToPlanJSON(js string) (string, error) {
 	}
 	return t, nil
 }
+
+// canonicalizePlanJSON absorbs the field/enum near-misses cheap models
+// reliably make: hyphenated/cased op types, "path" for "file", and
+// content/param keys placed at the operation top level instead of
+// under "parameters". Deterministic glue is far cheaper than a retry.
+func canonicalizePlanJSON(js string) (string, error) {
+	var plan map[string]any
+	if err := json.Unmarshal([]byte(js), &plan); err != nil {
+		return "", err
+	}
+	ops, _ := plan["operations"].([]any)
+	for _, o := range ops {
+		op, ok := o.(map[string]any)
+		if !ok {
+			continue
+		}
+		if t, ok := op["type"].(string); ok {
+			op["type"] = strings.ToLower(strings.ReplaceAll(strings.TrimSpace(t), "-", "_"))
+		}
+		if _, has := op["file"]; !has {
+			for _, k := range []string{"path", "filename", "filePath"} {
+				if v, ok := op[k].(string); ok {
+					op["file"] = v
+					delete(op, k)
+					break
+				}
+			}
+		}
+		params, _ := op["parameters"].(map[string]any)
+		if params == nil {
+			params = map[string]any{}
+		}
+		// content-ish synonyms -> parameters.codeSnippet
+		for _, k := range []string{"content", "code", "codeSnippet", "snippet", "body", "fileContent"} {
+			if v, ok := op[k]; ok {
+				if _, exists := params["codeSnippet"]; !exists {
+					params["codeSnippet"] = v
+				}
+				delete(op, k)
+			}
+		}
+		// known params placed at op top level -> parameters
+		for _, k := range []string{"newName", "replacementCode", "codePattern", "newFile", "location"} {
+			if v, ok := op[k]; ok {
+				if _, exists := params[k]; !exists {
+					params[k] = v
+				}
+				delete(op, k)
+			}
+		}
+		if len(params) > 0 {
+			op["parameters"] = params
+		}
+	}
+	out, err := json.Marshal(plan)
+	return string(out), err
+}

@@ -61,7 +61,25 @@ func newOpenAIProvider(baseURL, apiKey, model string) *openAIProvider {
 	}
 }
 
+// schemaCompleter is implemented by providers that can enforce a JSON
+// schema at decode time. The loop type-asserts for it and falls back
+// to plain Complete (mock, Anthropic) when absent.
+type schemaCompleter interface {
+	CompleteSchema(ctx context.Context, system, user, schema string) (string, error)
+}
+
 func (p *openAIProvider) Complete(ctx context.Context, system, user string) (string, error) {
+	return p.complete(ctx, system, user, "")
+}
+
+// CompleteSchema sends response_format=json_schema. Ollama (>=0.5) and
+// OpenAI structured outputs both honor this on the /chat/completions
+// endpoint; the model is grammar-constrained to the schema.
+func (p *openAIProvider) CompleteSchema(ctx context.Context, system, user, schema string) (string, error) {
+	return p.complete(ctx, system, user, schema)
+}
+
+func (p *openAIProvider) complete(ctx context.Context, system, user, schema string) (string, error) {
 	reqBody := map[string]any{
 		"model": p.model,
 		"messages": []map[string]string{
@@ -69,6 +87,15 @@ func (p *openAIProvider) Complete(ctx context.Context, system, user string) (str
 			{"role": "user", "content": user},
 		},
 		"temperature": 0,
+	}
+	if schema != "" {
+		reqBody["response_format"] = map[string]any{
+			"type": "json_schema",
+			"json_schema": map[string]any{
+				"name":   "refactoring_plan",
+				"schema": json.RawMessage(schema),
+			},
+		}
 	}
 	buf, err := json.Marshal(reqBody)
 	if err != nil {

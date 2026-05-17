@@ -26,6 +26,7 @@ func main() {
 		verbose     = flag.Bool("verbose", false, "echo the raw model response each iteration")
 		printPrompt = flag.Bool("print-prompt", false, "print the assembled model prompt for the spec and exit (no model call)")
 		showVersion = flag.Bool("version", false, "print version and exit")
+		noSchema    = flag.Bool("no-schema", false, "disable decode-time JSON-schema enforcement (A/B)")
 	)
 	flag.Parse()
 
@@ -52,6 +53,7 @@ func main() {
 		DryRun:     *dryRun,
 		AllowDirty: *allowDirty,
 		Verbose:    *verbose,
+		NoSchema:   *noSchema,
 		Out:        os.Stdout,
 	}
 

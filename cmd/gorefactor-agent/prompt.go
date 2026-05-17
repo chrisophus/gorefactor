@@ -25,6 +25,47 @@ var allowedOps = []string{
 	"remove_code_block",
 }
 
+// planJSONSchema is the decode-time grammar. It pins "type" to the
+// allowed enum and forbids unknown operation-level keys, so a cheap
+// model physically cannot emit create-file/path/content -- extras are
+// forced to nest under the open "parameters" object. This eliminates
+// the field/enum near-miss class at the source rather than repairing
+// it after the fact. Parameters/target stay open: per-op param shapes
+// are too varied to grammar-constrain without brittleness, and the
+// canonicalizer + validator + build/test gate remain the backstops.
+func planJSONSchema() string {
+	enum := make([]string, len(allowedOps))
+	copy(enum, allowedOps)
+	schema := map[string]any{
+		"type":                 "object",
+		"required":             []string{"version", "name", "description", "operations"},
+		"additionalProperties": false,
+		"properties": map[string]any{
+			"version":     map[string]any{"type": "string"},
+			"name":        map[string]any{"type": "string"},
+			"description": map[string]any{"type": "string"},
+			"operations": map[string]any{
+				"type":     "array",
+				"minItems": 1,
+				"items": map[string]any{
+					"type":                 "object",
+					"required":             []string{"type", "description", "file"},
+					"additionalProperties": false,
+					"properties": map[string]any{
+						"type":        map[string]any{"type": "string", "enum": enum},
+						"description": map[string]any{"type": "string"},
+						"file":        map[string]any{"type": "string"},
+						"target":      map[string]any{"type": "object"},
+						"parameters":  map[string]any{"type": "object"},
+					},
+				},
+			},
+		},
+	}
+	b, _ := json.Marshal(schema)
+	return string(b)
+}
+
 // systemPrompt is the feedforward guide. It pins the output to a single
 // schema, forbids prose, forbids line-number targeting, and forbids
 // behavioural change -- everything that keeps a cheap model on rails.

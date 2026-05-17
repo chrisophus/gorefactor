@@ -21,6 +21,7 @@ type Config struct {
 	DryRun     bool      // preview only; never apply
 	AllowDirty bool      // skip the clean-worktree precondition
 	Verbose    bool      // echo the raw model response each iteration
+	NoSchema   bool      // disable decode-time JSON-schema enforcement
 	Out        io.Writer // progress sink
 }
 
@@ -58,7 +59,13 @@ func RunDriver(ctx context.Context, p Provider, cfg Config) error {
 	for iter := 1; iter <= cfg.MaxIter; iter++ {
 		fmt.Fprintf(cfg.Out, "\n── iteration %d/%d ──\n", iter, cfg.MaxIter)
 
-		raw, err := p.Complete(ctx, systemPrompt(), buildUserPrompt(cfg.Spec, ".", feedback))
+		var raw string
+		sys, usr := systemPrompt(), buildUserPrompt(cfg.Spec, ".", feedback)
+		if sc, ok := p.(schemaCompleter); ok && !cfg.NoSchema {
+			raw, err = sc.CompleteSchema(ctx, sys, usr, planJSONSchema())
+		} else {
+			raw, err = p.Complete(ctx, sys, usr)
+		}
 		if err != nil {
 			return fmt.Errorf("provider call failed: %w", err)
 		}

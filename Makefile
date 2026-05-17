@@ -22,7 +22,7 @@ install-tools: ## Install required build tools
 
 build: test lint fmt vet ## Build binary (runs all checks first)
 	@echo "$(BLUE)Building gorefactor...$(NC)"
-	go build -o gorefactor .
+	go build -o gorefactor ./cmd/gorefactor
 	@echo "$(GREEN)✓ Build successful$(NC)"
 
 test: ## Run all tests
@@ -44,7 +44,7 @@ lint: ## Run golangci-lint
 fmt: ## Format code
 	@echo "$(BLUE)Formatting code...$(NC)"
 	go fmt ./...
-	@if [ -x ./gorefactor ]; then ./gorefactor format .; else go run . format .; fi
+	@if [ -x ./gorefactor ]; then ./gorefactor format .; else go run ./cmd/gorefactor format .; fi
 	@echo "$(GREEN)✓ Code formatted$(NC)"
 
 vet: ## Run go vet

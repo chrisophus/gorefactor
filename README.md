@@ -12,8 +12,11 @@ GoRefactor is a command-line tool for refactoring Go code, with a focus on metho
 ## Installation
 
 ```bash
-go install github.com/yourusername/gorefactor@latest
+go install github.com/chrisophus/gorefactor/cmd/gorefactor@latest
 ```
+
+Or grab a prebuilt binary for your platform from the
+[Releases page](https://github.com/chrisophus/gorefactor/releases).
 
 ## Usage
 

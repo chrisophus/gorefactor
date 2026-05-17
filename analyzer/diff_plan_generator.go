@@ -2,7 +2,7 @@ package analyzer
 
 import (
 	"fmt"
-	"gorefactor/orchestrator"
+	"github.com/chrisophus/gorefactor/orchestrator"
 	"sort"
 	"strings"
 	"time"

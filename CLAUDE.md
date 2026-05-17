@@ -284,7 +284,7 @@ make watch-test
 make build
 
 # Quick build (skip checks - not recommended)
-go build -o gorefactor main.go
+go build -o gorefactor ./cmd/gorefactor
 
 # After building, run commands like:
 ./gorefactor parse path/to/file.go

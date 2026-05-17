@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"gorefactor/analyzer"
+	"github.com/chrisophus/gorefactor/analyzer"
 	"os"
 	"path/filepath"
 	"strconv"

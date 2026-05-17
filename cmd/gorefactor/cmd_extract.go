@@ -7,7 +7,7 @@ import (
 	"go/printer"
 	"go/token"
 	"go/types"
-	"gorefactor/orchestrator"
+	"github.com/chrisophus/gorefactor/orchestrator"
 	"os"
 	"path/filepath"
 	"strconv"

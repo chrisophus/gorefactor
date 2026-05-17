@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gorefactor/orchestrator"
+	"github.com/chrisophus/gorefactor/orchestrator"
 )
 
 func formatCommand(args []string) error {

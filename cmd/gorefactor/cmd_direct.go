@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gorefactor/analyzer"
-	"gorefactor/orchestrator"
+	"github.com/chrisophus/gorefactor/analyzer"
+	"github.com/chrisophus/gorefactor/orchestrator"
 )
 
 func readContentArg(args []string, idx int) (string, error) {

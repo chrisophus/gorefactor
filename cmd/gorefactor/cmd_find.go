@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"gorefactor/analyzer"
+	"github.com/chrisophus/gorefactor/analyzer"
 )
 
 func findCallersCommand(args []string) error {

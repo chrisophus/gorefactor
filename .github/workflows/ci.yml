@@ -62,7 +62,7 @@ jobs:
           go-version: 'stable'
 
       - name: Build
-        run: go build -o gorefactor .
+        run: go build -o gorefactor ./cmd/gorefactor
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

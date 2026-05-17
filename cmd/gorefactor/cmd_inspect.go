@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"sort"
 
-	"gorefactor/analyzer"
-	"gorefactor/parser"
+	"github.com/chrisophus/gorefactor/analyzer"
+	"github.com/chrisophus/gorefactor/parser"
 )
 
 // inspectCommand prints a human-readable one-page summary of a file:

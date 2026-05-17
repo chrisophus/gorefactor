@@ -1,4 +1,4 @@
-module gorefactor
+module github.com/chrisophus/gorefactor
 
 go 1.25.0
 

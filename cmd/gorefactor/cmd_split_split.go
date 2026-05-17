@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"gorefactor/orchestrator"
+	"github.com/chrisophus/gorefactor/orchestrator"
 	"path/filepath"
 	"sort"
 	"strings"

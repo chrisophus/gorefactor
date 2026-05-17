@@ -22,7 +22,7 @@ install-tools: ## Install required build tools
 
 build: test lint fmt vet ## Build binary (runs all checks first)
 	@echo "$(BLUE)Building gorefactor...$(NC)"
-	go build -o gorefactor main.go
+	go build -o gorefactor .
 	@echo "$(GREEN)✓ Build successful$(NC)"
 
 test: ## Run all tests

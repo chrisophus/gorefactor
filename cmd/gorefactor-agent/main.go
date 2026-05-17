@@ -25,8 +25,14 @@ func main() {
 		allowDirty  = flag.Bool("allow-dirty", false, "skip the clean-git-worktree precondition")
 		verbose     = flag.Bool("verbose", false, "echo the raw model response each iteration")
 		printPrompt = flag.Bool("print-prompt", false, "print the assembled model prompt for the spec and exit (no model call)")
+		showVersion = flag.Bool("version", false, "print version and exit")
 	)
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(agentVersion)
+		return
+	}
 
 	spec, err := resolveSpec(*specFlag)
 	if err != nil {

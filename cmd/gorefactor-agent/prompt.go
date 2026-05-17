@@ -152,7 +152,12 @@ func goFiles(dir string) []string {
 		if err != nil || d.IsDir() {
 			if d != nil && d.IsDir() {
 				n := d.Name()
-				if n == ".git" || n == "vendor" || n == "testdata" {
+				// Skip VCS/deps/test fixtures and ALL dot-dirs — in
+				// particular .gorefactor (gorefactor's own snapshot/
+				// undo store). Targeting snapshot copies would make the
+				// campaign chase its own artifacts and never converge.
+				if n == "vendor" || n == "testdata" ||
+					(len(n) > 1 && n[0] == '.') {
 					return filepath.SkipDir
 				}
 			}

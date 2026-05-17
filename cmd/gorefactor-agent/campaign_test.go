@@ -77,6 +77,36 @@ func TestCampaign_DetectsDelegatesAndPuntsCleanly(t *testing.T) {
 	}
 }
 
+func TestGoFilesSkipsDotAndVendorDirs(t *testing.T) {
+	dir := t.TempDir()
+	mk := func(p, body string) {
+		full := filepath.Join(dir, p)
+		os.MkdirAll(filepath.Dir(full), 0o755)
+		os.WriteFile(full, []byte(body), 0o644)
+	}
+	mk("main.go", "package m")
+	mk(".gorefactor/snapshots/_exec/x.go", "package x") // gorefactor's own store
+	mk(".hidden/y.go", "package y")
+	mk("vendor/z.go", "package z")
+	mk("testdata/t.go", "package t")
+	mk("sub/ok.go", "package sub")
+
+	got := goFiles(dir)
+	for _, f := range got {
+		if strings.Contains(f, ".gorefactor") || strings.Contains(f, "/.hidden") ||
+			strings.Contains(f, "/vendor/") || strings.Contains(f, "/testdata/") {
+			t.Fatalf("goFiles must skip dot/vendor/testdata dirs, got: %s", f)
+		}
+	}
+	var names []string
+	for _, f := range got {
+		names = append(names, filepath.Base(f))
+	}
+	if len(got) != 2 { // main.go + sub/ok.go only
+		t.Fatalf("expected exactly main.go and sub/ok.go, got %v", names)
+	}
+}
+
 func TestCampaign_NoFindingsIsClean(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module ok\n\ngo 1.21\n"), 0o644)

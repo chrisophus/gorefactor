@@ -14,7 +14,7 @@ import (
 type PlanSuggester struct {
 	filePath string
 	fset     *token.FileSet
-	file     *ast.File
+	File     *ast.File
 }
 
 // SuggestedPlan represents a refactoring plan recommendation
@@ -52,7 +52,7 @@ func NewPlanSuggester(filePath string) (*PlanSuggester, error) {
 	return &PlanSuggester{
 		filePath: filePath,
 		fset:     fset,
-		file:     file,
+		File:     file,
 	}, nil
 }
 
@@ -61,7 +61,7 @@ func (ps *PlanSuggester) SuggestExtractions() []SuggestedPlan {
 	var plans []SuggestedPlan
 
 	// Find functions with high complexity
-	for _, decl := range ps.file.Decls {
+	for _, decl := range ps.File.Decls {
 		if fn, ok := decl.(*ast.FuncDecl); ok {
 			complexity := ps.analyzeComplexity(fn)
 
@@ -97,7 +97,7 @@ func (ps *PlanSuggester) SuggestRenames() []SuggestedPlan {
 	var plans []SuggestedPlan
 
 	// Suggest renaming unexported symbols that could be exported
-	for _, decl := range ps.file.Decls {
+	for _, decl := range ps.File.Decls {
 		if fn, ok := decl.(*ast.FuncDecl); ok {
 			if !isExported(fn.Name.Name) && ps.shouldBeExported(fn) {
 				plan := SuggestedPlan{
@@ -222,10 +222,10 @@ func isExported(name string) bool {
 
 // countLines counts total lines in the file
 func (ps *PlanSuggester) countLines() int {
-	if ps.file == nil {
+	if ps.File == nil {
 		return 0
 	}
-	f := ps.fset.File(ps.file.End())
+	f := ps.fset.File(ps.File.End())
 	if f == nil {
 		return 0
 	}

@@ -84,8 +84,19 @@ func suggestPlanCommand(args []string) error {
 
 	// If patterns requested, show pattern analysis
 	if patterns {
-		fmt.Println("=== Pattern Analysis ===")
-		fmt.Println("(Use --json to get full pattern data)")
+		fmt.Println("\n=== Architectural Pattern Analysis ===")
+		pd := analyzer.NewPatternDetector(suggester.File)
+		detectedPatterns := pd.DetectPatterns()
+
+		if len(detectedPatterns) == 0 {
+			fmt.Println("No architectural patterns detected.")
+		} else {
+			fmt.Printf("Found %d pattern(s):\n\n", len(detectedPatterns))
+			for i, p := range detectedPatterns {
+				fmt.Printf("%d. %s\n", i+1, p.Summary())
+				fmt.Printf("   Suggestion: %s\n\n", p.Suggestion)
+			}
+		}
 	}
 
 	// Offer to save as plan

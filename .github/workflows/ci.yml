@@ -18,7 +18,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: 'stable'
 
       - name: Cache Go modules
         uses: actions/cache@v4
@@ -32,9 +32,9 @@ jobs:
         run: make vet
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.4.0
           args: --timeout=5m
 
       - name: Run tests
@@ -59,7 +59,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: 'stable'
 
       - name: Build
         run: go build -o gorefactor main.go

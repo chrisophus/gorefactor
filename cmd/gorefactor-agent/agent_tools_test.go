@@ -3,11 +3,30 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// extractPuntReport pulls and parses the JSON the loop emits between
+// the <<<PUNT_REPORT ... PUNT_REPORT>>> markers in the run log.
+func extractPuntReport(t *testing.T, log string) puntReport {
+	t.Helper()
+	a := strings.Index(log, "<<<PUNT_REPORT")
+	b := strings.Index(log, "PUNT_REPORT>>>")
+	if a < 0 || b < 0 || b < a {
+		t.Fatalf("no PUNT_REPORT block in log:\n%s", log)
+	}
+	body := strings.TrimSpace(log[a+len("<<<PUNT_REPORT") : b])
+	var rep puntReport
+	if err := json.Unmarshal([]byte(body), &rep); err != nil {
+		t.Fatalf("punt report not valid JSON: %v\n%s", err, body)
+	}
+	return rep
+}
 
 // mockToolProvider scripts assistant turns for the agentic loop. If
 // repeatLast is set, the final scripted turn repeats forever (used to
@@ -79,6 +98,25 @@ func TestAgentic_PuntRollsBackClean(t *testing.T) {
 	if string(before) != string(after) {
 		t.Fatalf("punt did not leave the tree clean")
 	}
+
+	// The structured warm hand-off must be present and well-formed.
+	var pe *puntError
+	if !errors.As(err, &pe) {
+		t.Fatalf("error is not *puntError: %T", err)
+	}
+	rep := extractPuntReport(t, log.String())
+	if rep.Status != "punt" || rep.Kind != "explicit" {
+		t.Fatalf("bad report status/kind: %+v", rep)
+	}
+	if !rep.RepoClean {
+		t.Fatalf("report must assert repo_clean after rollback: %+v", rep)
+	}
+	if rep.Task == "" || !strings.Contains(rep.Reason, "algorithmic") || len(rep.Trace) == 0 {
+		t.Fatalf("report missing warm context: %+v", rep)
+	}
+	if pe.Report().Reason != rep.Reason {
+		t.Fatalf("puntError.Report() out of sync with emitted JSON")
+	}
 }
 
 func TestAgentic_BudgetExhaustionAutopunts(t *testing.T) {
@@ -100,5 +138,9 @@ func TestAgentic_BudgetExhaustionAutopunts(t *testing.T) {
 	after, _ := os.ReadFile(filepath.Join(dir, "sample.go"))
 	if string(before) != string(after) {
 		t.Fatalf("autopunt did not leave the tree clean")
+	}
+	rep := extractPuntReport(t, log.String())
+	if rep.Kind != "autopunt:budget" || !rep.RepoClean {
+		t.Fatalf("expected clean autopunt:budget report, got %+v", rep)
 	}
 }

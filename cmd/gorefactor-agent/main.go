@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -80,6 +81,14 @@ func main() {
 		runErr = RunDriver(context.Background(), provider, cfg)
 	}
 	if runErr != nil {
+		// A punt is not a crash: the junior cleanly handed work back.
+		// The structured report is already on stdout; exit 3 so a
+		// delegating (senior) agent can branch on "punted" vs "failed".
+		var pe *puntError
+		if errors.As(runErr, &pe) {
+			fmt.Fprintln(os.Stderr, "punted:", pe.Error())
+			os.Exit(3)
+		}
 		fmt.Fprintln(os.Stderr, "\nError:", runErr)
 		os.Exit(1)
 	}

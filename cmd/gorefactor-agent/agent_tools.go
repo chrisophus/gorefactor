@@ -64,6 +64,7 @@ func RunAgenticDriver(ctx context.Context, tc toolChatter, cfg Config) error {
 	}
 	tools := toolCatalog()
 
+	var trace []traceEntry
 	gateFails, noTool := 0, 0
 	for step := 1; step <= cfg.MaxIter; step++ {
 		fmt.Fprintf(cfg.Out, "\n── step %d/%d ──\n", step, cfg.MaxIter)
@@ -78,8 +79,11 @@ func RunAgenticDriver(ctx context.Context, tc toolChatter, cfg Config) error {
 			if cfg.Verbose && asst.Content != "" {
 				fmt.Fprintf(cfg.Out, "  (model said: %s)\n", trim(asst.Content, 300))
 			}
+			trace = addTrace(trace, traceEntry{Step: step, Tool: "(no tool call)",
+				Result: trim(asst.Content, 160)})
 			if noTool >= maxNoToolTurn {
-				return autopunt(cfg, "model produced prose instead of tool calls repeatedly")
+				return doPunt(cfg, "autopunt:no_tool_calls",
+					"model produced prose instead of tool calls repeatedly", trace, step)
 			}
 			messages = append(messages, chatMessage{Role: "user",
 				Content: "Act via a tool. When the change is complete call finish. " +
@@ -91,6 +95,8 @@ func RunAgenticDriver(ctx context.Context, tc toolChatter, cfg Config) error {
 		for _, call := range asst.ToolCalls {
 			content, status := dispatchTool(call, cfg, &gateFails)
 			fmt.Fprintf(cfg.Out, "  → %s: %s\n", call.Function.Name, trim(content, 160))
+			trace = addTrace(trace, traceEntry{Step: step, Tool: call.Function.Name,
+				Args: trim(call.Function.Arguments, 200), Result: trim(content, 200)})
 			messages = append(messages, chatMessage{
 				Role: "tool", ToolCallID: call.ID, Content: content,
 			})
@@ -99,25 +105,77 @@ func RunAgenticDriver(ctx context.Context, tc toolChatter, cfg Config) error {
 				fmt.Fprintf(cfg.Out, "  ✓ finished; gate green; changes kept\n")
 				return nil
 			case stPunt:
-				return punt(cfg, content)
+				return doPunt(cfg, "explicit", content, trace, step)
 			}
 		}
 		if gateFails >= maxGateFails {
-			return autopunt(cfg, fmt.Sprintf("gate failed %d times", gateFails))
+			return doPunt(cfg, "autopunt:gate_fails",
+				fmt.Sprintf("gate failed %d times", gateFails), trace, step)
 		}
 	}
-	return autopunt(cfg, "tool-call budget exhausted")
+	return doPunt(cfg, "autopunt:budget", "tool-call budget exhausted", trace, cfg.MaxIter)
 }
 
-// punt rolls back to the clean baseline and returns a distinguishable
-// error carrying a warm report for the driver/expensive model.
-func punt(cfg Config, reason string) error {
+// traceEntry is one step the junior took, kept tight for the report.
+type traceEntry struct {
+	Step   int    `json:"step"`
+	Tool   string `json:"tool"`
+	Args   string `json:"args,omitempty"`
+	Result string `json:"result,omitempty"`
+}
+
+func addTrace(t []traceEntry, e traceEntry) []traceEntry {
+	t = append(t, e)
+	if len(t) > 24 { // keep the tail; older steps rarely matter to the senior
+		t = t[len(t)-24:]
+	}
+	return t
+}
+
+// puntReport is the warm hand-off the second-tier agent gives back to
+// whatever delegated to it: the task, what it tried, why it stopped,
+// and a guarantee the repo is clean. Emitted as JSON between markers
+// so a senior agent can extract it from the run log; the process also
+// exits with a distinct code (see main.go).
+type puntReport struct {
+	Status    string       `json:"status"` // always "punt"
+	Kind      string       `json:"kind"`   // explicit | autopunt:*
+	Task      string       `json:"task"`
+	Reason    string       `json:"reason"`
+	Steps     int          `json:"steps"`
+	RepoClean bool         `json:"repo_clean"`
+	Dir       string       `json:"dir"`
+	Trace     []traceEntry `json:"trace"`
+}
+
+// puntError carries the report while satisfying error. Error() still
+// contains "PUNT" so existing callers/tests keep working.
+type puntError struct{ rep puntReport }
+
+func (e *puntError) Error() string { return "PUNT: " + e.rep.Reason }
+
+// Report exposes the structured hand-off (used by main.go / callers).
+func (e *puntError) Report() puntReport { return e.rep }
+
+// doPunt rolls back to the clean baseline, verifies it, emits the warm
+// report, and returns a *puntError.
+func doPunt(cfg Config, kind, reason string, trace []traceEntry, steps int) error {
 	rollback(cfg.Dir, cfg.Out)
-	fmt.Fprintf(cfg.Out, "  ⮌ PUNT: %s\n", trim(reason, 400))
-	return fmt.Errorf("PUNT: %s", trim(reason, 400))
+	rep := puntReport{
+		Status:    "punt",
+		Kind:      kind,
+		Task:      strings.TrimSpace(cfg.Spec),
+		Reason:    trim(reason, 800),
+		Steps:     steps,
+		RepoClean: requireCleanWorktree(cfg.Dir) == nil,
+		Dir:       cfg.Dir,
+		Trace:     trace,
+	}
+	fmt.Fprintf(cfg.Out, "  ⮌ PUNT (%s): %s\n", kind, trim(reason, 400))
+	b, _ := json.MarshalIndent(rep, "", "  ")
+	fmt.Fprintf(cfg.Out, "<<<PUNT_REPORT\n%s\nPUNT_REPORT>>>\n", string(b))
+	return &puntError{rep: rep}
 }
-
-func autopunt(cfg Config, reason string) error { return punt(cfg, "autopunt: "+reason) }
 
 // dispatchTool routes one tool call. Sense tools are read-only; mutate
 // tools are single deterministic orchestrator ops; finish runs the

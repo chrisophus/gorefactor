@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"gorefactor/orchestrator"
+	"github.com/chrisophus/gorefactor/orchestrator"
 	"io"
 	"os"
 )

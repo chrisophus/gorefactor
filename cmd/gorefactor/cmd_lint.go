@@ -32,7 +32,7 @@ func lintCommand(args []string) error {
 		case a == "--max":
 			if i+1 < len(args) {
 				var n int
-				fmt.Sscanf(args[i+1], "%d", &n)
+				_, _ = fmt.Sscanf(args[i+1], "%d", &n)
 				if n > 0 {
 					maxSize = n
 				}

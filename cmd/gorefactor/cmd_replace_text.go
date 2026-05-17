@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"gorefactor/orchestrator"
+	"github.com/chrisophus/gorefactor/orchestrator"
 )
 
 // replaceTextCommand performs a literal text substitution inside a target

@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"gorefactor/orchestrator"
+	"github.com/chrisophus/gorefactor/orchestrator"
 	"strings"
 )
 
@@ -53,7 +53,9 @@ func moveCode(args []string) error {
 
 	// Execute the plan
 	orch := orchestrator.NewOrchestrator()
-	orch.RegisterPlan(plan)
+	if err := orch.RegisterPlan(plan); err != nil {
+		return fmt.Errorf("failed to register plan: %w", err)
+	}
 
 	result, err := orch.ExecutePlan(plan.Name)
 	if err != nil {

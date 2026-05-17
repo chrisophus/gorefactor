@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"gorefactor/orchestrator"
+	"github.com/chrisophus/gorefactor/orchestrator"
 )
 
 // DiffAnalyzer analyzes code diffs and generates refactoring plans

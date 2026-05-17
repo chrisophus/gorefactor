@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"gorefactor/analyzer"
+	"github.com/chrisophus/gorefactor/analyzer"
 	"strings"
 )
 

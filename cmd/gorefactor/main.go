@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"gorefactor/orchestrator"
-	"gorefactor/parser"
+	"github.com/chrisophus/gorefactor/orchestrator"
+	"github.com/chrisophus/gorefactor/parser"
 )
 
 type Command struct {

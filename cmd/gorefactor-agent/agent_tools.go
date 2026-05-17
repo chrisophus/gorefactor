@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -37,7 +38,7 @@ const (
 // RunAgenticDriver is Arm D's entry point. Mirror of RunDriver's safety
 // envelope (clean-worktree precondition, chdir, git rollback) but the
 // model drives via tool calls instead of one constrained plan.
-func RunAgenticDriver(ctx context.Context, tc toolChatter, cfg Config) error {
+func RunAgenticDriver(ctx context.Context, tc toolChatter, cfg Config) (err error) {
 	if cfg.Out == nil {
 		cfg.Out = os.Stdout
 	}
@@ -58,6 +59,9 @@ func RunAgenticDriver(ctx context.Context, tc toolChatter, cfg Config) error {
 	}
 	defer os.Chdir(prev)
 
+	lastStep := 0
+	defer func() { emitRunMetrics(cfg.Out, tc, err, lastStep) }()
+
 	messages := []chatMessage{
 		{Role: "system", Content: agenticSystemPrompt()},
 		{Role: "user", Content: "TASK:\n" + strings.TrimSpace(cfg.Spec)},
@@ -67,6 +71,7 @@ func RunAgenticDriver(ctx context.Context, tc toolChatter, cfg Config) error {
 	var trace []traceEntry
 	gateFails, noTool := 0, 0
 	for step := 1; step <= cfg.MaxIter; step++ {
+		lastStep = step
 		fmt.Fprintf(cfg.Out, "\n── step %d/%d ──\n", step, cfg.MaxIter)
 		asst, err := tc.ChatTools(ctx, compactMessages(messages, 12), tools)
 		if err != nil {
@@ -145,6 +150,33 @@ func compactMessages(msgs []chatMessage, keep int) []chatMessage {
 	out = append(out, chatMessage{Role: "user", Content: fmt.Sprintf(
 		"(… %d earlier steps elided to fit context; continue from the latest results …)", start-2)})
 	return append(out, msgs[start:]...)
+}
+
+// emitRunMetrics prints one machine-readable record per agentic run:
+// outcome + steps + local token usage. Frontier tokens are 0 by
+// construction. The reliability battery aggregates these blocks.
+func emitRunMetrics(out io.Writer, tc toolChatter, err error, steps int) {
+	outcome := "fixed"
+	switch {
+	case isPunt(err):
+		outcome = "punt"
+	case err != nil:
+		outcome = "error"
+	}
+	pt, ct := 0, 0
+	if ts, ok := tc.(tokenStater); ok {
+		pt, ct = ts.Tokens()
+	}
+	rec := struct {
+		Outcome          string `json:"outcome"`
+		Steps            int    `json:"steps"`
+		PromptTokens     int    `json:"prompt_tokens"`
+		CompletionTokens int    `json:"completion_tokens"`
+		LocalTokens      int    `json:"local_tokens"`
+		FrontierTokens   int    `json:"frontier_tokens"`
+	}{outcome, steps, pt, ct, pt + ct, 0}
+	b, _ := json.Marshal(rec)
+	fmt.Fprintf(out, "<<<RUN_METRICS %s RUN_METRICS>>>\n", string(b))
 }
 
 func addTrace(t []traceEntry, e traceEntry) []traceEntry {

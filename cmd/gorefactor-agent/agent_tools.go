@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/chrisophus/gorefactor/analyzer"
-	"github.com/chrisophus/gorefactor/orchestrator"
 	"github.com/chrisophus/gorefactor/parser"
 )
 
@@ -34,92 +32,6 @@ const (
 	maxGateFails  = 4  // repeated red gate -> autopunt
 	maxNoToolTurn = 3  // model keeps talking instead of acting -> autopunt
 )
-
-// RunAgenticDriver is Arm D's entry point. Mirror of RunDriver's safety
-// envelope (clean-worktree precondition, chdir, git rollback) but the
-// model drives via tool calls instead of one constrained plan.
-func RunAgenticDriver(ctx context.Context, tc toolChatter, cfg Config) (err error) {
-	if cfg.Out == nil {
-		cfg.Out = os.Stdout
-	}
-	if cfg.MaxIter <= 0 {
-		cfg.MaxIter = maxToolCalls
-	}
-	if !cfg.AllowDirty {
-		if err := requireCleanWorktree(cfg.Dir); err != nil {
-			return err
-		}
-	}
-	prev, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	if err := os.Chdir(cfg.Dir); err != nil {
-		return fmt.Errorf("chdir %s: %w", cfg.Dir, err)
-	}
-	defer os.Chdir(prev)
-
-	lastStep := 0
-	defer func() { emitRunMetrics(cfg.Out, tc, err, lastStep) }()
-
-	messages := []chatMessage{
-		{Role: "system", Content: agenticSystemPrompt()},
-		{Role: "user", Content: "TASK:\n" + strings.TrimSpace(cfg.Spec)},
-	}
-	tools := toolCatalog()
-
-	var trace []traceEntry
-	gateFails, noTool := 0, 0
-	for step := 1; step <= cfg.MaxIter; step++ {
-		lastStep = step
-		fmt.Fprintf(cfg.Out, "\n── step %d/%d ──\n", step, cfg.MaxIter)
-		asst, err := tc.ChatTools(ctx, compactMessages(messages, 12), tools)
-		if err != nil {
-			return fmt.Errorf("provider call failed: %w", err)
-		}
-		messages = append(messages, asst)
-
-		if len(asst.ToolCalls) == 0 {
-			noTool++
-			if cfg.Verbose && asst.Content != "" {
-				fmt.Fprintf(cfg.Out, "  (model said: %s)\n", trim(asst.Content, 300))
-			}
-			trace = addTrace(trace, traceEntry{Step: step, Tool: "(no tool call)",
-				Result: trim(asst.Content, 160)})
-			if noTool >= maxNoToolTurn {
-				return doPunt(cfg, "autopunt:no_tool_calls",
-					"model produced prose instead of tool calls repeatedly", trace, step)
-			}
-			messages = append(messages, chatMessage{Role: "user",
-				Content: "Act via a tool. When the change is complete call finish. " +
-					"If it cannot be done with these tools call punt(reason)."})
-			continue
-		}
-		noTool = 0
-
-		for _, call := range asst.ToolCalls {
-			content, status := dispatchTool(call, cfg, &gateFails)
-			fmt.Fprintf(cfg.Out, "  → %s: %s\n", call.Function.Name, trim(content, 160))
-			trace = addTrace(trace, traceEntry{Step: step, Tool: call.Function.Name,
-				Args: trim(call.Function.Arguments, 200), Result: trim(content, 200)})
-			messages = append(messages, chatMessage{
-				Role: "tool", ToolCallID: call.ID, Content: content,
-			})
-			switch status {
-			case stSuccess:
-				fmt.Fprintf(cfg.Out, "  ✓ finished; gate green; changes kept\n")
-				return nil
-			case stPunt:
-				return doPunt(cfg, "explicit", content, trace, step)
-			}
-		}
-		if gateFails >= maxGateFails {
-			return doPunt(cfg, "autopunt:gate_fails",
-				fmt.Sprintf("gate failed %d times", gateFails), trace, step)
-		}
-	}
-	return doPunt(cfg, "autopunt:budget", "tool-call budget exhausted", trace, cfg.MaxIter)
-}
 
 // traceEntry is one step the junior took, kept tight for the report.
 type traceEntry struct {
@@ -232,135 +144,6 @@ func doPunt(cfg Config, kind, reason string, trace []traceEntry, steps int) erro
 	return &puntError{rep: rep}
 }
 
-// dispatchTool routes one tool call. Sense tools are read-only; mutate
-// tools are single deterministic orchestrator ops; finish runs the
-// authoritative gate; punt is terminal.
-func dispatchTool(call toolCall, cfg Config, gateFails *int) (string, toolStatus) {
-	var a map[string]any
-	if call.Function.Arguments != "" {
-		_ = json.Unmarshal([]byte(call.Function.Arguments), &a)
-	}
-	if a == nil {
-		a = map[string]any{}
-	}
-	str := func(k string) string { s, _ := a[k].(string); return strings.TrimSpace(s) }
-
-	switch call.Function.Name {
-	case "punt":
-		r := str("reason")
-		if r == "" {
-			r = "model punted without a reason"
-		}
-		return r, stPunt
-
-	case "finish":
-		ok, out := runGate(".")
-		if ok {
-			return "gate green", stSuccess
-		}
-		*gateFails++
-		return "gate FAILED (not done). Fix and call finish again:\n" + trim(out, 1200), stContinue
-
-	case "run_gate":
-		ok, out := runGate(".")
-		if ok {
-			return "gate green", stContinue
-		}
-		return "gate red:\n" + trim(out, 1000), stContinue
-
-	case "list_symbols":
-		return senseListSymbols(str("file")), stContinue
-
-	case "read_excerpt":
-		return senseReadExcerpt(str("file"), a), stContinue
-
-	case "analyze_file_size":
-		return senseFileSize(str("file")), stContinue
-
-	case "find_references":
-		return senseFindRefs(str("symbol")), stContinue
-
-	case "rename_declaration", "replace_code", "insert_code",
-		"create_file", "move_method", "delete_declaration", "remove_code_block":
-		return applyOp(call.Function.Name, a, cfg), stContinue
-
-	default:
-		return "unknown tool: " + call.Function.Name, stContinue
-	}
-}
-
-// applyOp builds one orchestrator operation from tool args, executes it
-// deterministically, and gofmt's the touched file. Returns a tight
-// success or structured-error string the model can react to.
-func applyOp(kind string, a map[string]any, cfg Config) string {
-	str := func(k string) string { s, _ := a[k].(string); return strings.TrimSpace(s) }
-	op := &orchestrator.RefactoringOperation{Type: kind, Description: kind, File: str("file")}
-	tgt := &orchestrator.TargetSpecification{}
-	params := map[string]any{}
-
-	switch kind {
-	case "rename_declaration":
-		if fn := str("function"); fn != "" {
-			tgt.FunctionName = fn
-		}
-		if m := str("method"); m != "" {
-			tgt.MethodName = m
-		}
-		if t := str("type"); t != "" {
-			tgt.TypeName = t
-		}
-		op.Target = tgt
-		params["newName"] = str("new_name")
-	case "replace_code":
-		params["location"] = map[string]any{"functionName": str("function")}
-		params["codePattern"] = str("code_pattern")
-		params["replacementCode"] = str("replacement_code")
-	case "insert_code":
-		loc := map[string]any{"type": str("location_type")}
-		if anc := str("anchor_function"); anc != "" {
-			loc["functionName"] = anc
-		}
-		params["location"] = loc
-		params["codeSnippet"] = str("code_snippet")
-	case "create_file":
-		params["codeSnippet"] = str("code_snippet")
-	case "move_method":
-		tgt.MethodName = str("method")
-		tgt.ReceiverType = str("receiver_type")
-		op.Target = tgt
-		params["newFile"] = str("new_file")
-	case "delete_declaration":
-		if fn := str("function"); fn != "" {
-			tgt.FunctionName = fn
-		}
-		if m := str("method"); m != "" {
-			tgt.MethodName = m
-		}
-		if t := str("type"); t != "" {
-			tgt.TypeName = t
-		}
-		op.Target = tgt
-	case "remove_code_block":
-		params["codePattern"] = str("code_pattern")
-	}
-	if len(params) > 0 {
-		op.Parameters = params
-	}
-
-	o := orchestrator.NewOrchestrator()
-	res, err := o.ExecuteOperations([]*orchestrator.RefactoringOperation{op})
-	if err != nil {
-		return "ERROR: " + trim(err.Error(), 400)
-	}
-	if res == nil || !res.Success {
-		return "FAILED: " + trim(execErrors(res, nil), 600)
-	}
-	if op.File != "" {
-		_, _ = runIn(".", "gofmt", "-w", op.File)
-	}
-	return fmt.Sprintf("applied %s on %s", kind, op.File)
-}
-
 // --- sense tools (read-only, tight output per task #12) -------------
 
 func senseListSymbols(file string) string {
@@ -379,44 +162,6 @@ func senseListSymbols(file string) string {
 		fmt.Fprintf(&b, "method %s.%s\n", m.Receiver, m.Name)
 	}
 	return trim(b.String(), 1200)
-}
-
-func senseReadExcerpt(file string, a map[string]any) string {
-	if file == "" {
-		return "ERROR: 'file' required"
-	}
-	data, err := os.ReadFile(file)
-	if err != nil {
-		return "ERROR: " + trim(err.Error(), 200)
-	}
-	lines := strings.Split(string(data), "\n")
-	num := func(k string, def int) int {
-		if f, ok := a[k].(float64); ok {
-			return int(f)
-		}
-		return def
-	}
-	start := num("start_line", 1)
-	end := num("end_line", start+60)
-	if start < 1 {
-		start = 1
-	}
-	if end > len(lines) {
-		end = len(lines)
-	}
-	// Tight window: small context budget (~4096 tok). A bigger view
-	// should be taken as successive bounded reads, not one dump.
-	if end-start > 80 {
-		end = start + 80
-	}
-	if start > end {
-		return "ERROR: start_line > end_line"
-	}
-	var b strings.Builder
-	for i := start; i <= end; i++ {
-		fmt.Fprintf(&b, "%d: %s\n", i, lines[i-1])
-	}
-	return trim(b.String(), 2800)
 }
 
 func senseFileSize(file string) string {

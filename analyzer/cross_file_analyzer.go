@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"gorefactor/util"
 	"os"
 	"sort"
 	"strings"
@@ -185,7 +186,7 @@ func extractIndividualBlocks(fn *ast.FuncDecl, filePath string, fset *token.File
 
 // AnalyzeCrossFile performs a complete cross-file analysis on a directory
 func AnalyzeCrossFile(dirPath string) (*CrossFileAnalysis, error) {
-	files, err := findGoFiles(dirPath)
+	files, err := util.FindGoFiles(dirPath)
 	if err != nil {
 		return nil, err
 	}

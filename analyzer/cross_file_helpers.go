@@ -4,7 +4,6 @@ import (
 	"crypto/md5"
 	"fmt"
 	"go/ast"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -126,31 +125,6 @@ func generateDuplicateRecommendation(locations []Location) string {
 	}
 
 	return fmt.Sprintf("Extract to shared utility. Found in: %s", strings.Join(files, ", "))
-}
-
-// findGoFiles recursively finds all Go files in a directory
-func findGoFiles(dirPath string) ([]string, error) {
-	var files []string
-	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Skip hidden directories and vendor
-		if info.IsDir() {
-			if strings.HasPrefix(info.Name(), ".") || info.Name() == "vendor" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		if strings.HasSuffix(path, ".go") {
-			files = append(files, path)
-		}
-		return nil
-	})
-
-	return files, err
 }
 
 // estimateSavings calculates how many lines could be saved

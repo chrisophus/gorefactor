@@ -4,10 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"gorefactor/analyzer"
+	"gorefactor/util"
 	"os"
-	"path/filepath"
 	"strconv"
-	"strings"
 )
 
 func analyzeFileSizes(args []string) error {
@@ -40,7 +39,7 @@ func analyzeFileSizes(args []string) error {
 	}
 
 	// Find all Go files
-	files, err := findGoFiles(directory)
+	files, err := util.FindGoFiles(directory)
 	if err != nil {
 		return fmt.Errorf("failed to find Go files: %w", err)
 	}
@@ -98,16 +97,3 @@ func analyzeFileSizes(args []string) error {
 	return nil
 }
 
-func findGoFiles(directory string) ([]string, error) {
-	var files []string
-	err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() && strings.HasSuffix(path, ".go") {
-			files = append(files, path)
-		}
-		return nil
-	})
-	return files, err
-}

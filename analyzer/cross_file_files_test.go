@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"gorefactor/util"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,7 +45,7 @@ func TestFindGoFiles(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	files, err := findGoFiles(tmpDir)
+	files, err := util.FindGoFiles(tmpDir)
 	if err != nil {
 		t.Fatalf("findGoFiles error: %v", err)
 	}

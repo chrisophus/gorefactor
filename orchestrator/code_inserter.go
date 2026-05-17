@@ -143,6 +143,7 @@ func (ci *CodeInserter) InsertCode(filePath string, location *InsertionLocation,
 	}
 	return result, nil
 }
+
 // FindFunction is the exported version of findFunction for callers outside this package.
 func (ci *CodeInserter) FindFunction(node *ast.File, functionName, methodName, receiverType string) *ast.FuncDecl {
 	return ci.findFunction(node, functionName, methodName, receiverType)

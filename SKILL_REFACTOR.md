@@ -2,6 +2,37 @@
 
 A Claude Code skill that leverages the GoRefactor tool for intelligent, automated code refactoring. This skill makes refactoring decisions more efficiently than manual code editing by analyzing code complexity and applying safe transformations.
 
+## Quick Start (recommended path)
+
+The main `gorefactor` binary is now self-sufficient. Use these CLI commands instead of `Write`/`Edit` for any `.go` file change:
+
+```bash
+# Read-only sensors
+./gorefactor lint .                          # structural issues (file-size, duplicates, untested-package, extract-candidates)
+./gorefactor inspect path/to/file.go         # one-page human-readable file summary
+./gorefactor find-callers MyFunc             # who calls X (with `Receiver:Method` for methods)
+./gorefactor find-uses MySymbol              # where X is referenced
+./gorefactor find-implementations MyIface    # types satisfying an interface
+
+# Mutations (never use Write/Edit on .go files; use these)
+./gorefactor create path/to/new.go -         # create file (- = read stdin)
+./gorefactor insert file.go after:Func -     # insert code at semantic location
+./gorefactor replace file.go Func "<old>" "<new>"          # AST replace within func body
+./gorefactor replace-text file.go Func "<old>" "<new>"     # literal text replace within func body
+./gorefactor delete file.go Func             # delete declaration
+./gorefactor rename file.go old new          # rename unexported symbol package-wide
+./gorefactor move src.go Func dest.go        # move declaration between files
+./gorefactor split file.go                   # auto-split file if over size limit
+
+# Aggregate
+./gorefactor lint . --fix                    # autofix file-size violations
+./gorefactor doctor                          # lint + build + test gate; non-zero on failure
+```
+
+`Receiver:Method` selects a method (e.g. `CodeInserter:InsertCode`). `-` as the final arg reads stdin (for multi-line code, this avoids quoting).
+
+The legacy `skill-refactor` binary documented below predates these commands and is useful mainly for the priority-ranked auto-extraction workflow. For everything else, prefer the gorefactor CLI.
+
 ## When to Use This Skill
 
 Use the GoRefactor skill when:

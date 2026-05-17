@@ -254,3 +254,51 @@ func TestInspectCommand(t *testing.T) {
 		t.Fatalf("inspectCommand: %v", err)
 	}
 }
+func TestExtractCommandBasic(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module ex\ngo 1.24\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	path := writeTempGo(t, dir, "main.go", `package main
+
+import "fmt"
+
+func main() {
+	a := 10
+	b := 20
+	x := a + b
+	y := x * 2
+	fmt.Println(y)
+}
+`)
+	if err := extractCommand([]string{path, "8", "9", "compute"}); err != nil {
+		t.Fatalf("extractCommand: %v", err)
+	}
+	got := readFile(t, path)
+	if !strings.Contains(got, "func compute(a int, b int) int") {
+		t.Fatalf("expected new function signature; got:\n%s", got)
+	}
+	if !strings.Contains(got, "y := compute(a, b)") {
+		t.Fatalf("expected call site; got:\n%s", got)
+	}
+}
+
+func TestExtractCommandRejectsReturn(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module ex\ngo 1.24\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	path := writeTempGo(t, dir, "main.go", `package main
+
+func main() {
+	x := 1
+	if x > 0 {
+		return
+	}
+}
+`)
+	err := extractCommand([]string{path, "4", "7", "guard"})
+	if err == nil || !strings.Contains(err.Error(), "return") {
+		t.Fatalf("expected return-rejection error; got %v", err)
+	}
+}

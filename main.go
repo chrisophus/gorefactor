@@ -132,6 +132,11 @@ func getCommands() map[string]Command {
 			Description: "Aggregate health gate: lint + build + test. Exits non-zero on failure. [--json]",
 			Run:         doctorCommand,
 		},
+		"extract": {
+			Name:        "extract",
+			Description: "Extract a code block into a new function. Args: <file> <startLine> <endLine> <methodName>",
+			Run:         extractCommand,
+		},
 	}
 }
 

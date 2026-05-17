@@ -27,8 +27,11 @@ Mapping of common edits to commands (run `./gorefactor` for the full list):
 | Check what calls a function (before refactor) | `gorefactor find-callers <Func>` |
 | Check where a symbol is used | `gorefactor find-uses <Symbol>` |
 | Find interface implementations | `gorefactor find-implementations <Iface>` |
+| Extract a block to a new function | `gorefactor extract <file> <startLine> <endLine> <methodName>` |
 | Detect file-size / duplicate / extract issues | `gorefactor lint .` |
 | Autofix file-size issues | `gorefactor lint . --fix` |
+| Final gate (lint + build + test) | `gorefactor doctor` |
+| One-page file summary | `gorefactor inspect <file>` |
 
 **When `Edit`/`Write` is OK**: non-Go files (Markdown, YAML, JSON, Makefile, go.mod), git operations, completely-new packages with multiple files where stdin-pipe friction outweighs the benefit. For .go file mutations, fall back to `Edit` only when none of the above commands apply and document why.
 

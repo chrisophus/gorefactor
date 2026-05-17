@@ -142,6 +142,11 @@ func getCommands() map[string]Command {
 			Description: "Extract a code block into a new function. Args: <file> <startLine> <endLine> <methodName>",
 			Run:         extractCommand,
 		},
+		"suggest-plan": {
+			Name:        "suggest-plan",
+			Description: "Suggest refactoring opportunities for a file [--output plan.json] [--json] [--patterns]",
+			Run:         suggestPlanCommand,
+		},
 	}
 }
 

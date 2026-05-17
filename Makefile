@@ -10,6 +10,14 @@ YELLOW := \033[1;33m
 RED := \033[0;31m
 NC := \033[0m # No Color
 
+# Pinned golangci-lint version. Must match the version in
+# .github/workflows/ci.yml. Installed via the official script (not
+# `go install`) so we get the pre-built binary, which is compiled with
+# the latest Go — `go install` would honor the linter's own go.mod
+# toolchain and produce a binary built with an older Go that then
+# refuses to type-check a project targeting a newer Go.
+GOLANGCI_VERSION := v2.12.2
+
 help: ## Show this help message
 	@echo "$(BLUE)GoRefactor Build Targets$(NC)"
 	@echo ""
@@ -17,7 +25,7 @@ help: ## Show this help message
 
 install-tools: ## Install required build tools
 	@echo "$(BLUE)Installing build tools...$(NC)"
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/$(GOLANGCI_VERSION)/install.sh | sh -s -- -b $(shell go env GOPATH)/bin $(GOLANGCI_VERSION)
 	go mod download
 
 build: test lint fmt vet ## Build binary (runs all checks first)

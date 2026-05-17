@@ -141,7 +141,9 @@ func deleteCommand(args []string) error {
 		}},
 	}
 	orch := orchestrator.NewOrchestrator()
-	orch.RegisterPlan(plan)
+	if err := orch.RegisterPlan(plan); err != nil {
+		return err
+	}
 	_, err := orch.ExecutePlan(plan.Name)
 	if err != nil {
 		return err
@@ -203,7 +205,9 @@ func renameCommand(args []string) error {
 		}},
 	}
 	orch := orchestrator.NewOrchestrator()
-	orch.RegisterPlan(plan)
+	if err := orch.RegisterPlan(plan); err != nil {
+		return err
+	}
 	_, err := orch.ExecutePlan(plan.Name)
 	if err != nil {
 		return err

@@ -100,8 +100,8 @@ func (o *Orchestrator) simulateOperationChange(operation *RefactoringOperation, 
 // generateDryRunSummary creates a human-readable summary of what would change
 func (o *Orchestrator) generateDryRunSummary(result *DryRunResult) string {
 	var summary strings.Builder
-	summary.WriteString(fmt.Sprintf("Dry-run of plan: %s\n", result.Plan.Name))
-	summary.WriteString(fmt.Sprintf("Operations: %d\n", len(result.Operations)))
+	fmt.Fprintf(&summary, "Dry-run of plan: %s\n", result.Plan.Name)
+	fmt.Fprintf(&summary, "Operations: %d\n", len(result.Operations))
 
 	successCount := 0
 	failureCount := 0
@@ -118,9 +118,9 @@ func (o *Orchestrator) generateDryRunSummary(result *DryRunResult) string {
 		}
 	}
 
-	summary.WriteString(fmt.Sprintf("Would succeed: %d\n", successCount))
-	summary.WriteString(fmt.Sprintf("Would fail: %d\n", failureCount))
-	summary.WriteString(fmt.Sprintf("Files affected: %d\n", len(filesAffected)))
+	fmt.Fprintf(&summary, "Would succeed: %d\n", successCount)
+	fmt.Fprintf(&summary, "Would fail: %d\n", failureCount)
+	fmt.Fprintf(&summary, "Files affected: %d\n", len(filesAffected))
 
 	return summary.String()
 }
@@ -128,8 +128,8 @@ func (o *Orchestrator) generateDryRunSummary(result *DryRunResult) string {
 // FormatDryRunDiff returns a colorized diff representation
 func FormatDryRunDiff(diff *FileDiff) string {
 	var output strings.Builder
-	output.WriteString(fmt.Sprintf("\n--- %s\n", diff.File))
-	output.WriteString(fmt.Sprintf("+++ %s\n", diff.File))
+	fmt.Fprintf(&output, "\n--- %s\n", diff.File)
+	fmt.Fprintf(&output, "+++ %s\n", diff.File)
 
 	oldLines := strings.Split(diff.OldCode, "\n")
 	newLines := strings.Split(diff.NewCode, "\n")
@@ -153,13 +153,13 @@ func FormatDryRunDiff(diff *FileDiff) string {
 
 		if oldLine != newLine {
 			if oldLine != "" {
-				output.WriteString(fmt.Sprintf("- %s\n", oldLine))
+				fmt.Fprintf(&output, "- %s\n", oldLine)
 			}
 			if newLine != "" {
-				output.WriteString(fmt.Sprintf("+ %s\n", newLine))
+				fmt.Fprintf(&output, "+ %s\n", newLine)
 			}
 		} else {
-			output.WriteString(fmt.Sprintf("  %s\n", oldLine))
+			fmt.Fprintf(&output, "  %s\n", oldLine)
 		}
 	}
 
@@ -189,7 +189,7 @@ func SaveDryRunReport(result *DryRunResult, outputPath string) error {
 
 	for _, op := range result.Operations {
 		if !op.Success {
-			report.WriteString(fmt.Sprintf("\n[FAILED] %s: %s\n", op.Operation.Type, op.Error))
+			fmt.Fprintf(&report, "\n[FAILED] %s: %s\n", op.Operation.Type, op.Error)
 			continue
 		}
 		for _, diff := range op.Changes {

@@ -160,10 +160,10 @@ func (tr *TestRunner) CanTestAll() bool {
 func (r *TestResult) Summary() string {
 	var sb strings.Builder
 	sb.WriteString("=== Test Results ===\n")
-	sb.WriteString(fmt.Sprintf("Status: %v\n", map[bool]string{true: "PASSED", false: "FAILED"}[r.Success]))
-	sb.WriteString(fmt.Sprintf("Exit Code: %d\n", r.ExitCode))
-	sb.WriteString(fmt.Sprintf("Tests Passed: %d\n", r.TestsPassed))
-	sb.WriteString(fmt.Sprintf("Tests Failed: %d\n", r.TestsFailed))
+	fmt.Fprintf(&sb, "Status: %v\n", map[bool]string{true: "PASSED", false: "FAILED"}[r.Success])
+	fmt.Fprintf(&sb, "Exit Code: %d\n", r.ExitCode)
+	fmt.Fprintf(&sb, "Tests Passed: %d\n", r.TestsPassed)
+	fmt.Fprintf(&sb, "Tests Failed: %d\n", r.TestsFailed)
 
 	if len(r.PackageTests) > 0 {
 		sb.WriteString("\nPackage Results:\n")
@@ -172,7 +172,7 @@ func (r *TestResult) Summary() string {
 			if !result.Passed {
 				status = "✗"
 			}
-			sb.WriteString(fmt.Sprintf("  %s %s\n", status, pkg))
+			fmt.Fprintf(&sb, "  %s %s\n", status, pkg)
 		}
 	}
 

@@ -23,7 +23,7 @@ func inspectCommand(args []string) error {
 	for i := 1; i < len(args); i++ {
 		if args[i] == "--max" && i+1 < len(args) {
 			var n int
-			fmt.Sscanf(args[i+1], "%d", &n)
+			_, _ = fmt.Sscanf(args[i+1], "%d", &n)
 			if n > 0 {
 				maxSize = n
 			}

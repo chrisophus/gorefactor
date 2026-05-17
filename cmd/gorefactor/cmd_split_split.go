@@ -20,7 +20,7 @@ func splitCommand(args []string) error {
 		case "--max":
 			if i+1 < len(args) {
 				var n int
-				fmt.Sscanf(args[i+1], "%d", &n)
+				_, _ = fmt.Sscanf(args[i+1], "%d", &n)
 				if n > 0 {
 					maxSize = n
 				}
@@ -102,7 +102,9 @@ func splitCommand(args []string) error {
 		}
 		plan.Operations = append(plan.Operations, op)
 	}
-	orch.RegisterPlan(plan)
+	if err := orch.RegisterPlan(plan); err != nil {
+		return err
+	}
 	result, err := orch.ExecutePlan(plan.Name)
 	if err != nil {
 		return err

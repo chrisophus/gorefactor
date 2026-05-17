@@ -157,24 +157,24 @@ func isDefinition(ident *ast.Ident) bool {
 // SafetyReport generates a human-readable safety report
 func (v *RenameValidation) SafetyReport(oldName, newName string) string {
 	var report strings.Builder
-	report.WriteString(fmt.Sprintf("Rename validation for: %s -> %s\n", oldName, newName))
-	report.WriteString(fmt.Sprintf("Status: %v\n", v.SafeToRename))
-	report.WriteString(fmt.Sprintf("Exported: %v\n", v.IsExported))
+	fmt.Fprintf(&report, "Rename validation for: %s -> %s\n", oldName, newName)
+	fmt.Fprintf(&report, "Status: %v\n", v.SafeToRename)
+	fmt.Fprintf(&report, "Exported: %v\n", v.IsExported)
 
 	if v.TargetFile != "" {
-		report.WriteString(fmt.Sprintf("Location: %s:%d\n", filepath.Base(v.TargetFile), v.TargetLine))
+		fmt.Fprintf(&report, "Location: %s:%d\n", filepath.Base(v.TargetFile), v.TargetLine)
 	}
 
-	report.WriteString(fmt.Sprintf("References: %d internal, %d test\n", v.InternalReferences, v.TestReferences))
+	fmt.Fprintf(&report, "References: %d internal, %d test\n", v.InternalReferences, v.TestReferences)
 
 	if len(v.ReferringSymbols) > 0 {
-		report.WriteString(fmt.Sprintf("Referenced by: %v\n", v.ReferringSymbols))
+		fmt.Fprintf(&report, "Referenced by: %v\n", v.ReferringSymbols)
 	}
 
 	if len(v.Warnings) > 0 {
 		report.WriteString("Warnings:\n")
 		for _, w := range v.Warnings {
-			report.WriteString(fmt.Sprintf("  - %s\n", w))
+			fmt.Fprintf(&report, "  - %s\n", w)
 		}
 	}
 

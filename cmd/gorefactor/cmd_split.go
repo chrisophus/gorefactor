@@ -182,7 +182,7 @@ func fileLineCount(filePath string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	n := 0
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {

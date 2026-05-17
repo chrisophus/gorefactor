@@ -225,18 +225,18 @@ func (pg *PackageGraph) AllPackages() []*PackageInfo {
 func (pg *PackageGraph) Summary() string {
 	var result strings.Builder
 	result.WriteString("=== Dependency Graph Summary ===\n")
-	result.WriteString(fmt.Sprintf("Total packages: %d\n", len(pg.packages)))
+	fmt.Fprintf(&result, "Total packages: %d\n", len(pg.packages))
 
 	totalImports := 0
 	for _, edges := range pg.edges {
 		totalImports += len(edges)
 	}
-	result.WriteString(fmt.Sprintf("Total import edges: %d\n", totalImports))
+	fmt.Fprintf(&result, "Total import edges: %d\n", totalImports)
 
 	// Check for cycles
 	cycles := pg.HasCircularDependencies()
 	if len(cycles) > 0 {
-		result.WriteString(fmt.Sprintf("Circular dependencies detected: %d\n", len(cycles)))
+		fmt.Fprintf(&result, "Circular dependencies detected: %d\n", len(cycles))
 	} else {
 		result.WriteString("No circular dependencies\n")
 	}
@@ -249,14 +249,14 @@ func (pg *PackageGraph) PrintGraph() string {
 	var result strings.Builder
 
 	for _, pkg := range pg.AllPackages() {
-		result.WriteString(fmt.Sprintf("\n%s (%s)\n", pkg.Name, pkg.Path))
-		result.WriteString(fmt.Sprintf("  Dir: %s\n", pkg.Dir))
-		result.WriteString(fmt.Sprintf("  Functions: %d, Types: %d, Files: %d\n", pkg.Functions, pkg.Types, pkg.Files))
+		fmt.Fprintf(&result, "\n%s (%s)\n", pkg.Name, pkg.Path)
+		fmt.Fprintf(&result, "  Dir: %s\n", pkg.Dir)
+		fmt.Fprintf(&result, "  Functions: %d, Types: %d, Files: %d\n", pkg.Functions, pkg.Types, pkg.Files)
 
 		if len(pkg.Imports) > 0 {
 			result.WriteString("  Imports:\n")
 			for _, imp := range pkg.Imports {
-				result.WriteString(fmt.Sprintf("    - %s\n", imp))
+				fmt.Fprintf(&result, "    - %s\n", imp)
 			}
 		}
 	}

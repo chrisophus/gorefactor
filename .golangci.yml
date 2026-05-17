@@ -1,12 +1,11 @@
 version: "2"
 
-# Match go.mod. Pre-built golangci-lint binaries are currently compiled
-# with Go 1.25; declaring a newer target in go.mod makes them bail out
-# during type-checking. The project doesn't use any 1.26-only features,
-# so 1.25 is the right declared target until a Go-1.26-compatible
-# golangci-lint binary ships.
+# Must be <= the Go version the golangci-lint binary was built with,
+# or it bails out during type-checking. The pinned linter (v2.12.2,
+# see Makefile / CI) ships a pre-built binary compiled with Go 1.26,
+# so 1.26 is a valid target. Keep this in sync with go.mod.
 run:
-  go: "1.25"
+  go: "1.26"
 
 linters:
   enable:
@@ -45,7 +44,7 @@ linters:
       # subcommand dispatch and aren't core logic; exempt them from
       # complexity, length, and unchecked-error noise.
       - linters: [cyclop, funlen, errcheck, gocritic, gosec]
-        path: ^cmd_.*\.go$
+        path: cmd/gorefactor/cmd_.*\.go$
       # Stylistic gocritic rules — preference, not correctness. Pre-existing
       # patterns; lint warnings here aren't worth churning the code.
       - linters: [gocritic]
@@ -55,7 +54,7 @@ linters:
       - linters: [cyclop, errcheck]
         path: analyzer/file_size_analyzer\.go$
       - linters: [funlen]
-        path: ^main\.go$
+        path: cmd/gorefactor/main\.go$
       # Empty if-err branches in older tests are intentional ("operation
       # may fail; we only care that it ran"). Documented at the call site.
       - linters: [staticcheck]

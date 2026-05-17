@@ -14,8 +14,15 @@ func orchestrateRefactoring(args []string) error {
 
 	planFile := args[0]
 	outputFile := ""
-	if len(args) > 1 {
-		outputFile = args[1]
+	dryRun := false
+
+	// Parse arguments
+	for i := 1; i < len(args); i++ {
+		if args[i] == "--dry-run" {
+			dryRun = true
+		} else if outputFile == "" {
+			outputFile = args[i]
+		}
 	}
 
 	// Create orchestrator
@@ -30,6 +37,39 @@ func orchestrateRefactoring(args []string) error {
 	fmt.Printf("Loaded plan: %s\n", plan.Name)
 	fmt.Printf("Description: %s\n", plan.Description)
 	fmt.Printf("Operations: %d\n", len(plan.Operations))
+
+	if dryRun {
+		fmt.Printf("\n[DRY-RUN MODE] No files will be modified\n")
+		dryRunResult, err := orch.ExecutePlanDryRun(plan.Name)
+		if err != nil {
+			return fmt.Errorf("failed to execute dry-run: %w", err)
+		}
+
+		fmt.Println(dryRunResult.Summary)
+
+		for i, op := range dryRunResult.Operations {
+			fmt.Printf("\nOperation %d: %s\n", i+1, op.Operation.Type)
+			if op.Success {
+				fmt.Printf("  Status: SUCCESS\n")
+				fmt.Printf("  Changes: %d file(s)\n", len(op.Changes))
+				for _, change := range op.Changes {
+					fmt.Printf("    - %s\n", change.File)
+				}
+			} else {
+				fmt.Printf("  Status: FAILED\n")
+				fmt.Printf("  Error: %s\n", op.Error)
+			}
+		}
+
+		if outputFile != "" {
+			if err := orchestrator.SaveDryRunReport(dryRunResult, outputFile); err != nil {
+				return fmt.Errorf("failed to save dry-run report: %w", err)
+			}
+			fmt.Printf("\nDry-run report saved to: %s\n", outputFile)
+		}
+
+		return nil
+	}
 
 	// Execute the plan
 	result, err := orch.ExecutePlan(plan.Name)

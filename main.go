@@ -122,6 +122,11 @@ func getCommands() map[string]Command {
 			Description: "Find all types that implement an interface [--in path] [--json]",
 			Run:         findImplementationsCommand,
 		},
+		"find-package-deps": {
+			Name:        "find-package-deps",
+			Description: "Analyze package dependencies and detect circular imports [--json]",
+			Run:         findPackageDepsCommand,
+		},
 		"inspect": {
 			Name:        "inspect",
 			Description: "One-page summary of a Go file: decls, sizes, lint issues, extraction candidates",
@@ -136,6 +141,16 @@ func getCommands() map[string]Command {
 			Name:        "extract",
 			Description: "Extract a code block into a new function. Args: <file> <startLine> <endLine> <methodName>",
 			Run:         extractCommand,
+		},
+		"suggest-plan": {
+			Name:        "suggest-plan",
+			Description: "Suggest refactoring opportunities for a file [--output plan.json] [--json] [--patterns]",
+			Run:         suggestPlanCommand,
+		},
+		"repl": {
+			Name:        "repl",
+			Description: "Interactive REPL mode for step-by-step refactoring",
+			Run:         replCommand,
 		},
 	}
 }

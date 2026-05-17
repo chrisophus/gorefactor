@@ -48,3 +48,5 @@ go.work
 # Temporary files
 *.tmp
 *.temp 
+# gorefactor-agent build artifact
+/gorefactor-agent

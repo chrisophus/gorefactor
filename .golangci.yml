@@ -45,6 +45,12 @@ linters:
       # complexity, length, and unchecked-error noise.
       - linters: [cyclop, funlen, errcheck, gocritic, gosec]
         path: cmd/gorefactor/cmd_.*\.go$
+      # The second-tier agent driver (gorefactor-agent) is the same
+      # category: a harness of dispatch loops, flag parsing, provider
+      # plumbing and stdout reporting, not core algorithmic logic. Same
+      # rationale and exemption as the CLI command files above.
+      - linters: [cyclop, funlen, errcheck, gocritic, gosec]
+        path: cmd/gorefactor-agent/.*\.go$
       # Stylistic gocritic rules — preference, not correctness. Pre-existing
       # patterns; lint warnings here aren't worth churning the code.
       - linters: [gocritic]

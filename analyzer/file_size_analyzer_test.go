@@ -173,28 +173,28 @@ func TestCountLines_EmptyFile(t *testing.T) {
 
 func TestCalculateFunctionComplexity(t *testing.T) {
 	testCases := []struct {
-		name       string
-		code       string
+		name        string
+		code        string
 		expectedMin int // Minimum expected complexity
 	}{
 		{
-			name:       "Simple function",
-			code:       "func f() { x := 1 }",
+			name:        "Simple function",
+			code:        "func f() { x := 1 }",
 			expectedMin: 1,
 		},
 		{
-			name:       "Function with if",
-			code:       "func f() { if true { x := 1 } }",
+			name:        "Function with if",
+			code:        "func f() { if true { x := 1 } }",
 			expectedMin: 2,
 		},
 		{
-			name:       "Function with for loop",
-			code:       "func f() { for i := 0; i < 10; i++ { } }",
+			name:        "Function with for loop",
+			code:        "func f() { for i := 0; i < 10; i++ { } }",
 			expectedMin: 2,
 		},
 		{
-			name:       "Function with switch",
-			code:       "func f() { switch x { case 1: } }",
+			name:        "Function with switch",
+			code:        "func f() { switch x { case 1: } }",
 			expectedMin: 3, // switch gets higher penalty
 		},
 	}
@@ -220,8 +220,8 @@ func TestCalculateFunctionComplexity(t *testing.T) {
 
 func TestCalculateExtractionPriority(t *testing.T) {
 	testCases := []struct {
-		lineCount  int
-		complexity int
+		lineCount   int
+		complexity  int
 		minExpected int // We check minimum, as exact values depend on formula
 	}{
 		{20, 1, 2},   // Small, simple

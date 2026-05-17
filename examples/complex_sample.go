@@ -123,3 +123,4 @@ func loadCustomer(id string) (Customer, error) {
 func saveOrder(order OrderResult) error {
 	return nil
 }
+func main() {}

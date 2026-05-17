@@ -127,6 +127,11 @@ func getCommands() map[string]Command {
 			Description: "One-page summary of a Go file: decls, sizes, lint issues, extraction candidates",
 			Run:         inspectCommand,
 		},
+		"doctor": {
+			Name:        "doctor",
+			Description: "Aggregate health gate: lint + build + test. Exits non-zero on failure. [--json]",
+			Run:         doctorCommand,
+		},
 	}
 }
 

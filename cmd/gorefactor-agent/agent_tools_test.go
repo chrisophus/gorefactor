@@ -58,6 +58,33 @@ func asstCall(name, argsJSON string) chatMessage {
 	return chatMessage{Role: "assistant", ToolCalls: []toolCall{c}}
 }
 
+func TestCompactMessages(t *testing.T) {
+	msgs := []chatMessage{{Role: "system"}, {Role: "user", Content: "task"}}
+	for i := 0; i < 20; i++ { // 20 (assistant,tool) pairs
+		msgs = append(msgs,
+			chatMessage{Role: "assistant", ToolCalls: []toolCall{{ID: "x"}}},
+			chatMessage{Role: "tool", ToolCallID: "x"})
+	}
+	got := compactMessages(msgs, 12)
+	if len(got) >= len(msgs) {
+		t.Fatalf("not compacted: %d -> %d", len(msgs), len(got))
+	}
+	if got[0].Role != "system" || got[1].Content != "task" {
+		t.Fatalf("system+task not preserved: %+v", got[:2])
+	}
+	if !strings.Contains(got[2].Content, "elided") {
+		t.Fatalf("missing elision marker: %+v", got[2])
+	}
+	if got[3].Role != "assistant" {
+		t.Fatalf("recent window must start on an assistant turn, got %q", got[3].Role)
+	}
+	// small histories pass through untouched
+	small := msgs[:6]
+	if len(compactMessages(small, 12)) != len(small) {
+		t.Fatalf("small history should be untouched")
+	}
+}
+
 func TestAgentic_AppliesAndGates(t *testing.T) {
 	dir := newSampleRepo(t)
 

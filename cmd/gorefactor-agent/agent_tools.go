@@ -68,7 +68,7 @@ func RunAgenticDriver(ctx context.Context, tc toolChatter, cfg Config) error {
 	gateFails, noTool := 0, 0
 	for step := 1; step <= cfg.MaxIter; step++ {
 		fmt.Fprintf(cfg.Out, "\n── step %d/%d ──\n", step, cfg.MaxIter)
-		asst, err := tc.ChatTools(ctx, messages, tools)
+		asst, err := tc.ChatTools(ctx, compactMessages(messages, 12), tools)
 		if err != nil {
 			return fmt.Errorf("provider call failed: %w", err)
 		}
@@ -122,6 +122,29 @@ type traceEntry struct {
 	Tool   string `json:"tool"`
 	Args   string `json:"args,omitempty"`
 	Result string `json:"result,omitempty"`
+}
+
+// compactMessages bounds what we send the model so a long tool history
+// never blows the (small, often 4096-token) context window. It keeps
+// the system prompt + original task, elides the middle with a one-line
+// marker, and keeps a recent window that starts on an assistant turn
+// (so a tool message is never sent without its triggering tool call).
+func compactMessages(msgs []chatMessage, keep int) []chatMessage {
+	if len(msgs) <= keep+2 {
+		return msgs
+	}
+	start := len(msgs) - keep
+	for start > 2 && msgs[start].Role != "assistant" {
+		start--
+	}
+	if start <= 2 {
+		return msgs
+	}
+	out := make([]chatMessage, 0, 3+len(msgs)-start)
+	out = append(out, msgs[0], msgs[1])
+	out = append(out, chatMessage{Role: "user", Content: fmt.Sprintf(
+		"(… %d earlier steps elided to fit context; continue from the latest results …)", start-2)})
+	return append(out, msgs[start:]...)
 }
 
 func addTrace(t []traceEntry, e traceEntry) []traceEntry {
@@ -342,15 +365,17 @@ func senseReadExcerpt(file string, a map[string]any) string {
 		return def
 	}
 	start := num("start_line", 1)
-	end := num("end_line", start+80)
+	end := num("end_line", start+60)
 	if start < 1 {
 		start = 1
 	}
 	if end > len(lines) {
 		end = len(lines)
 	}
-	if end-start > 120 {
-		end = start + 120
+	// Tight window: small context budget (~4096 tok). A bigger view
+	// should be taken as successive bounded reads, not one dump.
+	if end-start > 80 {
+		end = start + 80
 	}
 	if start > end {
 		return "ERROR: start_line > end_line"
@@ -359,7 +384,7 @@ func senseReadExcerpt(file string, a map[string]any) string {
 	for i := start; i <= end; i++ {
 		fmt.Fprintf(&b, "%d: %s\n", i, lines[i-1])
 	}
-	return trim(b.String(), 6000)
+	return trim(b.String(), 2800)
 }
 
 func senseFileSize(file string) string {

@@ -47,6 +47,33 @@ type openAIProvider struct {
 	apiKey  string
 	model   string
 	client  *http.Client
+
+	// cumulative local-model token usage (free, but the proxy for
+	// frontier tokens the junior avoided spending).
+	promptToks, completionToks int
+}
+
+// tokenStater exposes cumulative model token usage for metrics.
+type tokenStater interface {
+	Tokens() (prompt, completion int)
+}
+
+func (p *openAIProvider) Tokens() (int, int) { return p.promptToks, p.completionToks }
+
+// usageEnvelope is the OpenAI/Ollama `usage` block (best-effort).
+type usageEnvelope struct {
+	Usage struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+	} `json:"usage"`
+}
+
+func (p *openAIProvider) addUsage(body []byte) {
+	var u usageEnvelope
+	if json.Unmarshal(body, &u) == nil {
+		p.promptToks += u.Usage.PromptTokens
+		p.completionToks += u.Usage.CompletionTokens
+	}
 }
 
 func newOpenAIProvider(baseURL, apiKey, model string) *openAIProvider {
@@ -122,6 +149,7 @@ func (p *openAIProvider) complete(ctx context.Context, system, user, schema stri
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("provider HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
+	p.addUsage(body)
 
 	var parsed struct {
 		Choices []struct {
@@ -215,6 +243,7 @@ func (p *openAIProvider) ChatTools(ctx context.Context, messages []chatMessage, 
 	if resp.StatusCode != http.StatusOK {
 		return chatMessage{}, fmt.Errorf("provider HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
+	p.addUsage(body)
 
 	var parsed struct {
 		Choices []struct {

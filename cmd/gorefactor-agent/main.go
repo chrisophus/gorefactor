@@ -30,6 +30,7 @@ func main() {
 		showVersion = flag.Bool("version", false, "print version and exit")
 		noSchema    = flag.Bool("no-schema", false, "single-shot only: disable decode-time JSON-schema enforcement")
 		singleShot  = flag.Bool("single-shot", false, "use the legacy single-shot constrained-plan path instead of the default agentic gorefactor-tools loop")
+		campaign    = flag.Bool("campaign", false, "sensor-driven autonomous mode: gorefactor findings -> agentic fixes -> commit-or-punt (no -spec needed)")
 	)
 	flag.Parse()
 
@@ -43,8 +44,8 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(2)
 	}
-	if spec == "" {
-		fmt.Fprintln(os.Stderr, "Error: -spec is required (text or @file)")
+	if spec == "" && !*campaign {
+		fmt.Fprintln(os.Stderr, "Error: -spec is required (text or @file), or use -campaign")
 		flag.Usage()
 		os.Exit(2)
 	}
@@ -82,9 +83,17 @@ func main() {
 	provider := providerFromFlags(*providerK, *apiBase, *model)
 
 	var runErr error
-	if *singleShot {
+	switch {
+	case *campaign:
+		tc, ok := provider.(toolChatter)
+		if !ok {
+			fmt.Fprintln(os.Stderr, "Error: -campaign needs a tool-calling provider (use -provider openai)")
+			os.Exit(2)
+		}
+		runErr = RunCampaign(context.Background(), tc, cfg)
+	case *singleShot:
 		runErr = RunDriver(context.Background(), provider, cfg)
-	} else {
+	default:
 		tc, ok := provider.(toolChatter)
 		if !ok {
 			fmt.Fprintln(os.Stderr,

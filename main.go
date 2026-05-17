@@ -147,6 +147,11 @@ func getCommands() map[string]Command {
 			Description: "Suggest refactoring opportunities for a file [--output plan.json] [--json] [--patterns]",
 			Run:         suggestPlanCommand,
 		},
+		"repl": {
+			Name:        "repl",
+			Description: "Interactive REPL mode for step-by-step refactoring",
+			Run:         replCommand,
+		},
 	}
 }
 

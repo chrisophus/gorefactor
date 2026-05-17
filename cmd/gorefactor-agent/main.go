@@ -23,6 +23,7 @@ func main() {
 		maxIter    = flag.Int("max-iter", 3, "maximum attempts before giving up")
 		dryRun      = flag.Bool("dry-run", false, "preview the plan and diff; never apply")
 		allowDirty  = flag.Bool("allow-dirty", false, "skip the clean-git-worktree precondition")
+		verbose     = flag.Bool("verbose", false, "echo the raw model response each iteration")
 		printPrompt = flag.Bool("print-prompt", false, "print the assembled model prompt for the spec and exit (no model call)")
 	)
 	flag.Parse()
@@ -44,6 +45,7 @@ func main() {
 		MaxIter:    *maxIter,
 		DryRun:     *dryRun,
 		AllowDirty: *allowDirty,
+		Verbose:    *verbose,
 		Out:        os.Stdout,
 	}
 

@@ -20,6 +20,7 @@ type Config struct {
 	MaxIter    int       // attempt cap
 	DryRun     bool      // preview only; never apply
 	AllowDirty bool      // skip the clean-worktree precondition
+	Verbose    bool      // echo the raw model response each iteration
 	Out        io.Writer // progress sink
 }
 
@@ -61,11 +62,16 @@ func RunDriver(ctx context.Context, p Provider, cfg Config) error {
 		if err != nil {
 			return fmt.Errorf("provider call failed: %w", err)
 		}
+		if cfg.Verbose {
+			fmt.Fprintf(cfg.Out, "  ┌ raw model response ──\n%s\n  └──\n", indent(trim(raw, 4000)))
+		}
 
 		js, err := extractPlanJSON(raw)
 		if err != nil {
+			// Echo what the model actually returned -- without it the
+			// first live runs of a cheap model are undebuggable.
 			feedback = fmt.Sprintf("output was not valid JSON: %v", err)
-			fmt.Fprintf(cfg.Out, "  ✗ %s\n", feedback)
+			fmt.Fprintf(cfg.Out, "  ✗ %s\n  raw: %s\n", feedback, trim(raw, 600))
 			continue
 		}
 

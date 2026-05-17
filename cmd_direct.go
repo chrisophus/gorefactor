@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"gorefactor/analyzer"
 	"gorefactor/orchestrator"
 )
 
@@ -151,11 +152,44 @@ func deleteCommand(args []string) error {
 
 func renameCommand(args []string) error {
 	if len(args) < 3 {
-		return fmt.Errorf("usage: rename <file> <oldname> <newname> (unexported symbols only; use gopls for exported)")
+		return fmt.Errorf("usage: rename <file> <oldname> <newname> [--strict]")
 	}
 	file := args[0]
 	oldName := args[1]
 	newName := args[2]
+	strict := false
+
+	for i := 3; i < len(args); i++ {
+		if args[i] == "--strict" {
+			strict = true
+		}
+	}
+
+	// Validate rename if --strict flag is set
+	if strict {
+		pkgDir := filepath.Dir(file)
+		validator, err := analyzer.NewExportedRenameValidator(pkgDir)
+		if err != nil {
+			return fmt.Errorf("failed to initialize validator: %w", err)
+		}
+
+		validation, err := validator.ValidateRename(oldName, newName)
+		if err != nil {
+			return fmt.Errorf("validation failed: %w", err)
+		}
+
+		// Print validation report
+		fmt.Println(validation.SafetyReport(oldName, newName))
+
+		if !validation.SafeToRename {
+			return fmt.Errorf("rename is not safe; review warnings above")
+		}
+
+		if validation.IsExported && len(validation.Warnings) > 0 {
+			fmt.Println("WARNING: Symbol is exported; this rename may break external packages")
+		}
+	}
+
 	plan := &orchestrator.RefactoringPlan{
 		Version: "1.0",
 		Name:    "rename",

@@ -27,6 +27,7 @@ func main() {
 		printPrompt = flag.Bool("print-prompt", false, "print the assembled model prompt for the spec and exit (no model call)")
 		showVersion = flag.Bool("version", false, "print version and exit")
 		noSchema    = flag.Bool("no-schema", false, "disable decode-time JSON-schema enforcement (A/B)")
+		agentic     = flag.Bool("agentic", false, "Arm D: agentic gorefactor-tools loop with punt (instead of single-shot plan)")
 	)
 	flag.Parse()
 
@@ -67,8 +68,19 @@ func main() {
 
 	provider := providerFromFlags(*providerK, *apiBase, *model)
 
-	if err := RunDriver(context.Background(), provider, cfg); err != nil {
-		fmt.Fprintln(os.Stderr, "\nError:", err)
+	var runErr error
+	if *agentic {
+		tc, ok := provider.(toolChatter)
+		if !ok {
+			fmt.Fprintln(os.Stderr, "Error: -agentic requires a tool-calling provider (use -provider openai)")
+			os.Exit(2)
+		}
+		runErr = RunAgenticDriver(context.Background(), tc, cfg)
+	} else {
+		runErr = RunDriver(context.Background(), provider, cfg)
+	}
+	if runErr != nil {
+		fmt.Fprintln(os.Stderr, "\nError:", runErr)
 		os.Exit(1)
 	}
 }

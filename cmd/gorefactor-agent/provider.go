@@ -139,6 +139,97 @@ func (p *openAIProvider) complete(ctx context.Context, system, user, schema stri
 	return parsed.Choices[0].Message.Content, nil
 }
 
+// --- Tool-calling surface (Arm D) -----------------------------------
+//
+// The agentic loop needs multi-turn function calling, not single-shot
+// completion. These types mirror the OpenAI /chat/completions tool
+// protocol, which Ollama (qwen2.5-coder) honors.
+
+type chatMessage struct {
+	Role       string     `json:"role"`
+	Content    string     `json:"content,omitempty"`
+	ToolCalls  []toolCall `json:"tool_calls,omitempty"`
+	ToolCallID string     `json:"tool_call_id,omitempty"`
+}
+
+type toolCall struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
+}
+
+type toolDef struct {
+	Type     string          `json:"type"`
+	Function toolDefFunction `json:"function"`
+}
+
+type toolDefFunction struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Parameters  map[string]any `json:"parameters"`
+}
+
+// toolChatter is the agentic provider surface: one round trip given the
+// conversation so far + the tool catalog, returning the assistant turn
+// (content and/or tool calls). The loop owns iteration & tool exec.
+type toolChatter interface {
+	ChatTools(ctx context.Context, messages []chatMessage, tools []toolDef) (chatMessage, error)
+}
+
+// ChatTools implements toolChatter for any OpenAI-compatible endpoint.
+func (p *openAIProvider) ChatTools(ctx context.Context, messages []chatMessage, tools []toolDef) (chatMessage, error) {
+	reqBody := map[string]any{
+		"model":       p.model,
+		"messages":    messages,
+		"temperature": 0,
+	}
+	if len(tools) > 0 {
+		reqBody["tools"] = tools
+		reqBody["tool_choice"] = "auto"
+	}
+	buf, err := json.Marshal(reqBody)
+	if err != nil {
+		return chatMessage{}, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		p.baseURL+"/chat/completions", bytes.NewReader(buf))
+	if err != nil {
+		return chatMessage{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if p.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+p.apiKey)
+	}
+
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return chatMessage{}, err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return chatMessage{}, fmt.Errorf("provider HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var parsed struct {
+		Choices []struct {
+			Message chatMessage `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return chatMessage{}, fmt.Errorf("decode tool response: %w", err)
+	}
+	if len(parsed.Choices) == 0 {
+		return chatMessage{}, fmt.Errorf("provider returned no choices")
+	}
+	return parsed.Choices[0].Message, nil
+}
+
 // providerFromFlags builds the real provider from CLI/env config.
 // kind selects the wire protocol: "anthropic" for the native Messages
 // API (cheap Claude models), anything else for OpenAI-compatible.

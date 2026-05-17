@@ -65,8 +65,8 @@ func (ps *PlanSuggester) SuggestExtractions() []SuggestedPlan {
 		if fn, ok := decl.(*ast.FuncDecl); ok {
 			complexity := ps.analyzeComplexity(fn)
 
-			// Recommend extraction if complexity is moderate-to-high (5-15)
-			if complexity >= 5 && complexity <= 15 {
+			// Recommend extraction if complexity is high (10+)
+			if complexity >= 10 {
 				plan := SuggestedPlan{
 					Name:        fmt.Sprintf("Extract from %s", fn.Name.Name),
 					Description: fmt.Sprintf("Function %s has complexity %d; consider extracting helper methods", fn.Name.Name, complexity),

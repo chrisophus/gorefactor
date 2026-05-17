@@ -74,6 +74,11 @@ func RunDriver(ctx context.Context, p Provider, cfg Config) error {
 			fmt.Fprintf(cfg.Out, "  ✗ %s\n  raw: %s\n", feedback, trim(raw, 600))
 			continue
 		}
+		if js, err = normalizeToPlanJSON(js); err != nil {
+			feedback = fmt.Sprintf("could not normalize JSON to a plan: %v", err)
+			fmt.Fprintf(cfg.Out, "  ✗ %s\n  raw: %s\n", feedback, trim(raw, 600))
+			continue
+		}
 
 		var plan orchestrator.RefactoringPlan
 		if err := json.Unmarshal([]byte(js), &plan); err != nil {

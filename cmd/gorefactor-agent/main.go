@@ -15,12 +15,12 @@ import (
 
 func main() {
 	var (
-		specFlag   = flag.String("spec", "", "refactoring spec text, or @path to read from a file")
-		dir        = flag.String("dir", ".", "target Go module directory")
-		providerK  = flag.String("provider", "openai", "model provider: openai (OpenAI-compatible) or anthropic")
-		model      = flag.String("model", "gpt-4o-mini", "model name (cheap/local is the point)")
-		apiBase    = flag.String("api-base", "", "provider base URL (default per provider; set for local/proxy)")
-		maxIter    = flag.Int("max-iter", 3, "maximum attempts before giving up")
+		specFlag    = flag.String("spec", "", "refactoring spec text, or @path to read from a file")
+		dir         = flag.String("dir", ".", "target Go module directory")
+		providerK   = flag.String("provider", "openai", "model provider: openai (OpenAI-compatible) or anthropic")
+		model       = flag.String("model", "gpt-4o-mini", "model name (cheap/local is the point)")
+		apiBase     = flag.String("api-base", "", "provider base URL (default per provider; set for local/proxy)")
+		maxIter     = flag.Int("max-iter", 3, "maximum attempts before giving up")
 		dryRun      = flag.Bool("dry-run", false, "preview the plan and diff; never apply")
 		allowDirty  = flag.Bool("allow-dirty", false, "skip the clean-git-worktree precondition")
 		verbose     = flag.Bool("verbose", false, "echo the raw model response each iteration")

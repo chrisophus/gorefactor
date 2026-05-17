@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -44,21 +45,22 @@ HARD RULES:
 6. The plan needs "version", "name" (kebab-case), "description", and a
    non-empty "operations" array.
 
-SCHEMA (only the fields you need):
+SHAPE you MUST emit (this is a STRUCTURE illustration -- the strings
+below are PLACEHOLDERS, never copy them; fill every field from the
+ACTUAL task you are given):
 {
   "version": "1.0",
-  "name": "string-kebab-case",
-  "description": "what this plan does",
+  "name": "<kebab-case-name-for-this-task>",
+  "description": "<what this specific plan does>",
   "operations": [
-    {
-      "type": "rename_declaration",
-      "description": "rename symbol",
-      "file": "relative/path.go",
-      "target": { "functionName": "OldName" },
-      "parameters": { "newName": "NewName" }
-    }
+    { "type": "<one allowed type>", "description": "<...>",
+      "file": "<real/path/in/this/repo.go>",
+      "target": { "<selector>": "<real symbol>" },
+      "parameters": { "<...>": "<...>" } }
   ]
 }
+ALWAYS emit this full object with an "operations" ARRAY -- never a
+bare operation object, never a top-level array.
 
 PARAMETERS BY TYPE:
 - rename_declaration: target={functionName|methodName|typeName|constName|varName}; parameters.newName
@@ -281,9 +283,10 @@ func relevantSource(spec, dir string, totalBudget, perFileCap int) string {
 // feedback sensor closing the loop).
 func buildUserPrompt(spec, dir, feedback string) string {
 	var b strings.Builder
-	b.WriteString("REFACTORING SPEC (already disambiguated):\n")
-	b.WriteString(strings.TrimSpace(spec))
-	b.WriteString("\n\nCODE MAP (target these symbols semantically):\n")
+	// Context first, instruction last: small models attend most to the
+	// end of the prompt, so the actual task and the output directive go
+	// last where they can't be drowned by the code map.
+	b.WriteString("CODE MAP (target these symbols semantically):\n")
 	b.WriteString(codeMap(dir))
 	b.WriteString("\n\nRELEVANT SOURCE (the most spec-relevant files):\n")
 	b.WriteString(relevantSource(spec, dir, 16000, 8000))
@@ -291,7 +294,14 @@ func buildUserPrompt(spec, dir, feedback string) string {
 		b.WriteString("\n\nYOUR PREVIOUS ATTEMPT FAILED. Fix it. Failure detail:\n")
 		b.WriteString(strings.TrimSpace(feedback))
 	}
-	b.WriteString("\n\nEmit the corrected RefactoringPlan JSON now.")
+	b.WriteString("\n\n════════ THE TASK ════════\n")
+	b.WriteString("Do EXACTLY this, and nothing else:\n\n")
+	b.WriteString(strings.TrimSpace(spec))
+	b.WriteString("\n\nOutput ONE JSON object: a RefactoringPlan with " +
+		"\"version\", \"name\", \"description\", and an \"operations\" " +
+		"ARRAY containing the operation(s) for THIS task. Do NOT copy " +
+		"the example's placeholder names/paths (oldFunction, " +
+		"path/to/file.go, etc.) -- they are illustrative only. JSON only.")
 	return b.String()
 }
 
@@ -303,10 +313,19 @@ func extractPlanJSON(raw string) (string, error) {
 	s = strings.TrimPrefix(s, "```json")
 	s = strings.TrimPrefix(s, "```")
 	s = strings.TrimSuffix(s, "```")
-	start := strings.IndexByte(s, '{')
-	if start < 0 {
-		return "", fmt.Errorf("no JSON object found in model output")
+
+	// Start at the first JSON container, object or array -- cheap
+	// models sometimes return a top-level array of operations.
+	ob := strings.IndexByte(s, '{')
+	br := strings.IndexByte(s, '[')
+	start := ob
+	if br >= 0 && (ob < 0 || br < ob) {
+		start = br
 	}
+	if start < 0 {
+		return "", fmt.Errorf("no JSON value found in model output")
+	}
+
 	depth := 0
 	inStr := false
 	esc := false
@@ -320,14 +339,55 @@ func extractPlanJSON(raw string) (string, error) {
 		case c == '"':
 			inStr = !inStr
 		case inStr:
-		case c == '{':
+		case c == '{', c == '[':
 			depth++
-		case c == '}':
+		case c == '}', c == ']':
 			depth--
 			if depth == 0 {
 				return s[start : i+1], nil
 			}
 		}
 	}
-	return "", fmt.Errorf("unbalanced JSON object in model output")
+	return "", fmt.Errorf("unbalanced JSON value in model output")
+}
+
+// normalizeToPlanJSON reshapes near-misses into a valid plan: a bare
+// operation object, a top-level array of operations, or a plan whose
+// "operations" is a single object instead of an array. Cheap models
+// produce these constantly; normalizing here is far cheaper than a
+// retry round-trip.
+func normalizeToPlanJSON(js string) (string, error) {
+	t := strings.TrimSpace(js)
+
+	wrap := func(opsArray string) (string, error) {
+		plan := map[string]any{
+			"version":     "1.0",
+			"name":        "auto",
+			"description": "auto-wrapped operations",
+			"operations":  json.RawMessage(opsArray),
+		}
+		out, err := json.Marshal(plan)
+		return string(out), err
+	}
+
+	if strings.HasPrefix(t, "[") {
+		return wrap(t)
+	}
+
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(t), &top); err != nil {
+		return "", err
+	}
+	if ops, ok := top["operations"]; ok {
+		if strings.HasPrefix(strings.TrimSpace(string(ops)), "{") {
+			top["operations"] = json.RawMessage("[" + string(ops) + "]")
+			out, err := json.Marshal(top)
+			return string(out), err
+		}
+		return t, nil
+	}
+	if _, ok := top["type"]; ok {
+		return wrap("[" + t + "]")
+	}
+	return t, nil
 }

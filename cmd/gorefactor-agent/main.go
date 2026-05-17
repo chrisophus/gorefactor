@@ -12,6 +12,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -21,14 +22,14 @@ func main() {
 		providerK   = flag.String("provider", "openai", "model provider: openai (OpenAI-compatible) or anthropic")
 		model       = flag.String("model", "gpt-4o-mini", "model name (cheap/local is the point)")
 		apiBase     = flag.String("api-base", "", "provider base URL (default per provider; set for local/proxy)")
-		maxIter     = flag.Int("max-iter", 3, "maximum attempts before giving up")
-		dryRun      = flag.Bool("dry-run", false, "preview the plan and diff; never apply")
+		maxIter     = flag.Int("max-iter", 0, "max steps/attempts (0 = mode default: agentic 24, single-shot 3)")
+		dryRun      = flag.Bool("dry-run", false, "single-shot only: preview the plan and diff; never apply")
 		allowDirty  = flag.Bool("allow-dirty", false, "skip the clean-git-worktree precondition")
-		verbose     = flag.Bool("verbose", false, "echo the raw model response each iteration")
-		printPrompt = flag.Bool("print-prompt", false, "print the assembled model prompt for the spec and exit (no model call)")
+		verbose     = flag.Bool("verbose", false, "echo raw model output / model prose")
+		printPrompt = flag.Bool("print-prompt", false, "print the assembled prompt for the active mode and exit (no model call)")
 		showVersion = flag.Bool("version", false, "print version and exit")
-		noSchema    = flag.Bool("no-schema", false, "disable decode-time JSON-schema enforcement (A/B)")
-		agentic     = flag.Bool("agentic", false, "Arm D: agentic gorefactor-tools loop with punt (instead of single-shot plan)")
+		noSchema    = flag.Bool("no-schema", false, "single-shot only: disable decode-time JSON-schema enforcement")
+		singleShot  = flag.Bool("single-shot", false, "use the legacy single-shot constrained-plan path instead of the default agentic gorefactor-tools loop")
 	)
 	flag.Parse()
 
@@ -60,25 +61,37 @@ func main() {
 	}
 
 	if *printPrompt {
-		fmt.Println("===== SYSTEM =====")
-		fmt.Println(systemPrompt())
-		fmt.Println("\n===== USER =====")
-		fmt.Println(buildUserPrompt(spec, *dir, ""))
+		if *singleShot {
+			fmt.Println("===== SYSTEM (single-shot) =====")
+			fmt.Println(systemPrompt())
+			fmt.Println("\n===== USER =====")
+			fmt.Println(buildUserPrompt(spec, *dir, ""))
+		} else {
+			fmt.Println("===== SYSTEM (agentic, default) =====")
+			fmt.Println(agenticSystemPrompt())
+			fmt.Println("\n===== TOOLS =====")
+			for _, td := range toolCatalog() {
+				fmt.Printf("- %s: %s\n", td.Function.Name, td.Function.Description)
+			}
+			fmt.Println("\n===== TASK =====")
+			fmt.Println(strings.TrimSpace(spec))
+		}
 		return
 	}
 
 	provider := providerFromFlags(*providerK, *apiBase, *model)
 
 	var runErr error
-	if *agentic {
+	if *singleShot {
+		runErr = RunDriver(context.Background(), provider, cfg)
+	} else {
 		tc, ok := provider.(toolChatter)
 		if !ok {
-			fmt.Fprintln(os.Stderr, "Error: -agentic requires a tool-calling provider (use -provider openai)")
+			fmt.Fprintln(os.Stderr,
+				"Error: the default agentic mode needs a tool-calling provider (use -provider openai); or pass -single-shot")
 			os.Exit(2)
 		}
 		runErr = RunAgenticDriver(context.Background(), tc, cfg)
-	} else {
-		runErr = RunDriver(context.Background(), provider, cfg)
 	}
 	if runErr != nil {
 		// A punt is not a crash: the junior cleanly handed work back.

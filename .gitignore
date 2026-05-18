@@ -43,6 +43,7 @@ Thumbs.db
 # Go specific
 *.test
 *.out
+coverage.html
 go.work
 
 # Temporary files

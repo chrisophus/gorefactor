@@ -30,6 +30,7 @@ func main() {
 		showVersion = flag.Bool("version", false, "print version and exit")
 		noSchema    = flag.Bool("no-schema", false, "single-shot only: disable decode-time JSON-schema enforcement")
 		singleShot  = flag.Bool("single-shot", false, "use the legacy single-shot constrained-plan path instead of the default agentic gorefactor-tools loop")
+		interactive = flag.Bool("interactive", false, "agentic mode only: pause after each step for user feedback and guidance")
 		campaign    = flag.Bool("campaign", false, "sensor-driven autonomous mode: gorefactor findings -> agentic fixes -> commit-or-punt (no -spec needed)")
 	)
 	flag.Parse()
@@ -82,6 +83,12 @@ func main() {
 
 	provider := providerFromFlags(*providerK, *apiBase, *model)
 
+	// Validate mode combinations
+	if *interactive && (*singleShot || *campaign) {
+		fmt.Fprintln(os.Stderr, "Error: -interactive is only for agentic mode (incompatible with -single-shot and -campaign)")
+		os.Exit(2)
+	}
+
 	var runErr error
 	switch {
 	case *campaign:
@@ -100,7 +107,11 @@ func main() {
 				"Error: the default agentic mode needs a tool-calling provider (use -provider openai); or pass -single-shot")
 			os.Exit(2)
 		}
-		runErr = RunAgenticDriver(context.Background(), tc, cfg)
+		if *interactive {
+			runErr = RunInteractiveAgenticDriver(context.Background(), tc, cfg)
+		} else {
+			runErr = RunAgenticDriver(context.Background(), tc, cfg)
+		}
 	}
 	if runErr != nil {
 		// A punt is not a crash: the junior cleanly handed work back.

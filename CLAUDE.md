@@ -227,10 +227,13 @@ make check              # Run all checks in sequence
 make coverage           # Generate coverage report (HTML)
 make ci                 # CI: All checks for pull requests
 
-# Code analysis (using refactor-skill)
+# Code analysis (using gorefactor)
 make analyze-dir        # Find patterns and duplication
 make find-symbol SYMBOL=FunctionName  # Find uses
 make find-callers FUNC=FunctionName   # Find callers
+
+# Interactive refactoring with the agent
+make build              # Build gorefactor-agent (included in full build)
 ```
 
 ### Quality Standards
@@ -405,197 +408,315 @@ Conditions allow operations to execute only when code meets certain criteria (e.
 - Push to origin with `git push -u origin <branch-name>`
 - The repository is at `/home/user/gorefactor`
 
-## GoRefactor Skill for Intelligent Refactoring
+## Interactive Refactoring with gorefactor-agent
 
-The repository includes a dedicated skill for efficient code refactoring that Claude Code can use:
+The repository includes `gorefactor-agent`, an agentic driver that uses an LLM to iteratively work through refactoring requests. The agent proposes changes, executes them via GoRefactor, receives feedback, and refines until complete—providing interactive, semi-autonomous refactoring.
 
-### Interfaces
+### Three Operating Modes
 
-**Go Binary (`skill-refactor`)**: Structured JSON interface for Claude Code integration
+**1. Agentic Mode (Default - Interactive Loop)**
+
+The LLM iteratively works on your refactoring spec using tool calls:
+
 ```bash
-./skill-refactor analyze path/to/file.go        # JSON recommendations
-./skill-refactor refactor path/to/file.go 3     # Auto-apply top 3 refactorings
-./skill-refactor extract file.go <start> <end> <method>  # Extract specific block
+# From command-line text
+./gorefactor-agent -spec "extract the payment validation logic into a separate method"
+
+# From a file
+./gorefactor-agent -spec @refactoring-request.txt
+
+# With custom model provider
+./gorefactor-agent -spec "..." -provider openai -model gpt-4o-mini
+./gorefactor-agent -spec "..." -provider anthropic -model claude-opus-4-7
 ```
 
-**Bash Wrapper (`refactor-skill.sh`)**: Human-friendly CLI with colored output
+The agent will:
+- Parse your refactoring request
+- Propose specific GoRefactor operations
+- Execute them via tool calls
+- Get feedback from GoRefactor and code analysis
+- Refine and iterate (up to 24 iterations by default)
+- Summarize changes when complete
+
+**2. Single-Shot Mode (Fast, One-Pass)**
+
+Generate a complete refactoring plan in one step—useful for simple, well-scoped tasks:
+
 ```bash
-./refactor-skill.sh analyze path/to/file.go     # Show extraction candidates
-./refactor-skill.sh extract-best path/to/file.go
-./refactor-skill.sh simplify path/to/file.go 3
+# Generate and preview without applying
+./gorefactor-agent -spec "extract X" -single-shot -dry-run
+
+# Then apply if the preview looks good
+./gorefactor-agent -spec "extract X" -single-shot
 ```
 
-### When to Use the Skill
+**3. Campaign Mode (Fully Autonomous)**
 
-**Use when** (token-efficient operations):
-- ✅ Analyzing code structure to find extraction opportunities (tool reads, you review JSON)
-- ✅ Extracting high-complexity blocks (LLM picks block, tool infers signature)
-- ✅ Batch refactoring multiple files with same pattern (one decision, many executions)
-- ✅ Finding complexity hotspots (tool analyzes, you decide priorities)
+Sensor-driven autonomous mode: the agent analyzes GoRefactor's linter findings and autonomously fixes issues without needing a refactoring spec:
 
-**Avoid when** (better for LLM):
-- ❌ Renaming for semantic clarity - LLM understands intent better
-- ❌ Changing code logic or behavior - Requires reasoning
-- ❌ Architectural decisions - Needs business context
-- ❌ Complex interdependencies - Better with human judgment
-- ❌ Test code - Often needs domain-specific knowledge
+```bash
+# Uses gorefactor lint to find issues, then fixes them
+./gorefactor-agent -campaign
+```
 
-### How It Works
+Exits with:
+- Status 0: All fixes applied and committed
+- Status 3: Punted (handed work back - requires human judgment)
+- Status 1: Fatal error
 
-The skill:
-1. Analyzes code complexity using metrics (control structures, statements, variable dependencies)
-2. Ranks extraction candidates by priority (1-10 scale)
-3. Generates intelligent method names based on code characteristics
-4. Optionally applies safe, high-impact refactorings automatically
+**4. Interactive Mode (Human-Guided Agentic Loop)**
 
-Priority factors:
-- Sweet spot complexity (3-10)
-- Clear inputs/outputs (has read and write variables)
-- Maintainable size (≤ 20 statements)
-- Extractability (valid AST, proper dependencies)
+Pauses the agentic loop after each tool execution to let you review results and provide feedback:
+
+```bash
+./gorefactor-agent -spec "extract payment validation" -interactive
+```
+
+The agent pauses and shows you what it did, then prompts for your decision:
+
+```
+── step 2/24 ──
+  → find_references
+    references to PaymentService found in 3 places:
+      payment.go:45
+      handlers.go:12
+      integration_test.go:88
+
+  Continue? [c/f/r/s/a/?] >
+```
+
+**Interactive Commands**:
+- `c` - **Continue** (accept this step and proceed to next)
+- `f <text>` - **Feedback** (provide guidance: "Also handle timeout cases")
+- `r` - **Review** (show `git diff` of changes so far)
+- `s` - **Stop** (gracefully punt and rollback all changes)
+- `a` - **Auto-continue** (resume full automation, stop pausing)
+- `?` or `help` - Show help message
+- `<enter>` - Same as `c`
+
+When you provide feedback with `f`, it's incorporated into the agent's conversation history, guiding its approach for the next step. Use this mode for:
+- Complex refactorings where you want to steer the agent's decisions
+- Learning how the agent approaches problems
+- Verifying changes step-by-step before they're applied
+- Stopping early if the agent goes off track
+
+### Common Options
+
+```bash
+# Model selection
+-provider openai|anthropic        # LLM provider (default: openai)
+-model <name>                     # Model name (default: gpt-4o-mini)
+-api-base <url>                   # Custom API endpoint (for local models, proxies)
+
+# Iteration control
+-max-iter N                        # Max iterations (0 = mode default: 24 for agentic, 3 for single-shot)
+
+# Debugging and inspection
+-verbose                           # Show model reasoning and intermediate steps
+-print-prompt                      # Preview the assembled prompt without calling the model
+-dry-run                          # (single-shot only) Preview changes without applying
+
+# Safety and flexibility
+-dir <path>                        # Target Go module directory (default: .)
+-allow-dirty                       # Skip the clean-git-worktree precondition
+-single-shot                       # Use legacy single-shot constrained-plan path
+-interactive                       # (agentic mode only) Pause after each step for user feedback
+-no-schema                         # (single-shot only) Disable JSON-schema enforcement
+```
 
 ### Examples
 
-**Analyze a file**:
+**Interactive extraction**:
 ```bash
-./skill-refactor analyze service.go
-# Output: JSON with priority-ranked extraction candidates
+./gorefactor-agent -spec "extract the validateOrder function's business logic into a checkOrderValidity helper"
+# Agent iterates, asks GoRefactor questions, refines the extraction
 ```
 
-**Auto-refactor the top 3 candidates**:
+**Autonomous cleanup**:
 ```bash
-./skill-refactor refactor service.go
-# Modifies file in-place, applies highest-value extractions
+./gorefactor-agent -campaign -max-iter 10
+# Agent finds file-size issues and automatically splits them
 ```
 
-**Extract a specific block**:
+**Preview before applying**:
 ```bash
-./skill-refactor extract service.go 45 62 validatePayment
+./gorefactor-agent -spec "rename handleRequest to processRequest" -single-shot -dry-run
+# Shows the exact changes GoRefactor would make
 ```
 
-### Integration
-
-The skill is designed for Claude Code workflows:
-1. Call `analyze` to find refactoring opportunities
-2. Review JSON output to understand recommendations
-3. Use `refactor` to apply automatically, or `extract` for specific blocks
-4. Verify the results maintain intended behavior
-
-For detailed documentation, see `SKILL_REFACTOR.md`.
-
-## Analysis Tools for Development
-
-GoRefactor includes built-in analysis tools (Phases 1-3) that help understand code structure during implementation:
-
-### Available Analysis Tools
-
-**Phase 1: Cross-File Duplicate Detection**
+**Using a specific model**:
 ```bash
-./gorefactor analyze-dir ./src
+# OpenAI-compatible endpoint (e.g., local model server)
+./gorefactor-agent -spec "..." -provider openai -api-base http://localhost:8000 -model mistral-7b
+
+# Anthropic's API
+./gorefactor-agent -spec "..." -provider anthropic -model claude-opus-4-7
+```
+
+### How It Works
+
+The agent:
+1. Parses your refactoring spec (or discovers issues via `gorefactor lint` in campaign mode)
+2. Uses tool calls to run GoRefactor analysis commands (parse, recommend, find-callers, etc.)
+3. Reads the output and decides which GoRefactor operations to execute
+4. Applies operations via tool calls
+5. Analyzes results and decides if more iterations are needed
+6. Commits changes when done
+
+The model never directly edits code—all mutations flow through deterministic GoRefactor commands, so the failure mode is "command rejects the change" rather than "malformed Go file."
+
+### Environment Setup
+
+**API Keys**:
+```bash
+# OpenAI (for OpenAI-compatible models)
+export OPENAI_API_KEY="sk-..."
+
+# Anthropic
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+**Local Models**:
+If using a local model server:
+```bash
+./gorefactor-agent -spec "..." \
+  -provider openai \
+  -api-base http://localhost:8000 \
+  -model local-model-name
+```
+
+### When to Use the Agent
+
+**Use agentic mode when**:
+- ✅ Refactoring requests are complex or open-ended ("improve code organization")
+- ✅ You want interactive iteration—model refines based on feedback
+- ✅ You want to see the agent's reasoning (use `-verbose`)
+- ✅ The task might require multiple coordinated steps
+
+**Use single-shot mode when**:
+- ✅ Task is simple and well-scoped ("rename function X to Y")
+- ✅ You want guaranteed termination in 1-3 steps
+- ✅ You want to preview with `-dry-run` before committing
+
+**Use campaign mode when**:
+- ✅ You want autonomous cleanup based on GoRefactor's linter rules
+- ✅ No specific refactoring request—just "improve the code quality"
+- ✅ You trust the linter rules and want hands-off execution
+
+## GoRefactor Analysis Commands for Development
+
+GoRefactor includes powerful analysis commands to understand code structure before making changes. These commands form the basis of how the agent works internally.
+
+### Available Analysis Commands
+
+**Cross-File Duplicate Detection**
+```bash
+./gorefactor analyze-dir ./pkg
 # Finds duplicate code patterns across files
-# Returns: DuplicateBlock with impact scores and consolidation recommendations
+# Returns: JSON with DuplicateBlock entries showing impact and consolidation opportunities
 ```
 
-**Phase 2: Find-All-Uses (Symbol Tracking)**
+**Symbol Tracking (Find-Uses)**
 ```bash
-# Use the analyzer package directly in code
-# Tracks: calls, reads, writes, definitions, parameters, returns
-# Enables: understanding symbol dependencies before refactoring
+./gorefactor find-uses SymbolName [--in path] [--json]
+# Shows all uses of a symbol: calls, reads, writes, definitions, parameters, returns
 ```
 
-**Phase 3: Find-Callers (Who Calls What)**
+**Caller Analysis (Find-Callers)**
 ```bash
-# Use the call analyzer for caller analysis
+./gorefactor find-callers FunctionName [--in path] [--json]
+./gorefactor find-callers Receiver:MethodName [--json]
+# Lists all places that call a function or method
 # Shows: direct calls, indirect (interface) calls, test calls
-# Enables: understanding impact before renaming or moving functions
 ```
 
-### Using Analysis During Implementation
+**Interface Implementations**
+```bash
+./gorefactor find-implementations InterfaceName [--in path] [--json]
+# Shows all types that implement an interface
+```
 
-Before implementing new features, use analysis to:
+**Extract Candidates**
+```bash
+./gorefactor recommend ./file.go
+# Returns JSON with ranked extraction opportunities
+# Scores blocks by complexity, extractability, and impact
+```
 
-1. **Find existing patterns** - Don't duplicate what already exists
+**Extraction Planning from Diffs**
+```bash
+./gorefactor analyze-diff changes.patch
+# Generates a RefactoringPlan based on git diff
+# Useful for understanding what refactoring a change implies
+```
+
+### Using Analysis During Development
+
+**Before implementing new features**:
+
+1. **Find existing patterns** - Check for similar code before writing new code
    ```bash
-   ./refactor-skill.sh analyze-dir ./analyzer
-   # Shows code patterns and opportunities
+   ./gorefactor find-uses Parser
+   # See how existing code analyses Go code
    ```
 
 2. **Understand dependencies** - Know what depends on code you're changing
    ```bash
-   ./refactor-skill.sh find-callers FunctionName
-   # Lists all places that call a function
+   ./gorefactor find-callers OldFunctionName
+   # Lists all call sites before refactoring
    ```
 
-3. **Check for duplication** - Before writing new code
+3. **Check for duplication** - Find duplicate blocks before adding more
    ```bash
-   ./refactor-skill.sh find-uses SymbolName
-   # Shows all uses of a symbol
+   ./gorefactor analyze-dir ./analyzer
+   # Shows code patterns and consolidation opportunities
    ```
 
-4. **Find dead code** - Clean up before adding new code
+4. **Evaluate extractability** - Before extracting, verify complexity is appropriate
    ```bash
-   ./refactor-skill.sh find-unused ./internal
-   # Identifies potentially unused symbols
+   ./gorefactor recommend ./large_file.go
+   # Shows which blocks are good extraction candidates
    ```
 
-### When Claude Should Use Analysis Tools
+5. **Find interface implementations** - Understand the type hierarchy
+   ```bash
+   ./gorefactor find-implementations Reader
+   # Lists all types implementing Reader interface
+   ```
 
-✅ **Use analysis tools when**:
+### Analysis + Agent Workflow
+
+The agent uses these analysis commands internally to:
+1. **Gather context** - Run find-callers, find-uses to understand impact
+2. **Propose operations** - Use recommend output to suggest extractions
+3. **Verify safety** - Run analysis after changes to ensure nothing broke
+4. **Iterate** - Get feedback from each analysis to refine the plan
+
+You can use the same commands manually when debugging agent decisions or planning refactors yourself:
+
+```bash
+# Manual workflow: understand → plan → execute
+./gorefactor find-callers PaymentValidator
+./gorefactor recommend payment.go
+# ... review recommendations ...
+./gorefactor-agent -spec "extract the highlighted block into validatePayment"
+```
+
+### When to Use Analysis Commands
+
+✅ **Use analysis commands when**:
 - Starting a new implementation phase
-- Before refactoring existing code
-- When designing interfaces or abstractions
-- To understand what code already exists
-- To verify assumptions about code structure
+- Before refactoring to understand impact
+- Designing interfaces or abstractions
+- Verifying assumptions about code structure
+- Debugging agent decisions
+- Planning batch refactorings
 
 ❌ **Skip analysis if**:
 - Writing simple standalone code (test cases)
-- Feature is entirely new with no existing patterns
-- Task is to write documentation, not code
-
-### Example: Phase 4 Implementation
-
-Before implementing `find-implementations`:
-```bash
-# 1. Find how interfaces are currently analyzed
-./refactor-skill.sh find-callers "collectDefinitions"
-
-# 2. Check for duplicate interface handling code
-./refactor-skill.sh analyze-dir ./analyzer
-
-# 3. Find uses of existing interface types
-./refactor-skill.sh find-uses "InterfaceType"
-```
-
-This helps Claude:
-- Reuse patterns from Phase 2-3
-- Avoid duplicating analysis logic
-- Understand how interfaces are currently represented
-- Build on existing infrastructure
-
-### Analysis Tool Commands
-
-```bash
-# Find all uses of a symbol across the codebase
-./refactor-skill.sh find-uses <symbol>
-
-# Find all functions that call a target
-./refactor-skill.sh find-callers <function>
-
-# Find potentially unused symbols
-./refactor-skill.sh find-unused <directory>
-
-# Analyze directory for duplicate patterns
-./refactor-skill.sh analyze-dir <directory>
-
-# Show implementations of an interface
-./refactor-skill.sh show-interface <type>
-
-# Check safety of proposed changes
-./refactor-skill.sh check-safety <action>
-
-# Show help
-./refactor-skill.sh help
-```
+- Feature is entirely new with no dependencies
+- Task is documentation, not code
+- Already familiar with the code area
 
 ## Notes for Future Work
 

@@ -45,10 +45,11 @@ The GoRefactor orchestration system provides a robust, resilient way to orchestr
    - Provides guidance on best practices
    - Supports custom template generation
 
-3. **CLI Integration** (`main.go`)
+3. **CLI integration** (`cmd/gorefactor/`)
    - `orchestrate` command for executing plans
    - `generate-templates` command for creating templates
-   - Integrated with existing GoRefactor functionality
+   - `undo` rolls back snapshots under `.gorefactor/`
+   - See also [orchestrator/README.md](orchestrator/README.md) and the root [README.md](README.md)
 
 ### Data Structures
 

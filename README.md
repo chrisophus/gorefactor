@@ -1,104 +1,119 @@
 # GoRefactor
 
-GoRefactor is a command-line tool for refactoring Go code, with a focus on method extraction. It provides functionality to analyze Go code and suggest or perform refactoring operations.
+GoRefactor is a command-line harness for **analyzing and refactoring Go code**. Structural edits go through AST-aware commands (not raw text patches), and optional **JSON orchestration plans** use semantic targeting so operations stay valid when line numbers shift.
 
-## Features
+A companion binary, **`gorefactor-agent`**, drives the same tools with a cheap or local LLM for iterative or autonomous refactors. See [CLAUDE.md](CLAUDE.md) for agent modes, contributor workflow, and the “use gorefactor instead of Write/Edit” rule in this repo.
 
-- Parse Go files and output their structure
-- List all functions and methods in a file
-- Recommend code blocks for method extraction
-- Extract methods from code blocks
+## Binaries
+
+| Binary | Role |
+|--------|------|
+| `gorefactor` | Deterministic CLI: analysis, direct edits, lint, plans, undo |
+| `gorefactor-agent` | LLM loop that calls `gorefactor`; never edits `.go` files directly |
+
+Legacy: `skill/` (`skill-refactor`) — older Claude Code bridge; prefer `gorefactor` for new work. See [SKILL_REFACTOR.md](SKILL_REFACTOR.md).
 
 ## Installation
 
 ```bash
 go install github.com/chrisophus/gorefactor/cmd/gorefactor@latest
+go install github.com/chrisophus/gorefactor/cmd/gorefactor-agent@latest
 ```
 
-Or grab a prebuilt binary for your platform from the
-[Releases page](https://github.com/chrisophus/gorefactor/releases).
+Or use prebuilt binaries from [Releases](https://github.com/chrisophus/gorefactor/releases).
 
-## Usage
-
-### Parse a Go File
+Build from source:
 
 ```bash
-gorefactor parse path/to/file.go
+make build                              # gorefactor (runs test, lint, vet first)
+go build -o gorefactor-agent ./cmd/gorefactor-agent
 ```
 
-This command parses a Go file and outputs its structure in JSON format, including:
-- Package name
-- Imports
-- Functions
-- Methods
-- Structs
-- Interfaces
-
-### List Functions
+## Quick start
 
 ```bash
-gorefactor list-functions path/to/file.go
+# Structural issues in the module
+./gorefactor lint .
+
+# Autofix oversized files where safe
+./gorefactor lint . --fix
+
+# Final gate: structural lint + go build + go test
+./gorefactor doctor
+
+# One-page summary of a file
+./gorefactor inspect path/to/file.go
+
+# Agent: autonomous cleanup from lint findings (needs API key)
+./gorefactor-agent -campaign
 ```
 
-This command lists all functions and methods in the specified file.
+Run `./gorefactor` with no subcommand arguments to print the full command list.
 
-### Recommend Extractions
+## `gorefactor` commands
 
-```bash
-gorefactor recommend path/to/file.go
-```
+### Analysis (read-only)
 
-This command analyzes the file and recommends code blocks that could be extracted into methods. The output includes:
-- Start and end lines of the block
-- Variables used in the block
-- Complexity score
-- Whether the block is extractable
+| Command | Purpose |
+|---------|---------|
+| `parse` | File structure as JSON |
+| `list-functions` | Functions/methods with line counts |
+| `recommend` | Ranked extraction candidates |
+| `inspect` | Human-readable file summary + lint hints |
+| `find-callers` | Who calls a function or `Receiver:Method` |
+| `find-uses` | References to a symbol |
+| `find-implementations` | Types implementing an interface |
+| `find-package-deps` | Package dependency graph |
+| `analyze-diff` | Refactoring plan from a patch file |
+| `analyze-file-sizes` | Oversized files and split hints |
+| `suggest-plan` | Suggested refactoring plan for a file |
 
-### Extract Method
+### Direct edits (preferred over editing `.go` by hand)
 
-```bash
-gorefactor extract path/to/file.go start_line end_line method_name
-```
+Methods use `Receiver:Method` (no `*` on the receiver). Many commands accept `-` as the last argument to read body content from stdin.
 
-This command extracts a code block into a new method. It:
-1. Analyzes the variables used in the block
-2. Creates a new method with appropriate parameters
-3. Replaces the original block with a call to the new method
+| Command | Purpose |
+|---------|---------|
+| `create` | New `.go` file |
+| `insert` | Code at `at-end`, `after:Func`, `inside:Func`, etc. |
+| `replace` | AST statement replace inside a function |
+| `replace-text` | Literal text replace inside a function |
+| `delete` | Remove a declaration |
+| `rename` | Unexported symbol, package-wide |
+| `move` | Move declaration to another file |
+| `extract` | Extract line range to new function |
+| `split` | Auto-split an oversized file |
+| `format` | gofmt + goimports in place |
 
-## Example
+### Automation
 
-Given a file `example.go`:
+| Command | Purpose |
+|---------|---------|
+| `lint` | Rules: `file-size`, `duplicate-block`, `extract-candidate`, `untested-package`; `--fix` splits oversized files |
+| `doctor` | Lint + `go build` + `go test`; non-zero on failure |
+| `undo` | Roll back last plan (snapshots under `.gorefactor/`) |
 
-```go
-package example
+### JSON plans
 
-func processData(data []int) int {
-    sum := 0
-    for i := 0; i < len(data); i++ {
-        if data[i] > 0 {
-            sum += data[i]
-        }
-    }
-    return sum
-}
-```
+| Command | Purpose |
+|---------|---------|
+| `orchestrate` | Run a refactoring plan file |
+| `exec` | Single operation from JSON/stdin |
+| `generate-templates` | Example plan templates |
+| `repl` | Interactive step-by-step refactoring |
 
-To extract the loop into a new method:
+Details and JSON plan schema: [ORCHESTRATION_SYSTEM.md](ORCHESTRATION_SYSTEM.md), [orchestrator/README.md](orchestrator/README.md).
+
+## Example: extract method
 
 ```bash
 gorefactor extract example.go 5 9 calculateSum
 ```
 
-This will create:
+Given:
 
 ```go
-package example
-
 func processData(data []int) int {
-    return calculateSum(data)
-}
-
-func calculateSum(data []int) int {
     sum := 0
     for i := 0; i < len(data); i++ {
         if data[i] > 0 {
@@ -109,21 +124,46 @@ func calculateSum(data []int) int {
 }
 ```
 
+The block becomes a new function and the original site calls it (parameters and returns are inferred from the selection).
+
+## `gorefactor-agent` (summary)
+
+Requires `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` (or a local OpenAI-compatible endpoint via `-api-base`).
+
+| Mode | Flag | Use when |
+|------|------|----------|
+| Agentic (default) | `-spec "..."` | Open-ended refactors; tool loop up to 24 steps |
+| Interactive | `-spec "..." -interactive` | Pause after each tool for review/feedback |
+| Single-shot | `-single-shot` | One constrained JSON plan (optional `-dry-run`) |
+| Campaign | `-campaign` | Fix `gorefactor lint` findings autonomously |
+
+The agent’s `finish` gate runs **`go build` + `go test`** only. For lint + build + test, run **`gorefactor doctor`** yourself or in CI.
+
+Full options and workflows: [CLAUDE.md — Interactive Refactoring with gorefactor-agent](CLAUDE.md#interactive-refactoring-with-gorefactor-agent).
+
+## Project layout
+
+```
+cmd/gorefactor/       CLI entrypoint and commands (including extract)
+cmd/gorefactor-agent/ LLM harness
+parser/               AST → structured JSON
+analyzer/             Complexity, diffs, file-size, duplicates
+orchestrator/         JSON plans, semantic targeting, undo snapshots
+skill/                Legacy skill-refactor binary
+```
+
+Extraction logic lives in **`cmd/gorefactor/cmd_extract.go`** and orchestrator extract operations—not a separate top-level `extractor/` package.
+
 ## Development
 
-### Project Structure
-
-- `main.go`: Command-line interface and main entry point
-- `parser/`: Package for parsing Go files
-- `analyzer/`: Package for analyzing code blocks
-- `extractor/`: Package for method extraction
-
-### Running Tests
-
 ```bash
-go test ./...
+make check              # fmt, vet, lint, test
+make test               # tests with race + coverage
+./gorefactor doctor     # same gate as CI-style health check
 ```
+
+Contributor and agent guidance: [CLAUDE.md](CLAUDE.md). Reliability benchmarks: [RELIABILITY.md](RELIABILITY.md).
 
 ## License
 
-MIT License 
+MIT License

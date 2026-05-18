@@ -2,6 +2,8 @@
 
 The orchestration system allows you to define refactoring operations in JSON files that are resilient to underlying code changes. This makes refactoring operations more robust and less likely to break when the codebase evolves.
 
+See also the root [README.md](../README.md) (CLI overview) and [ORCHESTRATION_SYSTEM.md](../ORCHESTRATION_SYSTEM.md) (full schema and examples).
+
 ## Key Features
 
 - **Resilient Targeting**: Use semantic information instead of line numbers to locate code targets

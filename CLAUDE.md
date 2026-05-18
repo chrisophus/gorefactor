@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**User-facing overview and install:** [README.md](README.md). **JSON plans:** [ORCHESTRATION_SYSTEM.md](ORCHESTRATION_SYSTEM.md).
+
 ## Project Overview
 
 GoRefactor is a command-line tool for analyzing and refactoring Go code. It focuses on method extraction and intelligent code analysis through a sophisticated JSON-based orchestration system. The tool provides both interactive commands and batch refactoring capabilities through resilient, semantic-based code targeting.
@@ -52,7 +54,7 @@ When adding new capabilities to gorefactor, add a corresponding lint rule (senso
 
 ### High-Level Design
 
-The codebase is organized into four core packages:
+The codebase is organized into library packages and command entry points:
 
 1. **Parser** (`parser/`)
    - Low-level AST analysis of Go files
@@ -67,33 +69,40 @@ The codebase is organized into four core packages:
    - Key metrics: control structures, statement count, variable usage, error handling paths
    - Can analyze specific functions or entire files
 
-3. **Extractor** (`extractor/`)
-   - Performs actual method extraction on specified code blocks
-   - Analyzes variable dependencies to determine method parameters and return types
-   - Handles edge cases like multiple return values and variable reassignments
-   - Modifies source code in-place
-
-4. **Orchestrator** (`orchestrator/`)
+3. **Orchestrator** (`orchestrator/`)
    - Executes refactoring plans defined in JSON format
    - Implements resilient semantic targeting strategies
    - Provides fallback mechanisms when targets change
-   - Includes code insertion capabilities for adding new code blocks
+   - Includes `CodeInserter` and operation handlers (extract, move, rename, insert, delete, etc.)
    - Generates JSON templates for common refactoring patterns
    - **Core feature**: Plans don't break when code changes—uses function names, patterns, and variable analysis instead of line numbers
 
+4. **CLI** (`cmd/gorefactor/`)
+   - Registers commands in `getCommands()` in `cmd/gorefactor/main.go`
+   - **Extraction** is implemented in `cmd/gorefactor/cmd_extract.go` (type-aware block extraction via `go/packages`); used by the `extract` CLI command and orchestrator `extract_method` operations
+
+5. **Agent** (`cmd/gorefactor-agent/`)
+   - LLM harness: proposes tool calls, never writes `.go` source directly
+   - Completion gate: `go build ./...` + `go test ./...` (see **Agent completion gate** below)
+
+6. **Skill** (`skill/`) — optional legacy `skill-refactor` bridge for Claude Code; prefer `gorefactor` CLI for new work ([SKILL_REFACTOR.md](SKILL_REFACTOR.md))
+
 ### Command Structure
 
-Main commands in `main.go` (registered in `getCommands()`):
+Main commands in `cmd/gorefactor/main.go` (registered in `getCommands()`):
 
 **Analysis (read-only sensors)**
 - `parse <file.go>`: Parse a Go file → JSON structure
 - `list-functions <file.go>`: List functions/methods with their **line counts**
 - `recommend <file.go>`: JSON of extractable code blocks (with complexity scores)
+- `inspect <file.go>`: One-page human summary (decls, sizes, lint hints, extraction candidates)
 - `analyze-diff <diff.patch>`: Generate a refactoring plan from a git diff
 - `analyze-file-sizes <dir>`: Find files over the size limit with extraction hints
 - `find-callers <Func|Receiver:Method> [--in path] [--json]`: All callers of a target
 - `find-uses <Symbol|Receiver:Method> [--in path] [--json]`: All uses of a symbol
 - `find-implementations <Interface> [--in path] [--json]`: Types that satisfy an interface
+- `find-package-deps [dir] [--json]`: Package dependency graph and circular-import detection
+- `suggest-plan <file.go> [--output plan.json] [--json] [--patterns]`: Suggested refactoring plan for a file
 
 **Mutation (direct CLI — no orchestrator JSON needed)**
 - `create <path> [content|-]`: Create a new .go file (auto-runs goimports). `-` reads stdin.
@@ -106,6 +115,7 @@ Main commands in `main.go` (registered in `getCommands()`):
 
 **Automation**
 - `lint [path] [--fix] [--json] [--max N]`: Structural linter. Rules: `file-size`, `duplicate-block`, `extract-candidate`, `untested-package`. `--fix` autofixes `file-size` via `split`.
+- `doctor [dir] [--json]`: Aggregate gate — structural lint + `go build ./...` + `go test ./...`; non-zero on failure
 - `split <file> [--max N] [--dry-run]`: Auto-split an oversized file by grouping methods on same receiver / functions sharing a CamelCase prefix.
 - `format [path ...]`: In-process gofmt+goimports. Replaces external `goimports` dependency.
 
@@ -114,6 +124,7 @@ Main commands in `main.go` (registered in `getCommands()`):
 - `exec`: Execute a single op from inline JSON or stdin
 - `undo`: Roll back the last refactoring (uses snapshots in `.gorefactor/`)
 - `generate-templates <dir>`: Generate example plan templates
+- `repl`: Interactive REPL for step-by-step refactoring
 
 ## Token Efficiency & Operation Selection
 
@@ -213,8 +224,9 @@ Better: Have Claude write one corrected function, extract pattern, use GoRefacto
 # Setup development environment
 make dev-setup          # Install tools + format code
 
-# Full build (runs tests, lint, fmt, vet first)
+# Full build: gorefactor only (runs test, lint, fmt, vet first)
 make build
+go build -o gorefactor-agent ./cmd/gorefactor-agent
 
 # Run individual checks
 make test               # Run tests with coverage
@@ -222,6 +234,7 @@ make lint               # Run golangci-lint
 make fmt                # Format code
 make vet                # Run go vet
 make check              # Run all checks in sequence
+./gorefactor doctor     # lint + build + test gate
 
 # Check code quality
 make coverage           # Generate coverage report (HTML)
@@ -231,9 +244,6 @@ make ci                 # CI: All checks for pull requests
 make analyze-dir        # Find patterns and duplication
 make find-symbol SYMBOL=FunctionName  # Find uses
 make find-callers FUNC=FunctionName   # Find callers
-
-# Interactive refactoring with the agent
-make build              # Build gorefactor-agent (included in full build)
 ```
 
 ### Quality Standards
@@ -270,8 +280,9 @@ go test ./... -v -race -coverprofile=coverage.out
 # Run tests for specific package
 go test ./analyzer -v
 go test ./parser -v
-go test ./extractor -v
+go test ./cmd/gorefactor -v
 go test ./orchestrator -v
+go test ./cmd/gorefactor-agent -v
 
 # Run specific test
 go test -v -run TestAnalyzeBlock ./analyzer
@@ -350,9 +361,9 @@ The orchestrator includes `CodeInserter` for adding new methods/code:
 
 ## Important Patterns and Conventions
 
-### Variable Analysis in Extraction
+### Extraction dependency analysis
 
-The extractor identifies dependencies by analyzing:
+Extraction (`cmd/gorefactor/cmd_extract.go` and orchestrator `extract_method`) identifies dependencies by analyzing:
 
 1. **Read variables**: Variables read but not declared in block (become parameters)
 2. **Write variables**: Variables written in block that are used after extraction (become returns)
@@ -403,18 +414,16 @@ Conditions allow operations to execute only when code meets certain criteria (e.
 
 ## Git Workflow
 
-- Work on the designated feature branch (`claude/add-claude-documentation-0NBR0`)
-- Commit changes with clear, descriptive messages
-- Push to origin with `git push -u origin <branch-name>`
-- The repository is at `/home/user/gorefactor`
+- Use a feature branch; commit with clear messages; open PRs against `main`
+- Pre-commit hook (optional): `ln -s ../../.githooks/pre-commit .git/hooks/pre-commit`
 
 ## Interactive Refactoring with gorefactor-agent
 
 The repository includes `gorefactor-agent`, an agentic driver that uses an LLM to iteratively work through refactoring requests. The agent proposes changes, executes them via GoRefactor, receives feedback, and refines until complete—providing interactive, semi-autonomous refactoring.
 
-### Three Operating Modes
+### Operating modes
 
-**1. Agentic Mode (Default - Interactive Loop)**
+**1. Agentic mode (default)**
 
 The LLM iteratively works on your refactoring spec using tool calls:
 
@@ -438,7 +447,7 @@ The agent will:
 - Refine and iterate (up to 24 iterations by default)
 - Summarize changes when complete
 
-**2. Single-Shot Mode (Fast, One-Pass)**
+**2. Single-shot mode**
 
 Generate a complete refactoring plan in one step—useful for simple, well-scoped tasks:
 
@@ -450,7 +459,7 @@ Generate a complete refactoring plan in one step—useful for simple, well-scope
 ./gorefactor-agent -spec "extract X" -single-shot
 ```
 
-**3. Campaign Mode (Fully Autonomous)**
+**3. Campaign mode**
 
 Sensor-driven autonomous mode: the agent analyzes GoRefactor's linter findings and autonomously fixes issues without needing a refactoring spec:
 
@@ -464,7 +473,7 @@ Exits with:
 - Status 3: Punted (handed work back - requires human judgment)
 - Status 1: Fatal error
 
-**4. Interactive Mode (Human-Guided Agentic Loop)**
+**4. Interactive mode** (flag on agentic loop)
 
 Pauses the agentic loop after each tool execution to let you review results and provide feedback:
 
@@ -564,6 +573,10 @@ The agent:
 6. Commits changes when done
 
 The model never directly edits code—all mutations flow through deterministic GoRefactor commands, so the failure mode is "command rejects the change" rather than "malformed Go file."
+
+### Agent completion gate
+
+The `finish` and `run_gate` tools call **`runGate`**: `go build ./...` then `go test ./...` in the target module. They do **not** run `gorefactor lint`. For lint + build + test, run **`gorefactor doctor`** manually or in CI after agent work.
 
 ### Environment Setup
 

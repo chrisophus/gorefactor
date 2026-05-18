@@ -2,6 +2,8 @@
 
 A Claude Code skill that leverages the GoRefactor tool for intelligent, automated code refactoring. This skill makes refactoring decisions more efficiently than manual code editing by analyzing code complexity and applying safe transformations.
 
+**Prefer the main CLI** for new work — see [README.md](README.md). This document covers the legacy `skill-refactor` binary and wrapper scripts.
+
 ## Quick Start (recommended path)
 
 The main `gorefactor` binary is now self-sufficient. Use these CLI commands instead of `Write`/`Edit` for any `.go` file change:
@@ -65,7 +67,7 @@ The skill binaries are built automatically:
 Ensure `gorefactor` binary is built first:
 
 ```bash
-go build -o gorefactor main.go
+go build -o gorefactor ./cmd/gorefactor
 ```
 
 ## Commands
@@ -401,7 +403,7 @@ Apply with:
 ### "Binary not found"
 
 ```bash
-go build -o gorefactor main.go
+go build -o gorefactor ./cmd/gorefactor
 go build -o skill-refactor ./skill/skill.go
 ```
 

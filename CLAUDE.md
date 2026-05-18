@@ -464,6 +464,42 @@ Exits with:
 - Status 3: Punted (handed work back - requires human judgment)
 - Status 1: Fatal error
 
+**4. Interactive Mode (Human-Guided Agentic Loop)**
+
+Pauses the agentic loop after each tool execution to let you review results and provide feedback:
+
+```bash
+./gorefactor-agent -spec "extract payment validation" -interactive
+```
+
+The agent pauses and shows you what it did, then prompts for your decision:
+
+```
+── step 2/24 ──
+  → find_references
+    references to PaymentService found in 3 places:
+      payment.go:45
+      handlers.go:12
+      integration_test.go:88
+
+  Continue? [c/f/r/s/a/?] >
+```
+
+**Interactive Commands**:
+- `c` - **Continue** (accept this step and proceed to next)
+- `f <text>` - **Feedback** (provide guidance: "Also handle timeout cases")
+- `r` - **Review** (show `git diff` of changes so far)
+- `s` - **Stop** (gracefully punt and rollback all changes)
+- `a` - **Auto-continue** (resume full automation, stop pausing)
+- `?` or `help` - Show help message
+- `<enter>` - Same as `c`
+
+When you provide feedback with `f`, it's incorporated into the agent's conversation history, guiding its approach for the next step. Use this mode for:
+- Complex refactorings where you want to steer the agent's decisions
+- Learning how the agent approaches problems
+- Verifying changes step-by-step before they're applied
+- Stopping early if the agent goes off track
+
 ### Common Options
 
 ```bash
@@ -484,6 +520,7 @@ Exits with:
 -dir <path>                        # Target Go module directory (default: .)
 -allow-dirty                       # Skip the clean-git-worktree precondition
 -single-shot                       # Use legacy single-shot constrained-plan path
+-interactive                       # (agentic mode only) Pause after each step for user feedback
 -no-schema                         # (single-shot only) Disable JSON-schema enforcement
 ```
 

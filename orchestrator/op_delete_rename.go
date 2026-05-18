@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"bytes"
 	"fmt"
+	"go/ast"
 	"go/format"
 	"go/parser"
 	"go/token"
@@ -36,7 +37,28 @@ func (o *Orchestrator) executeDeleteDeclaration(operation *RefactoringOperation,
 	}
 	startLine := fset.Position(node.Decls[removeIdx].Pos()).Line
 	endLine := fset.Position(node.Decls[removeIdx].End()).Line
+
+	// Capture the doc comment so we can remove it from node.Comments too.
+	// Without this, format.Node emits it as a free-floating comment after deletion.
+	var docComment *ast.CommentGroup
+	switch d := node.Decls[removeIdx].(type) {
+	case *ast.FuncDecl:
+		docComment = d.Doc
+	case *ast.GenDecl:
+		docComment = d.Doc
+	}
+
 	node.Decls = append(node.Decls[:removeIdx], node.Decls[removeIdx+1:]...)
+
+	if docComment != nil {
+		filtered := node.Comments[:0]
+		for _, cg := range node.Comments {
+			if cg != docComment {
+				filtered = append(filtered, cg)
+			}
+		}
+		node.Comments = filtered
+	}
 	var buf bytes.Buffer
 	if err := format.Node(&buf, fset, node); err != nil {
 		return fmt.Errorf("failed to format file: %w", err)

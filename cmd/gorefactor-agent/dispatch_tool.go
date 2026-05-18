@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 )
 
@@ -52,6 +53,16 @@ func dispatchTool(call toolCall, cfg Config, gateFails *int) (string, toolStatus
 
 	case "find_references":
 		return senseFindRefs(str("symbol")), stContinue
+
+	case "extract_method":
+		intStr := func(k string) string {
+			if v, ok := a[k].(float64); ok {
+				return fmt.Sprintf("%d", int(v))
+			}
+			s, _ := a[k].(string)
+			return strings.TrimSpace(s)
+		}
+		return applyExtractMethod(str("file"), intStr("start_line"), intStr("end_line"), str("new_function_name")), stContinue
 
 	case "rename_declaration", "replace_code", "insert_code",
 		"create_file", "move_method", "delete_declaration", "remove_code_block":

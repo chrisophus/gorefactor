@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/chrisophus/gorefactor/analyzer"
@@ -144,6 +145,48 @@ func doPunt(cfg Config, kind, reason string, trace []traceEntry, steps int) erro
 	return &puntError{rep: rep}
 }
 
+// logToolCall prints a tool call and its result. In normal mode it prints a
+// single trimmed summary line. In verbose mode it also prints the full
+// arguments and the untruncated result so the caller can see exactly what
+// the model asked for and what came back.
+func logToolCall(out io.Writer, verbose bool, name, args, result string) {
+	if verbose {
+		fmt.Fprintf(out, "  → %s\n", name)
+		if args != "" && args != "{}" {
+			fmt.Fprintf(out, "    args: %s\n", args)
+		}
+		fmt.Fprintf(out, "    result: %s\n", result)
+	} else {
+		fmt.Fprintf(out, "  → %s: %s\n", name, trim(result, 160))
+	}
+}
+
+// gorefactorBin returns the path to the gorefactor binary, found as a sibling
+// of the running agent binary so it works regardless of PATH.
+func gorefactorBin() string {
+	exe, err := os.Executable()
+	if err == nil {
+		sib := filepath.Join(filepath.Dir(exe), "gorefactor")
+		if _, err := os.Stat(sib); err == nil {
+			return sib
+		}
+	}
+	return "gorefactor" // fall back to PATH
+}
+
+// applyExtractMethod runs `gorefactor extract <file> <start> <end> <name>` and
+// returns a compact result string the model can react to.
+func applyExtractMethod(file, start, end, name string) string {
+	if file == "" || start == "" || end == "" || name == "" {
+		return "ERROR: file, start_line, end_line, and new_function_name are all required"
+	}
+	out, err := runIn(".", gorefactorBin(), "extract", file, start, end, name)
+	if err != nil {
+		return "ERROR extracting method: " + trim(out, 400)
+	}
+	return fmt.Sprintf("extracted lines %s-%s into %s in %s", start, end, name, file)
+}
+
 // --- sense tools (read-only, tight output per task #12) -------------
 
 func senseListSymbols(file string) string {
@@ -217,33 +260,24 @@ func senseFindRefs(symbol string) string {
 // --- catalog & prompt ------------------------------------------------
 
 func agenticSystemPrompt(dir string) string {
-	map_ := codeMap(dir)
-	return `You are a mechanical Go refactoring agent. You may ONLY change
-code by calling the provided tools — there is no file editor and no
-shell. Every mutation tool is a deterministic, AST-correct gorefactor
-operation; the build/test gate is the only judge of correctness.
+	files := fileList(dir)
+	return `You are a mechanical Go refactoring agent. Change code ONLY via
+the provided tools. Every mutation is a deterministic AST-correct
+gorefactor op; go build+test is the only correctness judge.
 
-REPO LAYOUT (all non-test Go files):
-` + map_ + `
+GO SOURCE FILES:
+` + files + `
 
-FILE PATHS: Use only paths from the repo layout above. Do NOT guess
-paths like "main.go" — Go projects keep source in subdirectories
-(cmd/, pkg/, internal/, etc.). If a tool returns an error about a
-missing file, you used the wrong path; consult the layout above and
-retry with the correct one.
-
-WORKFLOW:
-1. Use sense tools (list_symbols, read_excerpt, analyze_file_size,
-   find_references) to orient. Keep it minimal.
-2. Apply mutation tools to make the change.
-3. Call finish — it runs go build + go test. If it fails, fix and call
-   finish again.
-4. If the task CANNOT be accomplished with these tools (needs logic you
-   cannot express as rename/move/insert/replace/create/delete), call
-   punt with a clear reason. Punting is correct and expected when the
-   tools do not fit — do NOT hack around it or fake completion.
-
-Never claim done without calling finish. Be minimal and behaviour-safe.`
+RULES:
+- Use ONLY paths from the list above. Never guess paths like "main.go".
+- If a file tool errors with "no such file", you used the wrong path.
+- For extract_method: call list_symbols then read_excerpt to get exact
+  line numbers before extracting. Do not guess line numbers.
+- If the spec names the file and function, go straight to mutation —
+  skip sense tools unless you need line numbers or content.
+- Call finish when done. If the gate fails, fix and call finish again.
+- If the task needs logic you cannot express as a tool call, punt with
+  a clear reason. Punting is correct — do not fake completion.`
 }
 
 func obj(props map[string]any, required ...string) map[string]any {
@@ -262,49 +296,57 @@ func tool(name, desc string, params map[string]any) toolDef {
 
 func toolCatalog() []toolDef {
 	return []toolDef{
-		tool("list_symbols", "List functions/methods declared in a Go file.",
-			obj(map[string]any{"file": strProp("relative path")}, "file")),
-		tool("read_excerpt", "Read a bounded slice of a file (<=120 lines).",
-			obj(map[string]any{"file": strProp("relative path"),
-				"start_line": intProp("1-based start"), "end_line": intProp("end line")}, "file")),
-		tool("analyze_file_size", "Report a file's size and extraction hints.",
-			obj(map[string]any{"file": strProp("relative path")}, "file")),
-		tool("find_references", "Find lines mentioning a symbol across the repo.",
+		// sense (read-only)
+		tool("list_symbols", "List funcs/methods in a file.",
+			obj(map[string]any{"file": strProp("path")}, "file")),
+		tool("read_excerpt", "Read lines from a file (max 120).",
+			obj(map[string]any{"file": strProp("path"),
+				"start_line": intProp("1-based"), "end_line": intProp("inclusive")}, "file")),
+		tool("analyze_file_size", "File line count and extraction hints.",
+			obj(map[string]any{"file": strProp("path")}, "file")),
+		tool("find_references", "Lines mentioning a symbol across the repo.",
 			obj(map[string]any{"symbol": strProp("identifier")}, "symbol")),
 
+		// mutation
+		tool("extract_method", "Extract lines into a new function. Get line numbers via list_symbols+read_excerpt first.",
+			obj(map[string]any{
+				"file":              strProp("path"),
+				"start_line":        intProp("first line (1-based)"),
+				"end_line":          intProp("last line (inclusive)"),
+				"new_function_name": strProp("new function name"),
+			}, "file", "start_line", "end_line", "new_function_name")),
 		tool("rename_declaration", "Rename an unexported declaration package-wide.",
-			obj(map[string]any{"file": strProp("file containing the decl"),
-				"function": strProp("function name (or)"), "method": strProp("method name (or)"),
-				"type": strProp("type name"), "new_name": strProp("new identifier")}, "file", "new_name")),
-		tool("replace_code", "Replace a whole top-level statement inside a function.",
-			obj(map[string]any{"file": strProp("file"), "function": strProp("enclosing function"),
-				"code_pattern":     strProp("the EXACT complete statement to replace"),
-				"replacement_code": strProp("equivalent replacement statement(s)")},
+			obj(map[string]any{"file": strProp("path"), "function": strProp("or"),
+				"method": strProp("or"), "type": strProp("or"),
+				"new_name": strProp("new identifier")}, "file", "new_name")),
+		tool("replace_code", "Replace a complete statement inside a function.",
+			obj(map[string]any{"file": strProp("path"), "function": strProp("enclosing func"),
+				"code_pattern": strProp("exact statement to replace"), "replacement_code": strProp("replacement")},
 				"file", "function", "code_pattern", "replacement_code")),
-		tool("insert_code", "Insert a new declaration into a file.",
-			obj(map[string]any{"file": strProp("file"),
+		tool("insert_code", "Insert a declaration into a file.",
+			obj(map[string]any{"file": strProp("path"),
 				"location_type":   strProp("at_end|after_function|before_function|at_beginning"),
-				"anchor_function": strProp("anchor for *_function locations"),
+				"anchor_function": strProp("anchor (for *_function)"),
 				"code_snippet":    strProp("full declaration")}, "file", "location_type", "code_snippet")),
-		tool("create_file", "Create a new file with full contents.",
-			obj(map[string]any{"file": strProp("new path"),
-				"code_snippet": strProp("complete file text incl. package clause")}, "file", "code_snippet")),
+		tool("create_file", "Create a new Go file.",
+			obj(map[string]any{"file": strProp("path"),
+				"code_snippet": strProp("full file including package clause")}, "file", "code_snippet")),
 		tool("move_method", "Move a method to another file.",
-			obj(map[string]any{"file": strProp("source file"), "method": strProp("method name"),
-				"receiver_type": strProp("receiver type"), "new_file": strProp("destination file")},
+			obj(map[string]any{"file": strProp("source"), "method": strProp("method name"),
+				"receiver_type": strProp("receiver type"), "new_file": strProp("destination")},
 				"file", "method", "receiver_type", "new_file")),
-		tool("delete_declaration", "Delete a declaration.",
-			obj(map[string]any{"file": strProp("file"), "function": strProp("function (or)"),
-				"method": strProp("method (or)"), "type": strProp("type")}, "file")),
-		tool("remove_code_block", "Remove a code block matching an exact pattern.",
-			obj(map[string]any{"file": strProp("file"), "code_pattern": strProp("exact block")},
+		tool("delete_declaration", "Delete a func/method/type declaration.",
+			obj(map[string]any{"file": strProp("path"), "function": strProp("or"),
+				"method": strProp("or"), "type": strProp("or")}, "file")),
+		tool("remove_code_block", "Remove a block matching an exact pattern.",
+			obj(map[string]any{"file": strProp("path"), "code_pattern": strProp("exact block")},
 				"file", "code_pattern")),
 
-		tool("run_gate", "Advisory: run go build + go test now.", obj(map[string]any{})),
-		tool("finish", "Declare the task complete; runs the authoritative build+test gate.",
-			obj(map[string]any{})),
-		tool("punt", "Give up: the task cannot be done with these tools.",
-			obj(map[string]any{"reason": strProp("why the tools do not fit")}, "reason")),
+		// control
+		tool("run_gate", "Run go build+test and report (advisory, non-terminal).", obj(map[string]any{})),
+		tool("finish", "Mark task complete and run the authoritative gate.", obj(map[string]any{})),
+		tool("punt", "Give up; task cannot be done with these tools.",
+			obj(map[string]any{"reason": strProp("why")}, "reason")),
 	}
 }
 

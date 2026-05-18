@@ -4,14 +4,16 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"strings"
 )
 
 // RunInteractiveAgenticDriver is the interactive version of the agentic loop.
-// It pauses after each tool execution to let the user review and provide feedback.
+// After each tool execution the user can chat freely with the agent, review
+// the diff, stop, or continue. Any text that isn't a recognized command is
+// sent to the model as a chat message and the agent responds before the next
+// step begins.
 func RunInteractiveAgenticDriver(ctx context.Context, tc toolChatter, cfg Config) (err error) {
 	if cfg.Out == nil {
 		cfg.Out = os.Stdout
@@ -56,16 +58,28 @@ func RunInteractiveAgenticDriver(ctx context.Context, tc toolChatter, cfg Config
 		}
 		messages = append(messages, asst)
 
+		// Always show model reasoning in interactive mode — this is the main
+		// thing the user wants to see.
+		if asst.Content != "" {
+			fmt.Fprintf(cfg.Out, "\n  agent: %s\n", asst.Content)
+		}
+
 		if len(asst.ToolCalls) == 0 {
 			noTool++
-			if cfg.Verbose && asst.Content != "" {
-				fmt.Fprintf(cfg.Out, "  (model said: %s)\n", trim(asst.Content, 300))
-			}
 			trace = addTrace(trace, traceEntry{Step: step, Tool: "(no tool call)",
 				Result: trim(asst.Content, 160)})
 			if noTool >= maxNoToolTurn {
 				return doPunt(cfg, "autopunt:no_tool_calls",
 					"model produced prose instead of tool calls repeatedly", trace, step)
+			}
+			if !autoRun {
+				// Give the user a chance to redirect before nudging the model.
+				stopped, goAuto, newMsgs := chatPause(ctx, tc, cfg, messages, tools, reader)
+				messages = newMsgs
+				autoRun = goAuto
+				if stopped {
+					return doPunt(cfg, "user_stop", "user stopped interactively", trace, step)
+				}
 			}
 			messages = append(messages, chatMessage{Role: "user",
 				Content: "Act via a tool. When the change is complete call finish. " +
@@ -76,76 +90,16 @@ func RunInteractiveAgenticDriver(ctx context.Context, tc toolChatter, cfg Config
 
 		for _, call := range asst.ToolCalls {
 			content, status := dispatchTool(call, cfg, &gateFails)
-			fmt.Fprintf(cfg.Out, "  → %s: %s\n", call.Function.Name, trim(content, 160))
+			logToolCall(cfg.Out, cfg.Verbose, call.Function.Name, call.Function.Arguments, content)
 			trace = addTrace(trace, traceEntry{Step: step, Tool: call.Function.Name,
 				Args: trim(call.Function.Arguments, 200), Result: trim(content, 200)})
 
-			// Interactive pause point: before appending tool result to messages
-			if !autoRun && status == stContinue {
-				userFeedback := promptUser(cfg.Out, reader, step, cfg.MaxIter)
-				switch {
-				case userFeedback == "c" || userFeedback == "":
-					// Continue normally
-					messages = append(messages, chatMessage{
-						Role: "tool", ToolCallID: call.ID, Content: content,
-					})
-
-				case strings.HasPrefix(userFeedback, "f "):
-					// Provide feedback and continue
-					feedback := strings.TrimPrefix(userFeedback, "f ")
-					messages = append(messages, chatMessage{
-						Role: "user",
-						Content: fmt.Sprintf("User feedback: %s. Please refine your approach based on this guidance.",
-							strings.TrimSpace(feedback)),
-					})
-					messages = append(messages, chatMessage{
-						Role: "tool", ToolCallID: call.ID, Content: content,
-					})
-
-				case userFeedback == "r":
-					// Show diff and re-prompt
-					showGitDiff(cfg.Dir, cfg.Out)
-					userFeedback = promptUser(cfg.Out, reader, step, cfg.MaxIter)
-					if userFeedback == "s" {
-						return doPunt(cfg, "user_stop", "user stopped via review", trace, step)
-					}
-					// Treat as continue after reviewing
-					messages = append(messages, chatMessage{
-						Role: "tool", ToolCallID: call.ID, Content: content,
-					})
-
-				case userFeedback == "s":
-					// Stop and punt
-					return doPunt(cfg, "user_stop", "user stopped interactively", trace, step)
-
-				case userFeedback == "a":
-					// Auto-continue: switch off pausing
-					autoRun = true
-					messages = append(messages, chatMessage{
-						Role: "tool", ToolCallID: call.ID, Content: content,
-					})
-
-				case userFeedback == "?" || userFeedback == "help":
-					// Show help and re-prompt
-					showHelp(cfg.Out)
-					userFeedback = promptUser(cfg.Out, reader, step, cfg.MaxIter)
-					// Treat like "c" after help
-					messages = append(messages, chatMessage{
-						Role: "tool", ToolCallID: call.ID, Content: content,
-					})
-
-				default:
-					// Unknown command, treat as continue
-					messages = append(messages, chatMessage{
-						Role: "tool", ToolCallID: call.ID, Content: content,
-					})
-				}
-			} else {
-				// Auto-run mode or special status: append normally
-				messages = append(messages, chatMessage{
-					Role: "tool", ToolCallID: call.ID, Content: content,
-				})
-			}
+			// Append tool result now so the message history is valid before
+			// we open the chat pause (OpenAI requires tool results to follow
+			// their tool calls before any user message).
+			messages = append(messages, chatMessage{
+				Role: "tool", ToolCallID: call.ID, Content: content,
+			})
 
 			switch status {
 			case stSuccess:
@@ -153,6 +107,15 @@ func RunInteractiveAgenticDriver(ctx context.Context, tc toolChatter, cfg Config
 				return nil
 			case stPunt:
 				return doPunt(cfg, "explicit", content, trace, step)
+			}
+
+			if !autoRun {
+				stopped, goAuto, newMsgs := chatPause(ctx, tc, cfg, messages, tools, reader)
+				messages = newMsgs
+				autoRun = goAuto
+				if stopped {
+					return doPunt(cfg, "user_stop", "user stopped interactively", trace, step)
+				}
 			}
 		}
 		if gateFails >= maxGateFails {
@@ -163,19 +126,60 @@ func RunInteractiveAgenticDriver(ctx context.Context, tc toolChatter, cfg Config
 	return doPunt(cfg, "autopunt:budget", "tool-call budget exhausted", trace, cfg.MaxIter)
 }
 
-// promptUser displays the interactive prompt and reads user input.
-func promptUser(out io.Writer, reader *bufio.Reader, step, maxIter int) string {
-	fmt.Fprintf(out, "  Continue? [c/f/r/s/a/?] > ")
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		// EOF or other error: treat as "c" (continue)
-		return "c"
+// chatPause opens a conversational pause after a tool step. The user can type
+// freely: any text goes to the model as a chat message and the agent responds.
+// Recognized commands: enter/c = continue, r = diff, s = stop, a = auto.
+// Returns (stopped, goAuto, updated messages).
+const pausePrompt = "\n  ↩ continue · (a)uto · (r)eview diff · (s)top · or chat > "
+
+func chatPause(ctx context.Context, tc toolChatter, cfg Config, messages []chatMessage, tools []toolDef, reader *bufio.Reader) (stopped, goAuto bool, newMsgs []chatMessage) {
+	fmt.Fprint(cfg.Out, pausePrompt)
+	for {
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return false, false, messages // EOF → continue
+		}
+		input = strings.TrimSpace(input)
+
+		switch input {
+		case "", "c":
+			return false, false, messages
+
+		case "a":
+			return false, true, messages
+
+		case "s", "stop":
+			return true, false, messages
+
+		case "r", "diff":
+			showGitDiff(cfg.Dir, cfg.Out)
+			fmt.Fprint(cfg.Out, pausePrompt)
+
+		default:
+			// Free-form chat: send to model, show response, loop.
+			messages = append(messages, chatMessage{Role: "user", Content: input})
+			resp, err := tc.ChatTools(ctx, compactMessages(messages, 12), tools)
+			if err != nil {
+				fmt.Fprintf(cfg.Out, "  (error: %v)\n", err)
+				fmt.Fprint(cfg.Out, pausePrompt)
+				continue
+			}
+			messages = append(messages, resp)
+			if resp.Content != "" {
+				fmt.Fprintf(cfg.Out, "\n  agent: %s\n", resp.Content)
+			}
+			// If the model responded with tool calls, hand back to the main
+			// loop to execute them rather than trying to dispatch here.
+			if len(resp.ToolCalls) > 0 {
+				return false, false, messages
+			}
+			fmt.Fprint(cfg.Out, pausePrompt)
+		}
 	}
-	return strings.TrimSpace(input)
 }
 
 // showGitDiff displays the current git diff to the user.
-func showGitDiff(dir string, out io.Writer) {
+func showGitDiff(dir string, out interface{ Write([]byte) (int, error) }) {
 	cmd := exec.Command("git", "-C", dir, "diff")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -189,19 +193,4 @@ func showGitDiff(dir string, out io.Writer) {
 	fmt.Fprintf(out, "  ┌─ git diff ──\n")
 	fmt.Fprintf(out, "%s", indent(string(output)))
 	fmt.Fprintf(out, "  └──\n")
-}
-
-// showHelp displays the interactive command help.
-func showHelp(out io.Writer) {
-	fmt.Fprintf(out, `
-  Interactive Mode Commands:
-    c           - Continue (accept this step and proceed)
-    f <text>    - Provide feedback before continuing
-    r           - Review changes so far (show git diff)
-    s           - Stop (punt gracefully and rollback)
-    a           - Auto-continue (stop pausing, finish autonomously)
-    ? or help   - Show this help message
-    <enter>     - Same as 'c' (continue)
-
-`)
 }

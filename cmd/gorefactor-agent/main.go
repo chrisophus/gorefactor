@@ -7,6 +7,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"flag"
@@ -46,9 +47,20 @@ func main() {
 		os.Exit(2)
 	}
 	if spec == "" && !*campaign {
-		fmt.Fprintln(os.Stderr, "Error: -spec is required (text or @file), or use -campaign")
-		flag.Usage()
-		os.Exit(2)
+		if *interactive {
+			fmt.Print("What would you like to do? > ")
+			reader := bufio.NewReader(os.Stdin)
+			line, _ := reader.ReadString('\n')
+			spec = strings.TrimSpace(line)
+			if spec == "" {
+				fmt.Fprintln(os.Stderr, "Error: no spec provided")
+				os.Exit(2)
+			}
+		} else {
+			fmt.Fprintln(os.Stderr, "Error: -spec is required (text or @file), or use -campaign")
+			flag.Usage()
+			os.Exit(2)
+		}
 	}
 
 	cfg := Config{

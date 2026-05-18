@@ -71,7 +71,7 @@ func RunAgenticDriver(ctx context.Context, tc toolChatter, cfg Config) (err erro
 
 		for _, call := range asst.ToolCalls {
 			content, status := dispatchTool(call, cfg, &gateFails)
-			fmt.Fprintf(cfg.Out, "  → %s: %s\n", call.Function.Name, trim(content, 160))
+			logToolCall(cfg.Out, cfg.Verbose, call.Function.Name, call.Function.Arguments, content)
 			trace = addTrace(trace, traceEntry{Step: step, Tool: call.Function.Name,
 				Args: trim(call.Function.Arguments, 200), Result: trim(content, 200)})
 			messages = append(messages, chatMessage{

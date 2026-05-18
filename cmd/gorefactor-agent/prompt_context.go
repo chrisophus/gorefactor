@@ -10,9 +10,20 @@ import (
 	"github.com/chrisophus/gorefactor/parser"
 )
 
-// codeMap gives the model the semantic anchors it must target by:
-// the functions/methods/types per .go file. Built from gorefactor's
-// own parser so the map can never drift from what the engine sees.
+// fileList returns a compact newline-separated list of non-test Go file paths
+// relative to dir. Used in the system prompt so the model knows valid paths
+// without the token cost of a full symbol dump.
+func fileList(dir string) string {
+	files := goFiles(dir)
+	var b strings.Builder
+	for _, f := range files {
+		rel, _ := filepath.Rel(dir, f)
+		b.WriteString(rel)
+		b.WriteByte('\n')
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
 func goFiles(dir string) []string {
 	var files []string
 	filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {

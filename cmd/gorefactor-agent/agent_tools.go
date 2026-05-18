@@ -169,8 +169,11 @@ func senseFileSize(file string) string {
 		return "ERROR: 'file' required"
 	}
 	iss, err := analyzer.AnalyzeFileSize(file, 300)
-	if err != nil || iss == nil {
-		return "ERROR analyzing file size"
+	if err != nil {
+		return "ERROR analyzing file size: " + err.Error()
+	}
+	if iss == nil {
+		return "ERROR: no result returned for " + file
 	}
 	b := &strings.Builder{}
 	fmt.Fprintf(b, "lines=%d limit=%d oversized=%v\n", iss.LineCount, iss.MaxRecommended, iss.IsOversized)
@@ -213,11 +216,21 @@ func senseFindRefs(symbol string) string {
 
 // --- catalog & prompt ------------------------------------------------
 
-func agenticSystemPrompt() string {
+func agenticSystemPrompt(dir string) string {
+	map_ := codeMap(dir)
 	return `You are a mechanical Go refactoring agent. You may ONLY change
 code by calling the provided tools — there is no file editor and no
 shell. Every mutation tool is a deterministic, AST-correct gorefactor
 operation; the build/test gate is the only judge of correctness.
+
+REPO LAYOUT (all non-test Go files):
+` + map_ + `
+
+FILE PATHS: Use only paths from the repo layout above. Do NOT guess
+paths like "main.go" — Go projects keep source in subdirectories
+(cmd/, pkg/, internal/, etc.). If a tool returns an error about a
+missing file, you used the wrong path; consult the layout above and
+retry with the correct one.
 
 WORKFLOW:
 1. Use sense tools (list_symbols, read_excerpt, analyze_file_size,

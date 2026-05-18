@@ -37,7 +37,7 @@ func RunInteractiveAgenticDriver(ctx context.Context, tc toolChatter, cfg Config
 	defer func() { emitRunMetrics(cfg.Out, tc, err, lastStep) }()
 
 	messages := []chatMessage{
-		{Role: "system", Content: agenticSystemPrompt()},
+		{Role: "system", Content: agenticSystemPrompt(cfg.Dir)},
 		{Role: "user", Content: "TASK:\n" + strings.TrimSpace(cfg.Spec)},
 	}
 	tools := toolCatalog()

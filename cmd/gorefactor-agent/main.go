@@ -70,7 +70,7 @@ func main() {
 			fmt.Println(buildUserPrompt(spec, *dir, ""))
 		} else {
 			fmt.Println("===== SYSTEM (agentic, default) =====")
-			fmt.Println(agenticSystemPrompt())
+			fmt.Println(agenticSystemPrompt(*dir))
 			fmt.Println("\n===== TOOLS =====")
 			for _, td := range toolCatalog() {
 				fmt.Printf("- %s: %s\n", td.Function.Name, td.Function.Description)

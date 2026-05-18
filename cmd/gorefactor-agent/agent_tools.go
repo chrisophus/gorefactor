@@ -145,22 +145,6 @@ func doPunt(cfg Config, kind, reason string, trace []traceEntry, steps int) erro
 	return &puntError{rep: rep}
 }
 
-// logToolCall prints a tool call and its result. In normal mode it prints a
-// single trimmed summary line. In verbose mode it also prints the full
-// arguments and the untruncated result so the caller can see exactly what
-// the model asked for and what came back.
-func logToolCall(out io.Writer, verbose bool, name, args, result string) {
-	if verbose {
-		fmt.Fprintf(out, "  → %s\n", name)
-		if args != "" && args != "{}" {
-			fmt.Fprintf(out, "    args: %s\n", args)
-		}
-		fmt.Fprintf(out, "    result: %s\n", result)
-	} else {
-		fmt.Fprintf(out, "  → %s: %s\n", name, trim(result, 160))
-	}
-}
-
 // gorefactorBin returns the path to the gorefactor binary, found as a sibling
 // of the running agent binary so it works regardless of PATH.
 func gorefactorBin() string {
@@ -172,6 +156,26 @@ func gorefactorBin() string {
 		}
 	}
 	return "gorefactor" // fall back to PATH
+}
+
+func logToolCall(out io.Writer, verbose bool, name, args, result string) {
+	if verbose {
+		fmt.Fprintf(out, "  → %s\n", name)
+		if args != "" && args != "{}" {
+			var pretty []byte
+			if err := json.Unmarshal([]byte(args), new(any)); err == nil {
+				pretty, _ = json.MarshalIndent(json.RawMessage(args), "    ", "  ")
+			}
+			if len(pretty) > 0 {
+				fmt.Fprintf(out, "    args: %s\n", pretty)
+			} else {
+				fmt.Fprintf(out, "    args: %s\n", args)
+			}
+		}
+		fmt.Fprintf(out, "    result: %s\n", trim(result, 2000))
+	} else {
+		fmt.Fprintf(out, "  → %s: %s\n", name, trim(result, 160))
+	}
 }
 
 // applyExtractMethod runs `gorefactor extract <file> <start> <end> <name>` and

@@ -50,12 +50,12 @@ func RunAgenticDriver(ctx context.Context, tc toolChatter, cfg Config) (err erro
 			return fmt.Errorf("provider call failed: %w", err)
 		}
 		messages = append(messages, asst)
+		if cfg.Verbose && asst.Content != "" {
+			fmt.Fprintf(cfg.Out, "  thinking: %s\n", asst.Content)
+		}
 
 		if len(asst.ToolCalls) == 0 {
 			noTool++
-			if cfg.Verbose && asst.Content != "" {
-				fmt.Fprintf(cfg.Out, "  (model said: %s)\n", trim(asst.Content, 300))
-			}
 			trace = addTrace(trace, traceEntry{Step: step, Tool: "(no tool call)",
 				Result: trim(asst.Content, 160)})
 			if noTool >= maxNoToolTurn {

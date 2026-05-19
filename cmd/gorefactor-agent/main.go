@@ -99,6 +99,11 @@ func main() {
 	// sees a complete record. On no match, fall through to the agent.
 	if matched, err := triage(cfg); matched {
 		if err != nil {
+			var pe *puntError
+			if errors.As(err, &pe) {
+				fmt.Fprintln(os.Stderr, "punted:", pe.Error())
+				os.Exit(3)
+			}
 			fmt.Fprintln(os.Stderr, "\nError:", err)
 			os.Exit(1)
 		}

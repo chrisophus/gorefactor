@@ -12,12 +12,17 @@
 #
 # Usage: scripts/reliability.sh [iters] [model] [api-base] [provider] [outfile]
 #   provider : openai (default, OpenAI-compatible) | anthropic
-#   api-base : pass "" to use the provider default (required for anthropic)
+#   api-base : pass "" to use the provider default (required for anthropic);
+#              omit entirely to default to the local Ollama base URL
 #   outfile  : default $REPO/RELIABILITY.md
 set -u
 ITERS="${1:-3}"
 MODEL="${2:-qwen2.5-coder:14b}"
-APIBASE="${3:-http://localhost:11434/v1}"
+# NOTE: ${3-default} (no colon) so an explicit empty "" is preserved as
+# "use the provider's own default"; only an *unset* $3 falls back to
+# Ollama. ${3:-default} would clobber "" with the Ollama URL and point a
+# non-ollama provider (e.g. anthropic) at localhost:11434 -> 404.
+APIBASE="${3-http://localhost:11434/v1}"
 PROVIDER="${4:-openai}"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${5:-$REPO/RELIABILITY.md}"

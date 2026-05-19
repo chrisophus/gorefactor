@@ -57,6 +57,9 @@ func lintCommand(args []string) error {
 	if dups := checkDuplicates(root); len(dups) > 0 {
 		issues = append(issues, dups...)
 	}
+	if dead := checkDeadCode(root); len(dead) > 0 {
+		issues = append(issues, dead...)
+	}
 	if untested := checkUntestedPackages(root); len(untested) > 0 {
 		issues = append(issues, untested...)
 	}
@@ -132,6 +135,19 @@ func applyAutoFixes(issues []lintIssue, maxSize int) (applied, failed int) {
 				continue
 			}
 			applied++
+		} else if iss.Rule == "dead-code" {
+			// Extract file and target from AutoFixCmd
+			// Format: "delete <file> <target>"
+			parts := strings.Fields(iss.AutoFixCmd)
+			if len(parts) >= 3 && parts[0] == "delete" {
+				target := parts[2]
+				if err := deleteCommand([]string{iss.File, target}); err != nil {
+					fmt.Fprintf(os.Stderr, "fix failed for %s: %v\n", iss.File, err)
+					failed++
+					continue
+				}
+				applied++
+			}
 		}
 	}
 	return

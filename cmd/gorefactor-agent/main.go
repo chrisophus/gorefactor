@@ -93,6 +93,8 @@ func main() {
 		return
 	}
 
+	providerDebug = *verbose
+
 	provider := providerFromFlags(*providerK, *apiBase, *model)
 
 	// Validate mode combinations

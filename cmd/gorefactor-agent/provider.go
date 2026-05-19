@@ -144,9 +144,12 @@ func (p *openAIProvider) ChatTools(ctx context.Context, messages []chatMessage, 
 	if err != nil {
 		return chatMessage{}, err
 	}
+	endpoint := p.baseURL + "/chat/completions"
+	provDebugf("openai ChatTools -> POST %s model=%s msgs=%d tools=%d reqBytes=%d",
+		endpoint, p.model, len(messages), len(tools), len(buf))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		p.baseURL+"/chat/completions", bytes.NewReader(buf))
+		endpoint, bytes.NewReader(buf))
 	if err != nil {
 		return chatMessage{}, err
 	}
@@ -155,16 +158,22 @@ func (p *openAIProvider) ChatTools(ctx context.Context, messages []chatMessage, 
 		req.Header.Set("Authorization", "Bearer "+p.apiKey)
 	}
 
+	start := time.Now()
 	resp, err := p.client.Do(req)
 	if err != nil {
+		provDebugf("openai ChatTools FAILED after %s: %v", time.Since(start), err)
 		return chatMessage{}, err
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
+	elapsed := time.Since(start)
 	if resp.StatusCode != http.StatusOK {
+		provDebugf("openai ChatTools <- HTTP %d in %s (%d bytes): %s",
+			resp.StatusCode, elapsed, len(body), strings.TrimSpace(string(body)))
 		return chatMessage{}, fmt.Errorf("provider HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
+	ptBefore, ctBefore := p.promptToks, p.completionToks
 	p.addUsage(body)
 
 	var parsed struct {
@@ -183,12 +192,17 @@ func (p *openAIProvider) ChatTools(ctx context.Context, messages []chatMessage, 
 	// Hermes <tool_call> tags) rather than the OpenAI `tool_calls`
 	// field. The model IS tool-calling; absorb its dialect (harness
 	// absorbs model variety) instead of mistaking it for prose.
+	recovered := false
 	if len(msg.ToolCalls) == 0 {
 		if tcs := parseContentToolCalls(msg.Content); len(tcs) > 0 {
 			msg.ToolCalls = tcs
 			msg.Content = ""
+			recovered = true
 		}
 	}
+	provDebugf("openai ChatTools <- HTTP 200 in %s (%d bytes) in_tok=%d out_tok=%d toolcalls=%d recovered=%t textlen=%d",
+		elapsed, len(body), p.promptToks-ptBefore, p.completionToks-ctBefore,
+		len(msg.ToolCalls), recovered, len(msg.Content))
 	return msg, nil
 }
 

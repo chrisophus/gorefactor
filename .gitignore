@@ -1,6 +1,6 @@
 # Build artifacts
-gorefactor
-skill-refactor
+/gorefactor
+/skill-refactor
 *.exe
 *.dll
 *.so

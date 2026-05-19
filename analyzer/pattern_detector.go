@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"sort"
 	"strings"
 )
 
@@ -206,50 +207,67 @@ func (pd *PatternDetector) detectLargeClass() []ArchitecturalPattern {
 	return patterns
 }
 
-// detectDataClumps finds groups of variables that appear together frequently
+// detectDataClumps finds typed parameter groups (>=3 params) that recur
+// across >=2 functions in the file -- a Fowler "data clump" that likely
+// wants to become its own struct. The signature is keyed on (name,type)
+// pairs so int/string params are never conflated, order-normalized so a
+// reordered group still matches, and emitted in deterministic order so
+// the output does not depend on map iteration.
 func (pd *PatternDetector) detectDataClumps() []ArchitecturalPattern {
-	var patterns []ArchitecturalPattern
-
-	// Map of parameter signatures (sorted) to count
-	sigMap := make(map[string]int)
-	sigToParams := make(map[string][]string)
+	type clump struct {
+		display string   // human-readable "name type, name type"
+		params  []string // affected param names (first occurrence order)
+		count   int
+	}
+	clumps := make(map[string]*clump)
 
 	for _, decl := range pd.file.Decls {
-		if fn, ok := decl.(*ast.FuncDecl); ok {
-			var paramNames []string
-			if fn.Type.Params != nil {
-				for _, field := range fn.Type.Params.List {
-					for _, name := range field.Names {
-						paramNames = append(paramNames, name.Name)
-					}
-				}
-			}
-			if len(paramNames) >= 3 {
-				// Sort to normalize the signature
-				sig := strings.Join(paramNames, ",")
-				sigMap[sig]++
-				sigToParams[sig] = paramNames
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Type.Params == nil {
+			continue
+		}
+		var pairs, names []string
+		for _, field := range fn.Type.Params.List {
+			t := paramTypeString(field.Type)
+			for _, name := range field.Names {
+				pairs = append(pairs, name.Name+" "+t)
+				names = append(names, name.Name)
 			}
 		}
+		if len(pairs) < 3 {
+			continue
+		}
+		key := append([]string(nil), pairs...)
+		sort.Strings(key)
+		sig := strings.Join(key, ", ")
+		c := clumps[sig]
+		if c == nil {
+			c = &clump{display: strings.Join(pairs, ", "), params: names}
+			clumps[sig] = c
+		}
+		c.count++
 	}
 
-	// Find signatures that appear multiple times
-	for sig, count := range sigMap {
-		if count >= 2 {
-			params := sigToParams[sig]
-			pattern := ArchitecturalPattern{
-				Name:        "Data Clumps",
-				Type:        "smell",
-				Severity:    "low",
-				Description: fmt.Sprintf("Parameter group [%s] appears in %d functions; consider creating a struct", strings.Join(params, ", "), count),
-				Affected:    params,
-				Suggestion:  "Create a struct grouping these related fields, use it in function signatures",
-			}
-			patterns = append(patterns, pattern)
-			break // Only report once per file
+	var sigs []string
+	for sig, c := range clumps {
+		if c.count >= 2 {
+			sigs = append(sigs, sig)
 		}
 	}
+	sort.Strings(sigs)
 
+	var patterns []ArchitecturalPattern
+	for _, sig := range sigs {
+		c := clumps[sig]
+		patterns = append(patterns, ArchitecturalPattern{
+			Name:        "Data Clumps",
+			Type:        "smell",
+			Severity:    "low",
+			Description: fmt.Sprintf("Parameter group [%s] appears in %d functions; consider creating a struct", c.display, c.count),
+			Affected:    c.params,
+			Suggestion:  "Create a struct grouping these related fields, use it in function signatures",
+		})
+	}
 	return patterns
 }
 
@@ -311,6 +329,29 @@ func getReceiverTypeName(field *ast.Field) string {
 		return ident.Name
 	}
 	return "Unknown"
+}
+
+func paramTypeString(expr ast.Expr) string {
+	switch e := expr.(type) {
+	case *ast.Ident:
+		return e.Name
+	case *ast.StarExpr:
+		return "*" + paramTypeString(e.X)
+	case *ast.SelectorExpr:
+		return paramTypeString(e.X) + "." + e.Sel.Name
+	case *ast.ArrayType:
+		return "[]" + paramTypeString(e.Elt)
+	case *ast.MapType:
+		return "map[" + paramTypeString(e.Key) + "]" + paramTypeString(e.Value)
+	case *ast.Ellipsis:
+		return "..." + paramTypeString(e.Elt)
+	case *ast.InterfaceType:
+		return "interface{}"
+	case *ast.FuncType:
+		return "func"
+	default:
+		return "expr"
+	}
 }
 
 // countSwitchStatements recursively counts switch statements in a block

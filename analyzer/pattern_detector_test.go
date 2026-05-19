@@ -102,6 +102,26 @@ func Process(id int) {}
 `,
 			shouldDetect: false,
 		},
+		{
+			name: "reordered group still matches (order-normalized)",
+			code: `
+package main
+
+func Validate(name string, email string, phone string) {}
+func Store(email string, phone string, name string) {}
+`,
+			shouldDetect: true,
+		},
+		{
+			name: "same names different types are not conflated",
+			code: `
+package main
+
+func A(x int, y int, z int) {}
+func B(x string, y string, z string) {}
+`,
+			shouldDetect: false,
+		},
 	}
 
 	for _, tt := range tests {

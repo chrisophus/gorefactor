@@ -136,12 +136,12 @@ func applyAutoFixes(issues []lintIssue, maxSize int) (applied, failed int) {
 			}
 			applied++
 		} else if iss.Rule == "dead-code" {
-			// Extract file and target from AutoFixCmd
-			// Format: "delete <file> <target>"
+			// AutoFixCmd is the full intended command, e.g.
+			// "delete <file> <target> --safe"; forward its args
+			// verbatim so the --safe caller-check is preserved.
 			parts := strings.Fields(iss.AutoFixCmd)
 			if len(parts) >= 3 && parts[0] == "delete" {
-				target := parts[2]
-				if err := deleteCommand([]string{iss.File, target}); err != nil {
+				if err := deleteCommand(parts[1:]); err != nil {
 					fmt.Fprintf(os.Stderr, "fix failed for %s: %v\n", iss.File, err)
 					failed++
 					continue

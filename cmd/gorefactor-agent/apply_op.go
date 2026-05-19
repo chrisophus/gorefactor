@@ -77,10 +77,12 @@ func applyOp(kind string, a map[string]any, cfg Config) string {
 	// symbol but guesses its file; for file-scoped symbol ops a wrong
 	// source file is fatal. Resolve the real file ourselves instead of
 	// relying on an LLM retry — the model only has to name the symbol.
+	corrected := ""
 	switch kind {
 	case "move_function", "move_method", "delete_declaration":
 		if sym := argSym(a); sym != "" {
 			if f, ok := resolveSymbolFile(sym, op.File); ok {
+				corrected = op.File + " -> " + f
 				op.File = f
 			}
 		}
@@ -96,6 +98,20 @@ func applyOp(kind string, a map[string]any, cfg Config) string {
 	}
 	if op.File != "" {
 		_, _ = runIn(".", "gofmt", "-w", op.File)
+	}
+	switch kind {
+	case "move_function", "move_method":
+		msg := fmt.Sprintf("moved %s from %s to %s", argSym(a), op.File, str("new_file"))
+		if corrected != "" {
+			msg += " (source auto-resolved: " + corrected + ")"
+		}
+		return msg
+	case "delete_declaration":
+		msg := fmt.Sprintf("deleted %s from %s", argSym(a), op.File)
+		if corrected != "" {
+			msg += " (file auto-resolved: " + corrected + ")"
+		}
+		return msg
 	}
 	return fmt.Sprintf("applied %s on %s", kind, op.File)
 }

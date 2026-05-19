@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
+
+	"github.com/chrisophus/gorefactor/analyzer"
 )
 
 type lintIssue struct {
@@ -103,24 +104,7 @@ func lintCommand(args []string) error {
 }
 
 func collectGoFiles(root string) ([]string, error) {
-	var files []string
-	err := filepath.Walk(root, func(path string, fi os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if fi.IsDir() {
-			name := fi.Name()
-			if name == "vendor" || name == ".git" || name == ".gorefactor" || name == "node_modules" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if strings.HasSuffix(path, ".go") {
-			files = append(files, path)
-		}
-		return nil
-	})
-	return files, err
+	return analyzer.WalkGoFiles(root, analyzer.DefaultWalkOptions())
 }
 
 func applyAutoFixes(issues []lintIssue, maxSize int) (applied, failed int) {

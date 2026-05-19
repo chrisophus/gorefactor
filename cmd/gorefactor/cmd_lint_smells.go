@@ -29,28 +29,31 @@ func checkSmells(file string) []lintIssue {
 	return issues
 }
 
-// checkDeadCode detects unused functions and fields in a package
+// checkDeadCode detects unused unexported functions/methods per Go package
+// directory. Whole-tree analysis misattributes package-local symbols; one
+// detector per directory matches Go's package boundary and is much faster.
 func checkDeadCode(root string) []lintIssue {
 	files, err := collectGoFiles(root)
 	if err != nil {
 		return nil
 	}
 
-	deadIssues := analyzer.NewDeadCodeDetector(files).DetectDeadFunctions()
 	var issues []lintIssue
-	for _, d := range deadIssues {
-		target := d.Name
-		if d.Receiver != "" {
-			target = d.Receiver + ":" + d.Name
+	for _, pkgFiles := range analyzer.GroupFilesByDir(files) {
+		deadIssues := analyzer.NewDeadCodeDetector(pkgFiles).DetectDeadFunctions()
+		for _, d := range deadIssues {
+			target := d.Name
+			if d.Receiver != "" {
+				target = d.Receiver + ":" + d.Name
+			}
+			issues = append(issues, lintIssue{
+				File:       d.File,
+				Rule:       "dead-code",
+				Severity:   "warning",
+				Message:    d.Summary(),
+				AutoFixCmd: "delete " + d.File + " " + target + " --safe",
+			})
 		}
-		issue := lintIssue{
-			File:       d.File,
-			Rule:       "dead-code",
-			Severity:   "warning",
-			Message:    d.Summary(),
-			AutoFixCmd: "delete " + d.File + " " + target + " --safe",
-		}
-		issues = append(issues, issue)
 	}
 	return issues
 }

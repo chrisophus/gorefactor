@@ -183,9 +183,25 @@ func extractBlocksFromFunc(fn *ast.FuncDecl, filePath string, fset *token.FileSe
 	})
 }
 
-// AnalyzeCrossFile performs a complete cross-file analysis on a directory
+// FindDuplicateBlocksInDir walks dirPath with walk options, then finds duplicate
+// function-body blocks. Prefer this over AnalyzeCrossFile when you only need
+// duplicates and want generated/vendor trees skipped (same as lint).
+func FindDuplicateBlocksInDir(dirPath string, walk WalkOptions) ([]DuplicateBlock, error) {
+	files, err := WalkGoFiles(dirPath, walk)
+	if err != nil {
+		return nil, err
+	}
+	return FindDuplicateBlocks(files)
+}
+
+// AnalyzeCrossFile performs a complete cross-file analysis on a directory.
+// Generated *.gen.go / *_gen.go files and standard vendor/.git trees are skipped.
 func AnalyzeCrossFile(dirPath string) (*CrossFileAnalysis, error) {
-	files, err := findGoFiles(dirPath)
+	return analyzeCrossFile(dirPath, DefaultWalkOptions())
+}
+
+func analyzeCrossFile(dirPath string, walk WalkOptions) (*CrossFileAnalysis, error) {
+	files, err := WalkGoFiles(dirPath, walk)
 	if err != nil {
 		return nil, err
 	}

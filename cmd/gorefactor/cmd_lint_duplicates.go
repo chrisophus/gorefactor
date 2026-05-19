@@ -7,13 +7,13 @@ import (
 )
 
 func checkDuplicates(root string) []lintIssue {
-	result, err := analyzer.AnalyzeCrossFile(root)
-	if err != nil || result == nil {
+	blocks, err := analyzer.FindDuplicateBlocksInDir(root, analyzer.DefaultWalkOptions())
+	if err != nil {
 		return nil
 	}
 	var out []lintIssue
-	for _, d := range result.DuplicateBlocks {
-		if d.ImpactScore < 5 {
+	for _, d := range blocks {
+		if d.ImpactScore < analyzer.MinDuplicateImpactScore {
 			continue
 		}
 		locs := make([]string, 0, len(d.Locations))

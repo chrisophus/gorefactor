@@ -2,24 +2,27 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"io/fs"
 	"path/filepath"
 	"strings"
+
+	"github.com/chrisophus/gorefactor/analyzer"
 )
 
 // checkUntestedPackages walks the tree once and flags directories that
-// contain regular .go files but no *_test.go files. golangci-lint does
-// not have a per-package "tests exist" check.
+// contain hand-authored .go files but no *_test.go files. Generated *.gen.go
+// and *_gen.go sources do not count toward "needs tests".
 func checkUntestedPackages(root string) []lintIssue {
+	walk := analyzer.DefaultWalkOptions()
 	hasGo := map[string]bool{}
 	hasTest := map[string]bool{}
-	_ = filepath.Walk(root, func(path string, fi os.FileInfo, err error) error {
-		if err != nil || fi.IsDir() {
-			if fi != nil && fi.IsDir() {
-				name := fi.Name()
-				if name == "vendor" || name == ".git" || name == ".gorefactor" || name == "node_modules" {
-					return filepath.SkipDir
-				}
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if analyzer.ShouldSkipDir(path, walk) {
+				return filepath.SkipDir
 			}
 			return nil
 		}
@@ -29,9 +32,12 @@ func checkUntestedPackages(root string) []lintIssue {
 		dir := filepath.Dir(path)
 		if strings.HasSuffix(path, "_test.go") {
 			hasTest[dir] = true
-		} else {
-			hasGo[dir] = true
+			return nil
 		}
+		if analyzer.ShouldSkipFile(path, walk) {
+			return nil
+		}
+		hasGo[dir] = true
 		return nil
 	})
 	var out []lintIssue

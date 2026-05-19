@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"github.com/chrisophus/gorefactor/analyzer"
 	"os"
-	"path/filepath"
 	"strconv"
-	"strings"
 )
 
 func analyzeFileSizes(args []string) error {
@@ -99,15 +97,5 @@ func analyzeFileSizes(args []string) error {
 }
 
 func findGoFiles(directory string) ([]string, error) {
-	var files []string
-	err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() && strings.HasSuffix(path, ".go") {
-			files = append(files, path)
-		}
-		return nil
-	})
-	return files, err
+	return analyzer.WalkGoFiles(directory, analyzer.DefaultWalkOptions())
 }

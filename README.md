@@ -89,7 +89,7 @@ Methods use `Receiver:Method` (no `*` on the receiver). Many commands accept `-`
 
 | Command | Purpose |
 |---------|---------|
-| `lint` | Rules: `file-size`, `duplicate-block`, `extract-candidate`, `untested-package`; `--fix` splits oversized files |
+| `lint` | Rules: `file-size`, `duplicate-block`, `extract-candidate`, `untested-package`, smells, dead-code; skips `vendor`/`.git`/`node_modules` and `*.gen.go`/`_gen.go`; `--fix` splits oversized files |
 | `doctor` | Lint + `go build` + `go test`; non-zero on failure |
 | `undo` | Roll back last plan (snapshots under `.gorefactor/`) |
 
@@ -147,7 +147,7 @@ Full options and workflows: [CLAUDE.md — Interactive Refactoring with gorefact
 cmd/gorefactor/       CLI entrypoint and commands (including extract)
 cmd/gorefactor-agent/ LLM harness
 parser/               AST → structured JSON
-analyzer/             Complexity, diffs, file-size, duplicates
+analyzer/             Complexity, diffs, file-size, duplicates; `WalkGoFiles` + `WalkOptions` for lint walks
 orchestrator/         JSON plans, semantic targeting, undo snapshots
 skill/                Legacy skill-refactor binary
 ```

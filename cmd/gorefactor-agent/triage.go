@@ -88,15 +88,19 @@ func matchCallers(spec string) (op string, args map[string]any, ok bool) {
 	if len(m) < 2 {
 		return "", nil, false
 	}
-	return "find_callers_report", map[string]any{"symbol": m[1]}, true
+	return "find_references_report", map[string]any{"symbol": m[1]}, true
 }
 
 // runTriaged executes one matched op. Returns (matched, err):
-//   - matched=false, err=nil: graceful fall-through (precondition failed,
-//     symbol unresolvable, or chdir failed) — agent will pick it up.
+//   - matched=false, err=nil: graceful fall-through. The agent picks it
+//     up. Covers a failed precondition, an unresolvable symbol, a chdir
+//     failure, AND an applyOp/gate failure (the worktree is rolled back
+//     first so the agent sees a clean tree). Triage is purely additive:
+//     a triage attempt that fails never makes the task worse than if
+//     triage had not run at all.
 //   - matched=true,  err=nil: op landed + gate green; RUN_METRICS emitted.
-//   - matched=true,  err!=nil: apply/gate failed, worktree rolled back;
-//     main.go exits 1, same surface as a normal agent error.
+//   - matched=true,  err!=nil: autopunt returns its own *puntError so
+//     main.go exits 3. No other code path reaches this branch.
 func runTriaged(cfg Config, name, op string, args map[string]any) (bool, error) {
 	fmt.Fprintf(os.Stderr, "[triage] %s -> %s args=%v (no LLM call)\n", name, op, args)
 	if !cfg.AllowDirty {
@@ -112,10 +116,12 @@ func runTriaged(cfg Config, name, op string, args map[string]any) (bool, error) 
 		defer os.Chdir(prev)
 	}
 
-	if op == "find_callers_report" {
+	if op == "find_references_report" {
 		sym, _ := args["symbol"].(string)
 		out := senseFindRefs(sym)
-		fmt.Fprintf(cfg.Out, "report: callers of %s\n%s\n", sym, out)
+		// senseFindRefs is substring grep — captures defs, comments, and type
+		// uses, not strictly call sites. Label honestly.
+		fmt.Fprintf(cfg.Out, "report: references to %s (substring match; includes defs/comments, not strictly call sites)\n%s\n", sym, out)
 		emitRunMetrics(cfg.Out, nil, nil, 1)
 		fmt.Fprintln(cfg.Out, "  ✓ triage finished; analysis-only (no gate)")
 		return true, nil
@@ -135,16 +141,25 @@ func runTriaged(cfg Config, name, op string, args map[string]any) (bool, error) 
 	}
 	res := applyOp(op, args, cfg)
 	if strings.HasPrefix(res, "ERROR:") || strings.HasPrefix(res, "FAILED:") {
+		// Graceful fall-through: a slightly-malformed spec or an ambiguous
+		// symbol must not hard-exit the agent. Roll back any partial work,
+		// skip RUN_METRICS (the agent will emit its own), let the LLM loop
+		// try a different approach. Preserves the v1 promise that triage is
+		// purely additive and never regresses outcomes.
+		fmt.Fprintf(os.Stderr,
+			"[triage] %s apply failed; rolling back and falling through to agent: %s\n",
+			op, trim(res, 200))
 		rollback(".", cfg.Out)
-		emitRunMetrics(cfg.Out, nil, fmt.Errorf("triage %s failed", op), 1)
-		return true, fmt.Errorf("triage %s: %s", op, trim(res, 200))
+		return false, nil
 	}
 	fmt.Fprintf(cfg.Out, "[triage] %s\n", res)
 	ok, gateOut := runGate(".")
 	if !ok {
+		fmt.Fprintf(os.Stderr,
+			"[triage] gate red after %s; rolling back and falling through to agent:\n%s\n",
+			op, trim(gateOut, 400))
 		rollback(".", cfg.Out)
-		emitRunMetrics(cfg.Out, nil, fmt.Errorf("gate red"), 1)
-		return true, fmt.Errorf("triage gate red after %s:\n%s", op, trim(gateOut, 400))
+		return false, nil
 	}
 	fmt.Fprintln(cfg.Out, "  ✓ triage finished; gate green")
 	emitRunMetrics(cfg.Out, nil, nil, 1)

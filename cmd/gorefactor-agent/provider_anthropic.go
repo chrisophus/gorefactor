@@ -59,24 +59,12 @@ func (p *anthropicProvider) Complete(ctx context.Context, system, user string) (
 		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		p.baseURL+"/v1/messages", bytes.NewReader(buf))
+	status, body, err := p.doWithRetry(ctx, p.baseURL+"/v1/messages", buf)
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", p.apiKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
-
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("anthropic HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	if status != http.StatusOK {
+		return "", fmt.Errorf("anthropic HTTP %d: %s", status, strings.TrimSpace(string(body)))
 	}
 
 	var parsed struct {
@@ -196,28 +184,17 @@ func (p *anthropicProvider) ChatTools(ctx context.Context, messages []chatMessag
 	provDebugf("anthropic ChatTools -> POST %s model=%s msgs=%d tools=%d reqBytes=%d",
 		endpoint, p.model, len(apiMsgs), len(tools), len(buf))
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(buf))
-	if err != nil {
-		return chatMessage{}, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", p.apiKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
-
 	start := time.Now()
-	resp, err := p.client.Do(req)
+	status, body, err := p.doWithRetry(ctx, endpoint, buf)
+	elapsed := time.Since(start)
 	if err != nil {
-		provDebugf("anthropic ChatTools FAILED after %s: %v", time.Since(start), err)
+		provDebugf("anthropic ChatTools FAILED after %s: %v", elapsed, err)
 		return chatMessage{}, err
 	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	elapsed := time.Since(start)
-	if resp.StatusCode != http.StatusOK {
+	if status != http.StatusOK {
 		provDebugf("anthropic ChatTools <- HTTP %d in %s (%d bytes): %s",
-			resp.StatusCode, elapsed, len(body), strings.TrimSpace(string(body)))
-		return chatMessage{}, fmt.Errorf("anthropic HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+			status, elapsed, len(body), strings.TrimSpace(string(body)))
+		return chatMessage{}, fmt.Errorf("anthropic HTTP %d: %s", status, strings.TrimSpace(string(body)))
 	}
 
 	var parsed struct {
@@ -264,4 +241,41 @@ func (p *anthropicProvider) ChatTools(ctx context.Context, messages []chatMessag
 		elapsed, len(body), parsed.StopReason, parsed.Usage.InputTokens, parsed.Usage.OutputTokens,
 		len(out.ToolCalls), len(out.Content))
 	return out, nil
+}
+
+func (p *anthropicProvider) doWithRetry(ctx context.Context, endpoint string, buf []byte) (int, []byte, error) {
+	const maxAttempts = 5
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if attempt > 0 {
+			delay := time.Duration(1<<uint(attempt-1)) * time.Second
+			provDebugf("anthropic retry %d/%d after %s backoff (last: %v)",
+				attempt+1, maxAttempts, delay, lastErr)
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return 0, nil, ctx.Err()
+			}
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(buf))
+		if err != nil {
+			return 0, nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("x-api-key", p.apiKey)
+		req.Header.Set("anthropic-version", "2023-06-01")
+		resp, err := p.client.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			lastErr = fmt.Errorf("anthropic HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+			continue
+		}
+		return resp.StatusCode, body, nil
+	}
+	return 0, nil, fmt.Errorf("anthropic request failed after %d attempts: %w", maxAttempts, lastErr)
 }

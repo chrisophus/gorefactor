@@ -579,6 +579,8 @@ The model never directly edits code—all mutations flow through deterministic G
 
 The `finish` and `run_gate` tools call **`runGate`**: `go build ./...` then `go test ./...` in the target module. They do **not** run `gorefactor lint`. For lint + build + test, run **`gorefactor doctor`** manually or in CI after agent work.
 
+**Analysis-only tasks** (find callers/uses, "where is X") end via the **`report`** tool, which returns the answer and finishes *without* the build/test gate — no code changed, so the gate is irrelevant. The agent's tool catalog also exposes **`move_function`** (top-level funcs) alongside `move_method`; both were previously dispatchable but unadvertised, which caused the junior to punt function-move and find-callers tasks. When delegating to `gorefactor-agent`, the junior can now handle function moves and analysis questions, not just method moves — but a well-scoped analysis query is still cheapest run directly as `gorefactor find-callers`/`find-uses` (see the Decision Matrix; the agent path costs 20K+ tokens, the CLI ~0).
+
 ### Environment Setup
 
 **API Keys**:

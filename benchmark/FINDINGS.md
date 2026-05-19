@@ -80,18 +80,66 @@ When the change requires semantic understanding:
 - Error handling, new business logic
 - Type changes with semantic implications
 
-## Gaps identified (new workflows to support)
+## Gaps identified (status)
 
-1. **`safe_delete`**: `find-callers X` → if callers > 0, refuse; else `delete`
-   - Prevents broken builds when deleting functions that have callers
+1. **`safe_delete`** — ✅ done (`delete --safe`, benchmarked 76x).
+2. **`move_with_delete`** — ✅ done. `move_function` is now in the agent
+   tool catalog *and* the source file is resolved deterministically (see
+   2026-05-19 below). `move_method`/`move_function` were dispatchable but
+   unadvertised — the root cause of the original move punt.
+3. **Better `remove_code_block` error message** — ⏳ open (low priority;
+   not exercised by the battery's task classes).
+4. **`recommend` output trimming** — ✅ done (`recommend --short`,
+   benchmarked 15x; was 0.7x).
+5. **Anthropic provider token tracking** — ✅ done.
 
-2. **`move_with_delete`**: atomic "extract function to new file" compound command
-   - Agent failed on move because `remove_code_block` needed a location param
-   - A single `move` command already exists — but the agent didn't use it
+## 2026-05-19 — data-driven loop via the live reliability battery
 
-3. **Better `remove_code_block` error message**: show the correct `location` format on failure
+Method: controlled before/after on a fixed target commit, varying only
+the agent binary; local junior `qwen2.5-coder:14b`, 3 runs/class. The
+junior is deterministic per binary+commit, so deltas are causal.
 
-4. **`recommend` output trimming**: emit top-3 candidates as one-line summaries instead of full JSON
+| class | before | after | mean steps | mean secs | what fixed it |
+|---|--:|--:|--:|--:|---|
+| scaffold | 100% | 100% | 2.0 | 8 | no regression (3→2 steps) |
+| rename | **0%** | **100%** | 3.0 | 9 | explicit `function/method/type` param descriptions + "name the identifier, never guess the file" prompt rule |
+| movefunc | **0%** | **100%** | 2.0 | 6 | `move_function` added to catalog + `resolveSymbolFile` (deterministic source-file resolution) + accurate "moved X from A to B" result message |
+| analysis | 100% | 100% | 2.0 | 8 | measurement artifact — `finish` on an unchanged repo passes the gate, so this class can't discriminate; `report` is the real mechanism |
+| infeasible | punt | punt | 1.0 | 3 | correct outcome |
+| **all** | **40%** | **80%** | — | 7 | every *solvable* class now 100%; the only punts are the task that should punt |
 
-5. **Anthropic provider token tracking**: currently emits 0 for prompt/completion tokens
-   when using `-provider anthropic` — add the usage parsing from the response body
+Root-cause chain (each step found by one `-verbose` trace, not the
+aggregate table):
+
+1. `rename` punted: junior omitted the required `function` arg (the
+   `"or"` param descriptions were uninformative to a 14B model) and
+   guessed the wrong file. Fixed via explicit descriptions + prompt rule.
+2. `move_function`/`report` were wired in `dispatch_tool.go` +
+   `apply_op.go` but **absent from `toolCatalog()`** — invisible to the
+   model. Added both.
+3. `movefunc` still punted: the junior names the symbol reliably but
+   guesses its file, and `move_function` is file-scoped. Made the tool
+   resolve the symbol's real file itself (`resolveSymbolFile`) — no LLM
+   retry. (Deterministic per the user's steer: don't rely on the LLM.)
+4. `movefunc` still punted: the move *succeeded* but the result string
+   reported the source file, so the junior thought it went to the wrong
+   place and false-punted (which rolled the move back). Made the
+   success message op-aware ("moved X from A to B").
+
+**Headline sensor finding:** the battery (worktree + `git clean`) acted
+as a sensor and surfaced a real repo defect — `.gitignore`'s unanchored
+`gorefactor` pattern matched the `cmd/gorefactor/` *source dir*, so
+every untracked file there was gitignored (invisible to `git status`,
+unstaged by `git add .`, immune to `git clean`). A stray
+`case_convert.go` from a movefunc run got stuck, duplicated a symbol,
+broke `go build` in the worktree, and cascaded every gate-dependent
+class to punt while `report`-based `analysis` stayed green — the
+diagnostic signature for "broken gate, not broken agent". Fixed by
+anchoring the pattern to `/gorefactor`.
+
+**Wall-clock added:** `RELIABILITY.md` now reports `mean secs` (the real
+adoption gate — the junior is free in frontier tokens, not in time).
+At ~7s/run on this hardware, time is not a constraint at this scale.
+
+See `../RELIABILITY.md` for the live table; regenerate with
+`scripts/reliability.sh [iters]`.

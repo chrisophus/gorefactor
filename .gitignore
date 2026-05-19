@@ -1,4 +1,6 @@
-# Build artifacts
+# Build artifacts (root-level binaries; anchored with / so the pattern
+# does NOT also match the cmd/gorefactor/ source dir — an unanchored
+# "gorefactor" gitignores every untracked file under cmd/gorefactor/)
 /gorefactor
 /skill-refactor
 *.exe

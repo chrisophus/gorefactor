@@ -52,6 +52,7 @@ func lintCommand(args []string) error {
 	for _, f := range files {
 		issues = append(issues, checkFileSize(f, maxSize)...)
 		issues = append(issues, checkExtractable(f, 8)...)
+		issues = append(issues, checkSmells(f)...)
 	}
 	if dups := checkDuplicates(root); len(dups) > 0 {
 		issues = append(issues, dups...)

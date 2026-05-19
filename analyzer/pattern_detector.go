@@ -34,6 +34,9 @@ func (pd *PatternDetector) DetectPatterns() []ArchitecturalPattern {
 	patterns = append(patterns, pd.detectExcessiveParameters()...)
 	patterns = append(patterns, pd.detectTooManyReturnValues()...)
 	patterns = append(patterns, pd.detectInterfaceSegregation()...)
+	patterns = append(patterns, pd.detectLargeClass()...)
+	patterns = append(patterns, pd.detectDataClumps()...)
+	patterns = append(patterns, pd.detectSwitchStatements()...)
 	return patterns
 }
 
@@ -149,6 +152,217 @@ func (pd *PatternDetector) detectInterfaceSegregation() []ArchitecturalPattern {
 	}
 
 	return patterns
+}
+
+// detectLargeClass finds structs with too many methods (>20) or fields (>15)
+func (pd *PatternDetector) detectLargeClass() []ArchitecturalPattern {
+	var patterns []ArchitecturalPattern
+	classMethods := make(map[string]int)
+
+	// Count methods per receiver type
+	for _, decl := range pd.file.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv != nil {
+			if len(fn.Recv.List) > 0 {
+				recvType := getReceiverTypeName(fn.Recv.List[0])
+				classMethods[recvType]++
+			}
+		}
+	}
+
+	// Check structs: field count + method count
+	for _, decl := range pd.file.Decls {
+		if gd, ok := decl.(*ast.GenDecl); ok && gd.Tok == token.TYPE {
+			for _, spec := range gd.Specs {
+				if ts, ok := spec.(*ast.TypeSpec); ok {
+					if st, ok := ts.Type.(*ast.StructType); ok {
+						fieldCount := 0
+						if st.Fields != nil {
+							fieldCount = len(st.Fields.List)
+						}
+						methodCount := classMethods[ts.Name.Name]
+						totalMembers := fieldCount + methodCount
+
+						if fieldCount > 15 || methodCount > 20 || totalMembers > 30 {
+							severity := "low"
+							if methodCount > 20 || totalMembers > 30 {
+								severity = "medium"
+							}
+							pattern := ArchitecturalPattern{
+								Name:        "Large Class",
+								Type:        "smell",
+								Severity:    severity,
+								Description: fmt.Sprintf("Type %s has %d fields + %d methods = %d total members; consider extraction", ts.Name.Name, fieldCount, methodCount, totalMembers),
+								Affected:    []string{ts.Name.Name},
+								Suggestion:  "Extract cohesive methods into a new type or extract related fields into a sub-type",
+							}
+							patterns = append(patterns, pattern)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return patterns
+}
+
+// detectDataClumps finds groups of variables that appear together frequently
+func (pd *PatternDetector) detectDataClumps() []ArchitecturalPattern {
+	var patterns []ArchitecturalPattern
+
+	// Map of parameter signatures (sorted) to count
+	sigMap := make(map[string]int)
+	sigToParams := make(map[string][]string)
+
+	for _, decl := range pd.file.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok {
+			var paramNames []string
+			if fn.Type.Params != nil {
+				for _, field := range fn.Type.Params.List {
+					for _, name := range field.Names {
+						paramNames = append(paramNames, name.Name)
+					}
+				}
+			}
+			if len(paramNames) >= 3 {
+				// Sort to normalize the signature
+				sig := strings.Join(paramNames, ",")
+				sigMap[sig]++
+				sigToParams[sig] = paramNames
+			}
+		}
+	}
+
+	// Find signatures that appear multiple times
+	for sig, count := range sigMap {
+		if count >= 2 {
+			params := sigToParams[sig]
+			pattern := ArchitecturalPattern{
+				Name:        "Data Clumps",
+				Type:        "smell",
+				Severity:    "low",
+				Description: fmt.Sprintf("Parameter group [%s] appears in %d functions; consider creating a struct", strings.Join(params, ", "), count),
+				Affected:    params,
+				Suggestion:  "Create a struct grouping these related fields, use it in function signatures",
+			}
+			patterns = append(patterns, pattern)
+			break // Only report once per file
+		}
+	}
+
+	return patterns
+}
+
+// detectSwitchStatements finds switch statements on type fields
+func (pd *PatternDetector) detectSwitchStatements() []ArchitecturalPattern {
+	var patterns []ArchitecturalPattern
+	switchCount := make(map[string]int)
+	switchFuncs := make(map[string][]string)
+
+	for _, decl := range pd.file.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok {
+			count := countSwitchStatements(fn.Body)
+			if count > 0 {
+				functionName := fn.Name.Name
+				if fn.Recv != nil && len(fn.Recv.List) > 0 {
+					recvType := getReceiverTypeName(fn.Recv.List[0])
+					functionName = recvType + ":" + functionName
+				}
+				switchCount[functionName] = count
+				switchFuncs[functionName] = []string{functionName}
+			}
+		}
+	}
+
+	// Flag if switch statements are scattered (multiple functions with switches)
+	if len(switchCount) > 1 {
+		for funcName, count := range switchCount {
+			if count > 0 {
+				severity := "low"
+				if count > 2 {
+					severity = "medium"
+				}
+				pattern := ArchitecturalPattern{
+					Name:        "Switch Statements",
+					Type:        "smell",
+					Severity:    severity,
+					Description: fmt.Sprintf("Function %s contains %d switch statement(s) on type; pattern is scattered across codebase", funcName, count),
+					Affected:    []string{funcName},
+					Suggestion:  "Consider replacing scattered switches with polymorphism (strategy pattern or interface-based dispatch)",
+				}
+				patterns = append(patterns, pattern)
+			}
+		}
+	}
+
+	return patterns
+}
+
+// Helper functions
+
+// getReceiverTypeName extracts the receiver type name from a field
+func getReceiverTypeName(field *ast.Field) string {
+	if star, ok := field.Type.(*ast.StarExpr); ok {
+		if ident, ok := star.X.(*ast.Ident); ok {
+			return ident.Name
+		}
+	}
+	if ident, ok := field.Type.(*ast.Ident); ok {
+		return ident.Name
+	}
+	return "Unknown"
+}
+
+// countSwitchStatements recursively counts switch statements in a block
+func countSwitchStatements(block *ast.BlockStmt) int {
+	if block == nil {
+		return 0
+	}
+
+	count := 0
+	for _, stmt := range block.List {
+		count += countSwitchInStmt(stmt)
+	}
+	return count
+}
+
+// countSwitchInStmt recursively counts switch statements
+func countSwitchInStmt(stmt ast.Stmt) int {
+	count := 0
+	switch s := stmt.(type) {
+	case *ast.SwitchStmt:
+		count++
+		if s.Body != nil {
+			for _, s2 := range s.Body.List {
+				count += countSwitchInStmt(s2)
+			}
+		}
+	case *ast.TypeSwitchStmt:
+		count++
+		if s.Body != nil {
+			for _, s2 := range s.Body.List {
+				count += countSwitchInStmt(s2)
+			}
+		}
+	case *ast.IfStmt:
+		if s.Body != nil {
+			count += countSwitchStatements(s.Body)
+		}
+		if s.Else != nil {
+			count += countSwitchInStmt(s.Else)
+		}
+	case *ast.ForStmt:
+		if s.Body != nil {
+			count += countSwitchStatements(s.Body)
+		}
+	case *ast.RangeStmt:
+		if s.Body != nil {
+			count += countSwitchStatements(s.Body)
+		}
+	case *ast.BlockStmt:
+		count += countSwitchStatements(s)
+	}
+	return count
 }
 
 // DetectCircularDependencies checks for potential circular imports within package

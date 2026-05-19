@@ -197,6 +197,17 @@ func runGate(dir string) (bool, string) {
 func runIn(dir, name string, args ...string) (string, error) {
 	c := exec.Command(name, args...)
 	c.Dir = dir
+	env := append(os.Environ(), "GOTOOLCHAIN=auto")
+	// If /tmp is noexec (common in some container environments), the caller can
+	// set GOTMPDIR to a directory that allows execution. We honour it here so
+	// go test can write and execute test binaries. GOCACHE follows suit.
+	if v := os.Getenv("GOTMPDIR"); v != "" {
+		env = append(env, "GOTMPDIR="+v)
+	}
+	if v := os.Getenv("GOCACHE"); v != "" {
+		env = append(env, "GOCACHE="+v)
+	}
+	c.Env = env
 	b, err := c.CombinedOutput()
 	return trim(string(b), 1500), err
 }

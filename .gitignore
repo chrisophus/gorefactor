@@ -48,6 +48,10 @@ go.work
 
 # Temporary files
 *.tmp
-*.temp 
-# gorefactor-agent build artifact
+*.temp
+
+# Build artifacts (root-level binaries)
 /gorefactor-agent
+
+# Benchmark runner binary
+/benchmark/benchmark_runner

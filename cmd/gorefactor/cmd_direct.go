@@ -127,10 +127,44 @@ func parseFuncLocator(s string) (*orchestrator.InsertionLocation, error) {
 
 func deleteCommand(args []string) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: delete <file> <funcname-or-Receiver:Method>")
+		return fmt.Errorf("usage: delete <file> <funcname-or-Receiver:Method> [--safe]")
 	}
 	file := args[0]
-	target := parseTargetSpec(args[1])
+	name := args[1]
+
+	safe := false
+	for _, a := range args[2:] {
+		if a == "--safe" {
+			safe = true
+		}
+	}
+
+	if safe {
+		pkgDir := filepath.Dir(file)
+		target := parseTargetSpec(name)
+		funcName := target.FunctionName
+		if funcName == "" {
+			funcName = target.MethodName
+		}
+		if funcName != "" {
+			pkgFiles, _ := collectGoFiles(pkgDir)
+			ca := analyzer.NewCallAnalyzer(pkgFiles)
+			receiverType := ""
+			if target.ReceiverType != "" {
+				receiverType = target.ReceiverType
+			}
+			analysis, err := ca.FindCallers(funcName, receiverType)
+			if err == nil && len(analysis.DirectCallers) > 0 {
+				fmt.Fprintf(os.Stderr, "error: %s has %d caller(s) — delete would break the build:\n", name, len(analysis.DirectCallers))
+				for _, c := range analysis.DirectCallers {
+					fmt.Fprintf(os.Stderr, "  %s:%d  %s\n", c.File, c.Line, c.CallerName)
+				}
+				return fmt.Errorf("use find-callers %s to review, then remove callers before deleting", name)
+			}
+		}
+	}
+
+	target := parseTargetSpec(name)
 	plan := &orchestrator.RefactoringPlan{
 		Version: "1.0",
 		Name:    "delete-decl",
@@ -148,7 +182,7 @@ func deleteCommand(args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Deleted %s from %s\n", args[1], file)
+	fmt.Printf("Deleted %s from %s\n", name, file)
 	return nil
 }
 

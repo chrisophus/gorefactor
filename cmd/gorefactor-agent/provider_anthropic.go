@@ -22,7 +22,11 @@ type anthropicProvider struct {
 	model     string
 	maxTokens int
 	client    *http.Client
+
+	promptToks, completionToks int
 }
+
+func (p *anthropicProvider) Tokens() (int, int) { return p.promptToks, p.completionToks }
 
 func newAnthropicProvider(baseURL, apiKey, model string) *anthropicProvider {
 	if baseURL == "" {
@@ -80,10 +84,16 @@ func (p *anthropicProvider) Complete(ctx context.Context, system, user string) (
 			Type string `json:"type"`
 			Text string `json:"text"`
 		} `json:"content"`
+		Usage struct {
+			InputTokens  int `json:"input_tokens"`
+			OutputTokens int `json:"output_tokens"`
+		} `json:"usage"`
 	}
 	if err := json.Unmarshal(body, &parsed); err != nil {
 		return "", fmt.Errorf("decode anthropic response: %w", err)
 	}
+	p.promptToks += parsed.Usage.InputTokens
+	p.completionToks += parsed.Usage.OutputTokens
 	var sb strings.Builder
 	for _, c := range parsed.Content {
 		if c.Type == "text" {

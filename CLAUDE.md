@@ -23,13 +23,14 @@ Mapping of common edits to commands (run `./gorefactor` for the full list):
 | Move a function/method to a new file | `gorefactor move <src> <Func> <dest>` |
 | Replace a complete statement | `gorefactor replace <file> <Func> <old> <new>` |
 | Replace partial text inside a function | `gorefactor replace-text <file> <Func> <old> <new>` |
-| Delete a function/method | `gorefactor delete <file> <Func>` |
+| Delete a function/method | `gorefactor delete <file> <Func> --safe` (checks callers first) |
 | Rename an unexported symbol | `gorefactor rename <file> <old> <new>` |
 | Split a file that grew too large | `gorefactor split <file>` |
 | Check what calls a function (before refactor) | `gorefactor find-callers <Func>` |
 | Check where a symbol is used | `gorefactor find-uses <Symbol>` |
 | Find interface implementations | `gorefactor find-implementations <Iface>` |
 | Extract a block to a new function | `gorefactor extract <file> <startLine> <endLine> <methodName>` |
+| Find extraction candidates (concise) | `gorefactor recommend <file> --short` |
 | Detect file-size / duplicate / extract issues | `gorefactor lint .` |
 | Autofix file-size issues | `gorefactor lint . --fix` |
 | Final gate (lint + build + test) | `gorefactor doctor` |

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -26,6 +27,14 @@ func dispatchTool(call toolCall, cfg Config, gateFails *int) (string, toolStatus
 			r = "model punted without a reason"
 		}
 		return r, stPunt
+
+	case "report":
+		answer := str("answer")
+		if answer == "" {
+			answer = "(empty answer)"
+		}
+		fmt.Fprintf(os.Stdout, "\n  ✓ analysis result: %s\n", answer)
+		return answer, stSuccess
 
 	case "finish":
 		ok, out := runGate(".")
@@ -65,7 +74,7 @@ func dispatchTool(call toolCall, cfg Config, gateFails *int) (string, toolStatus
 		return applyExtractMethod(str("file"), intStr("start_line"), intStr("end_line"), str("new_function_name")), stContinue
 
 	case "rename_declaration", "replace_code", "insert_code",
-		"create_file", "move_method", "delete_declaration", "remove_code_block":
+		"create_file", "move_function", "move_method", "delete_declaration", "remove_code_block":
 		return applyOp(call.Function.Name, a, cfg), stContinue
 
 	default:

@@ -42,6 +42,11 @@ func applyOp(kind string, a map[string]any, cfg Config) string {
 		params["codeSnippet"] = str("code_snippet")
 	case "create_file":
 		params["codeSnippet"] = str("code_snippet")
+	case "move_function":
+		tgt.FunctionName = str("function")
+		op.Target = tgt
+		params["newFile"] = str("new_file")
+		op.Type = "move_method" // orchestrator handles both via same executor
 	case "move_method":
 		tgt.MethodName = str("method")
 		tgt.ReceiverType = str("receiver_type")
@@ -59,6 +64,9 @@ func applyOp(kind string, a map[string]any, cfg Config) string {
 		}
 		op.Target = tgt
 	case "remove_code_block":
+		if fn := str("function"); fn != "" {
+			params["location"] = map[string]any{"functionName": fn}
+		}
 		params["codePattern"] = str("code_pattern")
 	}
 	if len(params) > 0 {

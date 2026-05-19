@@ -108,12 +108,37 @@ func recommendExtractions(args []string) error {
 		}
 	}
 
+	shortMode := false
+	for _, a := range args[1:] {
+		if a == "--short" {
+			shortMode = true
+		}
+	}
+
 	recommendations, err := analyzer.RecommendExtractions(args[0], functionName, config)
 	if err != nil {
 		return err
 	}
 
-	// Output as JSON
+	if shortMode {
+		if len(recommendations) == 0 {
+			fmt.Println("no extraction candidates found")
+			return nil
+		}
+		limit := 3
+		if len(recommendations) < limit {
+			limit = len(recommendations)
+		}
+		fmt.Printf("top %d extraction candidates in %s:\n", limit, args[0])
+		for i, r := range recommendations[:limit] {
+			fmt.Printf("  %d. lines %d-%d  complexity=%d  stmts=%d  reads=%v  writes=%v\n",
+				i+1, r.StartLine, r.EndLine, r.Complexity, r.StatementCount,
+				r.ReadVars, r.WriteVars)
+		}
+		return nil
+	}
+
+	// Full JSON output
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(recommendations)

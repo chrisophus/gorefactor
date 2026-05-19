@@ -33,6 +33,16 @@ func triage(cfg Config) (matched bool, runErr error) {
 	if _, args, ok := matchInfeasible(spec); ok {
 		return runAutoPunt(cfg, args)
 	}
+	// Safety guard: a spec carrying an explicit negative constraint ("rename X
+	// to Y but not on receiver Z", "do not change W") cannot be safely handled
+	// by regex-driven positive triage — the build+test gate validates syntax,
+	// not the constraint. Discovered via RELIABILITY-HARD.md disambig: "Rename
+	// Tokens to TokenUsage. Do NOT rename ..." matched reRename and the gate
+	// stayed green even when both Tokens methods were renamed in lock-step.
+	// Fall through to the agent so the model honors the constraint.
+	if hasNegativeConstraint(spec) {
+		return false, nil
+	}
 	for _, pat := range triagePatterns {
 		if op, args, ok := pat.match(spec); ok {
 			return runTriaged(cfg, pat.name, op, args)
@@ -164,3 +174,7 @@ func runAutoPunt(cfg Config, args map[string]any) (bool, error) {
 	emitRunMetrics(cfg.Out, nil, err, 1)
 	return true, err
 }
+
+var reNegConstraint = regexp.MustCompile(`(?i)\b(?:do not|don't|but not|except|leave[^.\n]{0,60}(?:alone|untouched|unchanged)|without (?:modifying|changing|touching)|only (?:on|the|in))\b`)
+
+func hasNegativeConstraint(spec string) bool { return reNegConstraint.MatchString(spec) }

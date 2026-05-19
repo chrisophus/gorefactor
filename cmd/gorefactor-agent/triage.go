@@ -27,6 +27,12 @@ func triage(cfg Config) (matched bool, runErr error) {
 	if spec == "" {
 		return false, nil
 	}
+	// Negative triage runs first: an explicit-judgement spec warm-punts at
+	// 0 tokens before any positive pattern (e.g. "rewrite ... and rename ..."
+	// stays as a punt rather than getting half-applied).
+	if _, args, ok := matchInfeasible(spec); ok {
+		return runAutoPunt(cfg, args)
+	}
 	for _, pat := range triagePatterns {
 		if op, args, ok := pat.match(spec); ok {
 			return runTriaged(cfg, pat.name, op, args)
@@ -133,4 +139,28 @@ func runTriaged(cfg Config, name, op string, args map[string]any) (bool, error) 
 	fmt.Fprintln(cfg.Out, "  ✓ triage finished; gate green")
 	emitRunMetrics(cfg.Out, nil, nil, 1)
 	return true, nil
+}
+
+var reInfeasible = regexp.MustCompile(`(?i)` +
+	`\b(?:rewrite|refactor|optimi[sz]e|reimplement|redesign)\b[^.\n]*?` +
+	`\b(?:performance|linear[- ]time|big[- ]o|complexity|rolling[- ]hash|` +
+	`algorithm|design|architecture|memory|speed|allocation|approach)\b` +
+	`|\bfix\b[^.\n]*?\b(?:race|deadlock|concurrency|leak)\b`)
+
+func matchInfeasible(spec string) (op string, args map[string]any, ok bool) {
+	if reInfeasible.MatchString(spec) {
+		return "autopunt_judgement", map[string]any{"spec": spec}, true
+	}
+	return "", nil, false
+}
+
+func runAutoPunt(cfg Config, args map[string]any) (bool, error) {
+	fmt.Fprintln(os.Stderr,
+		"[triage] infeasible -> autopunt:judgement (no LLM call)")
+	reason := "spec explicitly requires semantic judgement " +
+		"(algorithm rewrite / race fix / performance redesign); " +
+		"senior should pick this up. See RELIABILITY-COMPARISON.md."
+	err := doPunt(cfg, "autopunt:judgement", reason, nil, 1)
+	emitRunMetrics(cfg.Out, nil, err, 1)
+	return true, err
 }

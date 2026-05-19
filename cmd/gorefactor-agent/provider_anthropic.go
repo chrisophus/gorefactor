@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -246,15 +247,14 @@ func (p *anthropicProvider) ChatTools(ctx context.Context, messages []chatMessag
 func (p *anthropicProvider) doWithRetry(ctx context.Context, endpoint string, buf []byte) (int, []byte, error) {
 	const maxAttempts = 5
 	var lastErr error
+	var prevResp *http.Response // headers only after attempts 1..N-1; carries Retry-After
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		if attempt > 0 {
-			delay := time.Duration(1<<uint(attempt-1)) * time.Second
+			delay := retryDelay(attempt, prevResp)
 			provDebugf("anthropic retry %d/%d after %s backoff (last: %v)",
 				attempt+1, maxAttempts, delay, lastErr)
-			select {
-			case <-time.After(delay):
-			case <-ctx.Done():
-				return 0, nil, ctx.Err()
+			if err := retrySleep(ctx, delay); err != nil {
+				return 0, nil, err
 			}
 		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(buf))
@@ -267,15 +267,44 @@ func (p *anthropicProvider) doWithRetry(ctx context.Context, endpoint string, bu
 		resp, err := p.client.Do(req)
 		if err != nil {
 			lastErr = err
+			prevResp = nil
 			continue
 		}
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 			lastErr = fmt.Errorf("anthropic HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+			prevResp = resp
 			continue
 		}
 		return resp.StatusCode, body, nil
 	}
 	return 0, nil, fmt.Errorf("anthropic request failed after %d attempts: %w", maxAttempts, lastErr)
+}
+
+var retrySleep = func(ctx context.Context, d time.Duration) error {
+	select {
+	case <-time.After(d):
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func retryDelay(attempt int, prevResp *http.Response) time.Duration {
+	const cap = 30 * time.Second
+	clamp := func(d time.Duration) time.Duration {
+		if d > cap {
+			return cap
+		}
+		return d
+	}
+	if prevResp != nil {
+		if h := prevResp.Header.Get("Retry-After"); h != "" {
+			if secs, err := strconv.Atoi(h); err == nil && secs > 0 {
+				return clamp(time.Duration(secs) * time.Second)
+			}
+		}
+	}
+	return clamp(time.Duration(1<<uint(attempt-1)) * time.Second)
 }

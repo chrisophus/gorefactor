@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 // TestAnthropicChatToolsTranslation verifies the OpenAI<->Anthropic
@@ -150,7 +151,14 @@ func TestAnthropicChatToolsTranslation(t *testing.T) {
 
 // TestAnthropicChatToolsHTTPError verifies a non-200 surfaces as an error
 // (the sensor the diagnostics also log) rather than a silent empty turn.
+// The 429 here will trigger doWithRetry's exponential backoff (5
+// attempts × 1+2+4+8s real time = 15s) — override retrySleep with a
+// no-op so the test runs in ~0s instead. Per Copilot review on PR #12.
 func TestAnthropicChatToolsHTTPError(t *testing.T) {
+	prevSleep := retrySleep
+	retrySleep = func(_ context.Context, _ time.Duration) error { return nil }
+	defer func() { retrySleep = prevSleep }()
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
 		io.WriteString(w, `{"error":{"message":"rate limited"}}`)

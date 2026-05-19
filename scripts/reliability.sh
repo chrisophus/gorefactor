@@ -10,16 +10,21 @@
 # NOTE: commit any uncommitted work before running — the per-run
 # `git clean -fd` will delete untracked files in the repo.
 #
-# Usage: scripts/reliability.sh [iters] [model] [api-base]
+# Usage: scripts/reliability.sh [iters] [model] [api-base] [provider] [outfile]
+#   provider : openai (default, OpenAI-compatible) | anthropic
+#   api-base : pass "" to use the provider default (required for anthropic)
+#   outfile  : default $REPO/RELIABILITY.md
 set -u
 ITERS="${1:-3}"
 MODEL="${2:-qwen2.5-coder:14b}"
 APIBASE="${3:-http://localhost:11434/v1}"
+PROVIDER="${4:-openai}"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+OUT="${5:-$REPO/RELIABILITY.md}"
 GRA="${GRA:-/tmp/gra}"
 BASE="$(git -C "$REPO" rev-parse HEAD)"
 RES="$(mktemp)"
-echo "battery: iters=$ITERS model=$MODEL base=$(git -C "$REPO" rev-parse --short HEAD)"
+echo "battery: iters=$ITERS provider=$PROVIDER model=$MODEL base=$(git -C "$REPO" rev-parse --short HEAD) out=$OUT"
 
 run() {            # $1=label  $2=spec
   for i in $(seq 1 "$ITERS"); do
@@ -27,8 +32,13 @@ run() {            # $1=label  $2=spec
     rm -rf "$REPO/.gorefactor"   # gitignored: clean -fdq won't, but stale
                                  # snapshots poison cross-run measurement
     t0=$(date +%s)
-    out="$("$GRA" -dir "$REPO" -provider openai -api-base "$APIBASE" \
-            -model "$MODEL" -max-iter 12 -spec "$2" 2>&1)"
+    if [ -n "$APIBASE" ]; then
+      out="$("$GRA" -dir "$REPO" -provider "$PROVIDER" -api-base "$APIBASE" \
+              -model "$MODEL" -max-iter 12 -spec "$2" 2>&1)"
+    else
+      out="$("$GRA" -dir "$REPO" -provider "$PROVIDER" \
+              -model "$MODEL" -max-iter 12 -spec "$2" 2>&1)"
+    fi
     ec=$?
     secs=$(( $(date +%s) - t0 ))
     m="$(printf '%s\n' "$out" | sed -n 's/.*<<<RUN_METRICS \(.*\) RUN_METRICS>>>.*/\1/p' | tail -1)"
@@ -48,9 +58,10 @@ git -C "$REPO" reset --hard "$BASE" -q && git -C "$REPO" clean -fdq
 rm -rf "$REPO/.gorefactor"
 echo "restored to $(git -C "$REPO" rev-parse --short HEAD); aggregating..."
 
-python3 - "$RES" "$REPO/RELIABILITY.md" "$MODEL" "$ITERS" <<'PY'
+python3 - "$RES" "$OUT" "$MODEL" "$ITERS" "$PROVIDER" <<'PY'
 import json, sys, collections, datetime
 res, outpath, model, iters = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+provider = sys.argv[5] if len(sys.argv) > 5 else "openai"
 rows=[json.loads(l) for l in open(res) if l.strip()]
 agg=collections.defaultdict(lambda: dict(n=0,fixed=0,punt=0,error=0,steps=0,toks=0,secs=0))
 for r in rows:
@@ -61,8 +72,9 @@ for r in rows:
 def pct(x,n): return f"{(100*x/n):.0f}%" if n else "-"
 lines=[]
 lines.append("# Reliability battery — second-tier agent\n")
-lines.append(f"_model `{model}`, {iters} run(s)/task, gate = go build+test, "
-             f"resets to runtime HEAD between runs, generated {datetime.date.today()}_\n")
+lines.append(f"_provider `{provider}`, model `{model}`, {iters} run(s)/task, "
+             f"gate = go build+test, resets to runtime HEAD between runs, "
+             f"generated {datetime.date.today()}_\n")
 lines.append("| task class | runs | success | punt | error | mean steps | mean secs | local tokens | frontier tokens |")
 lines.append("|---|--:|--:|--:|--:|--:|--:|--:|--:|")
 tot=dict(n=0,fixed=0,punt=0,error=0,toks=0,secs=0)

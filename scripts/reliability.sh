@@ -36,6 +36,8 @@ run() {            # $1=label  $2=spec
 
 run scaffold  'Create cmd/gorefactor-agent/relmeta.go in package main with exactly: func RelMeta() string { return "ok" }'
 run rename    'Rename the unexported function camelToSnake to camelToSnakeCase in package cmd/gorefactor and update all references.'
+run movefunc  'Move the top-level function camelToSnake to a new file cmd/gorefactor/case_convert.go in the same package. Do not change anything else.'
+run analysis  'List the files and line numbers of every caller of the function emitRunMetrics. Do not modify any code; report the answer.'
 run infeasible 'Rewrite the duplicate-block detection in the analyzer package to use a rolling hash for linear-time performance.'
 
 git -C "$REPO" reset --hard "$BASE" -q && git -C "$REPO" clean -fdq
@@ -58,7 +60,7 @@ lines.append(f"_model `{model}`, {iters} run(s)/task, gate = go build+test, "
 lines.append("| task class | runs | success | punt | error | mean steps | local tokens | frontier tokens |")
 lines.append("|---|--:|--:|--:|--:|--:|--:|--:|")
 tot=dict(n=0,fixed=0,punt=0,error=0,toks=0)
-for label in ("scaffold","rename","infeasible"):
+for label in ("scaffold","rename","movefunc","analysis","infeasible"):
     a=agg.get(label)
     if not a: continue
     n=a["n"]
@@ -69,9 +71,10 @@ n=tot["n"]
 lines.append(f"| **all** | {n} | {pct(tot['fixed'],n)} | {pct(tot['punt'],n)} "
              f"| {pct(tot['error'],n)} | - | {tot['toks']} | **0** |")
 lines.append("\n## Reading this\n")
-lines.append("- **success** = task done AND `go build`+`go test` green (gate is ground truth).\n"
+lines.append("- **success** = task done AND `go build`+`go test` green (gate is ground "
+             "truth); for `analysis` it is a `report` answer (no gate — nothing changed).\n"
              "- **punt** = junior cleanly handed back (warm report, repo restored) — a *correct* "
-             "outcome for `infeasible`, a miss for `scaffold`/`rename`.\n"
+             "outcome for `infeasible`, a miss for `scaffold`/`rename`/`movefunc`/`analysis`.\n"
              "- **error** = infrastructure failure (should be ~0).\n"
              "- **frontier tokens = 0**: every run is entirely local; each success is frontier "
              "spend avoided, each punt costs the senior only a warm report.\n")

@@ -1,0 +1,67 @@
+package main
+
+func toolCatalog() []toolDef {
+	return []toolDef{
+		// sense (read-only)
+		tool("list_symbols", "List funcs/methods in a file.",
+			obj(map[string]any{"file": strProp("path")}, "file")),
+		tool("read_excerpt", "Read lines from a file (max 120).",
+			obj(map[string]any{"file": strProp("path"),
+				"start_line": intProp("1-based"), "end_line": intProp("inclusive")}, "file")),
+		tool("analyze_file_size", "File line count and extraction hints.",
+			obj(map[string]any{"file": strProp("path")}, "file")),
+		tool("find_references", "Lines mentioning a symbol across the repo.",
+			obj(map[string]any{"symbol": strProp("identifier")}, "symbol")),
+
+		// mutation
+		tool("extract_method", "Extract lines into a new function. Get line numbers via list_symbols+read_excerpt first.",
+			obj(map[string]any{
+				"file":              strProp("path"),
+				"start_line":        intProp("first line (1-based)"),
+				"end_line":          intProp("last line (inclusive)"),
+				"new_function_name": strProp("new function name"),
+			}, "file", "start_line", "end_line", "new_function_name")),
+		tool("rename_declaration", "Rename an unexported declaration package-wide. Supply exactly one of function/method/type — the symbol's current identifier.",
+			obj(map[string]any{"file": strProp("path"),
+				"function": strProp("function name (top-level func)"),
+				"method":   strProp("method name"),
+				"type":     strProp("type name"),
+				"new_name": strProp("new identifier")}, "file", "new_name")),
+		tool("replace_code", "Replace a complete statement inside a function.",
+			obj(map[string]any{"file": strProp("path"), "function": strProp("enclosing func"),
+				"code_pattern": strProp("exact statement to replace"), "replacement_code": strProp("replacement")},
+				"file", "function", "code_pattern", "replacement_code")),
+		tool("insert_code", "Insert a declaration into a file.",
+			obj(map[string]any{"file": strProp("path"),
+				"location_type":   strProp("at_end|after_function|before_function|at_beginning"),
+				"anchor_function": strProp("anchor (for *_function)"),
+				"code_snippet":    strProp("full declaration")}, "file", "location_type", "code_snippet")),
+		tool("create_file", "Create a new Go file.",
+			obj(map[string]any{"file": strProp("path"),
+				"code_snippet": strProp("full file including package clause")}, "file", "code_snippet")),
+		tool("move_method", "Move a method to another file.",
+			obj(map[string]any{"file": strProp("source"), "method": strProp("method name"),
+				"receiver_type": strProp("receiver type"), "new_file": strProp("destination")},
+				"file", "method", "receiver_type", "new_file")),
+		tool("move_function", "Move a top-level function (no receiver) to another file.",
+			obj(map[string]any{"file": strProp("source"), "function": strProp("function name"),
+				"new_file": strProp("destination")},
+				"file", "function", "new_file")),
+		tool("delete_declaration", "Delete a func/method/type declaration. Supply exactly one of function/method/type — the symbol's identifier.",
+			obj(map[string]any{"file": strProp("path"),
+				"function": strProp("function name (top-level func)"),
+				"method":   strProp("method name"),
+				"type":     strProp("type name")}, "file")),
+		tool("remove_code_block", "Remove a block matching an exact pattern.",
+			obj(map[string]any{"file": strProp("path"), "code_pattern": strProp("exact block")},
+				"file", "code_pattern")),
+
+		// control
+		tool("report", "Return the answer for an analysis-only task and finish WITHOUT the build/test gate. Use for find-callers / find-uses / \"where is X\" questions.",
+			obj(map[string]any{"answer": strProp("the answer")}, "answer")),
+		tool("run_gate", "Run go build+test and report (advisory, non-terminal).", obj(map[string]any{})),
+		tool("finish", "Mark task complete and run the authoritative gate.", obj(map[string]any{})),
+		tool("punt", "Give up; task cannot be done with these tools.",
+			obj(map[string]any{"reason": strProp("why")}, "reason")),
+	}
+}

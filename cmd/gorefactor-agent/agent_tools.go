@@ -202,6 +202,14 @@ GO SOURCE FILES:
 RULES:
 - Use ONLY paths from the list above. Never guess paths like "main.go".
 - If a file tool errors with "no such file", you used the wrong path.
+- To rename/delete/move a symbol when the spec does NOT name its file,
+  call find_references <symbol> FIRST to find the file. Never guess
+  which file a symbol lives in.
+- rename_declaration / delete_declaration need the symbol's identifier
+  in function OR method OR type (not just new_name). Omitting it fails.
+- Analysis-only tasks (find callers/uses, "where is X"): gather with
+  sense tools, then call report with the answer. Do NOT call finish —
+  no code changed, the gate is irrelevant.
 - For extract_method: call list_symbols then read_excerpt to get exact
   line numbers before extracting. Do not guess line numbers.
 - If the spec names the file and function, go straight to mutation —
@@ -223,62 +231,6 @@ func intProp(desc string) map[string]any {
 
 func tool(name, desc string, params map[string]any) toolDef {
 	return toolDef{Type: "function", Function: toolDefFunction{Name: name, Description: desc, Parameters: params}}
-}
-
-func toolCatalog() []toolDef {
-	return []toolDef{
-		// sense (read-only)
-		tool("list_symbols", "List funcs/methods in a file.",
-			obj(map[string]any{"file": strProp("path")}, "file")),
-		tool("read_excerpt", "Read lines from a file (max 120).",
-			obj(map[string]any{"file": strProp("path"),
-				"start_line": intProp("1-based"), "end_line": intProp("inclusive")}, "file")),
-		tool("analyze_file_size", "File line count and extraction hints.",
-			obj(map[string]any{"file": strProp("path")}, "file")),
-		tool("find_references", "Lines mentioning a symbol across the repo.",
-			obj(map[string]any{"symbol": strProp("identifier")}, "symbol")),
-
-		// mutation
-		tool("extract_method", "Extract lines into a new function. Get line numbers via list_symbols+read_excerpt first.",
-			obj(map[string]any{
-				"file":              strProp("path"),
-				"start_line":        intProp("first line (1-based)"),
-				"end_line":          intProp("last line (inclusive)"),
-				"new_function_name": strProp("new function name"),
-			}, "file", "start_line", "end_line", "new_function_name")),
-		tool("rename_declaration", "Rename an unexported declaration package-wide.",
-			obj(map[string]any{"file": strProp("path"), "function": strProp("or"),
-				"method": strProp("or"), "type": strProp("or"),
-				"new_name": strProp("new identifier")}, "file", "new_name")),
-		tool("replace_code", "Replace a complete statement inside a function.",
-			obj(map[string]any{"file": strProp("path"), "function": strProp("enclosing func"),
-				"code_pattern": strProp("exact statement to replace"), "replacement_code": strProp("replacement")},
-				"file", "function", "code_pattern", "replacement_code")),
-		tool("insert_code", "Insert a declaration into a file.",
-			obj(map[string]any{"file": strProp("path"),
-				"location_type":   strProp("at_end|after_function|before_function|at_beginning"),
-				"anchor_function": strProp("anchor (for *_function)"),
-				"code_snippet":    strProp("full declaration")}, "file", "location_type", "code_snippet")),
-		tool("create_file", "Create a new Go file.",
-			obj(map[string]any{"file": strProp("path"),
-				"code_snippet": strProp("full file including package clause")}, "file", "code_snippet")),
-		tool("move_method", "Move a method to another file.",
-			obj(map[string]any{"file": strProp("source"), "method": strProp("method name"),
-				"receiver_type": strProp("receiver type"), "new_file": strProp("destination")},
-				"file", "method", "receiver_type", "new_file")),
-		tool("delete_declaration", "Delete a func/method/type declaration.",
-			obj(map[string]any{"file": strProp("path"), "function": strProp("or"),
-				"method": strProp("or"), "type": strProp("or")}, "file")),
-		tool("remove_code_block", "Remove a block matching an exact pattern.",
-			obj(map[string]any{"file": strProp("path"), "code_pattern": strProp("exact block")},
-				"file", "code_pattern")),
-
-		// control
-		tool("run_gate", "Run go build+test and report (advisory, non-terminal).", obj(map[string]any{})),
-		tool("finish", "Mark task complete and run the authoritative gate.", obj(map[string]any{})),
-		tool("punt", "Give up; task cannot be done with these tools.",
-			obj(map[string]any{"reason": strProp("why")}, "reason")),
-	}
 }
 
 // compile-time: ensure openAIProvider satisfies toolChatter.

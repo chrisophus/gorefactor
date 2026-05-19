@@ -52,9 +52,13 @@ func lintCommand(args []string) error {
 	for _, f := range files {
 		issues = append(issues, checkFileSize(f, maxSize)...)
 		issues = append(issues, checkExtractable(f, 8)...)
+		issues = append(issues, checkSmells(f)...)
 	}
 	if dups := checkDuplicates(root); len(dups) > 0 {
 		issues = append(issues, dups...)
+	}
+	if dead := checkDeadCode(root); len(dead) > 0 {
+		issues = append(issues, dead...)
 	}
 	if untested := checkUntestedPackages(root); len(untested) > 0 {
 		issues = append(issues, untested...)
@@ -131,6 +135,19 @@ func applyAutoFixes(issues []lintIssue, maxSize int) (applied, failed int) {
 				continue
 			}
 			applied++
+		} else if iss.Rule == "dead-code" {
+			// AutoFixCmd is the full intended command, e.g.
+			// "delete <file> <target> --safe"; forward its args
+			// verbatim so the --safe caller-check is preserved.
+			parts := strings.Fields(iss.AutoFixCmd)
+			if len(parts) >= 3 && parts[0] == "delete" {
+				if err := deleteCommand(parts[1:]); err != nil {
+					fmt.Fprintf(os.Stderr, "fix failed for %s: %v\n", iss.File, err)
+					failed++
+					continue
+				}
+				applied++
+			}
 		}
 	}
 	return

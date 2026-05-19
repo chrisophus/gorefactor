@@ -93,6 +93,18 @@ func main() {
 		return
 	}
 
+	// Triage guide: if the spec maps 1:1 to a deterministic gorefactor
+	// op (rename, callers of X, ...), apply it and run the gate without
+	// ever calling the LLM. RUN_METRICS is still emitted so the battery
+	// sees a complete record. On no match, fall through to the agent.
+	if matched, err := triage(cfg); matched {
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "\nError:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	providerDebug = *verbose
 
 	provider := providerFromFlags(*providerK, *apiBase, *model)

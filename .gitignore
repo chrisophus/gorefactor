@@ -54,6 +54,10 @@ go.work
 
 # Build artifacts (root-level binaries)
 /gorefactor-agent
+/gorefactor-repo-check
+
+# Generated reports
+REPO_HEALTH_REPORT.*
 
 # Benchmark runner binary
 /benchmark/benchmark_runner

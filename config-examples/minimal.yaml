@@ -1,0 +1,87 @@
+# Minimal Configuration - For Initial Setup
+# Use this when starting with code quality analysis on a new project
+# Focuses on the most critical issues only
+
+version: "1.0"
+name: "Minimal - Critical Issues Only"
+description: "Minimal configuration focusing on blocking issues"
+
+analysis:
+  enabled: true
+  exclude:
+    - vendor/
+    - testdata/
+    - "*_test.go"
+
+checks:
+  # Critical: files that are definitely too large
+  file_size:
+    enabled: true
+    max_lines: 400
+    severity: "error"
+    autofix: "gorefactor split <file> --max 400"
+
+  # Critical: god objects indicate fundamental design issues
+  god_object:
+    enabled: true
+    max_fields: 15
+    severity: "error"
+
+  # Critical: circular dependencies block clean architecture
+  circular_dependencies:
+    enabled: true
+    severity: "error"
+
+  # Medium: design patterns
+  switch_statements:
+    enabled: true
+    severity: "medium"
+    pattern_detection: true
+
+  # Medium: function complexity
+  excessive_parameters:
+    enabled: true
+    max_parameters: 7
+    severity: "medium"
+
+  # Disable: lower priority checks for now
+  large_class:
+    enabled: false
+  data_clumps:
+    enabled: false
+  untested_packages:
+    enabled: false
+  duplication:
+    enabled: false
+
+health_score:
+  error_weight: 20.0
+  medium_weight: 3.0
+  low_weight: 0.5
+  threshold_critical: 40
+  threshold_warning: 60
+  threshold_good: 80
+  max_score: 100.0
+
+reporting:
+  include_file_details: true
+  include_recommendations: true
+  include_affected_files: true
+  max_files_to_show: 10
+  show_severity_icons: true
+  show_autofix_commands: true
+  truncate_long_messages: true
+  max_message_length: 80
+
+filtering:
+  min_severity: "medium"  # Only show medium+ issues
+  group_by: "category"
+  sort_by: "severity"
+
+ci:
+  fail_threshold: 50
+  warn_threshold: 70
+  exit_codes:
+    success: 0
+    warning: 0
+    error: 1

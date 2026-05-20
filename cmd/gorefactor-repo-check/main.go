@@ -8,7 +8,87 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
+
+// Config represents the YAML configuration for the checker
+type Config struct {
+	Version   string      `yaml:"version"`
+	Name      string      `yaml:"name"`
+	Analysis  AnalysisConfig `yaml:"analysis"`
+	Checks    ChecksConfig   `yaml:"checks"`
+	HealthScore HealthScoreConfig `yaml:"health_score"`
+	Reporting ReportingConfig   `yaml:"reporting"`
+	Filtering FilteringConfig   `yaml:"filtering"`
+	CI        CIConfig          `yaml:"ci"`
+}
+
+type AnalysisConfig struct {
+	Enabled bool     `yaml:"enabled"`
+	Exclude []string `yaml:"exclude"`
+}
+
+type ChecksConfig struct {
+	FileSize             CheckConfig `yaml:"file_size"`
+	GodObject            CheckConfig `yaml:"god_object"`
+	LargeClass           CheckConfig `yaml:"large_class"`
+	SwitchStatements     CheckConfig `yaml:"switch_statements"`
+	ExcessiveParameters  CheckConfig `yaml:"excessive_parameters"`
+	DataClumps           CheckConfig `yaml:"data_clumps"`
+	CircularDependencies CheckConfig `yaml:"circular_dependencies"`
+	UntestedPackages     CheckConfig `yaml:"untested_packages"`
+	Duplication          CheckConfig `yaml:"duplication"`
+}
+
+type CheckConfig struct {
+	Enabled         bool   `yaml:"enabled"`
+	MaxLines        int    `yaml:"max_lines"`
+	MaxFields       int    `yaml:"max_fields"`
+	MaxMembers      int    `yaml:"max_members"`
+	MaxParameters   int    `yaml:"max_parameters"`
+	MinOccurrences  int    `yaml:"min_occurrences"`
+	MinBlockLines   int    `yaml:"min_block_lines"`
+	Severity        string `yaml:"severity"`
+	Description     string `yaml:"description"`
+	AutoFix         string `yaml:"autofix"`
+	AutoFixEnabled  bool   `yaml:"autofix_enabled"`
+	PatternDetection bool  `yaml:"pattern_detection"`
+}
+
+type HealthScoreConfig struct {
+	ErrorWeight      float64 `yaml:"error_weight"`
+	MediumWeight     float64 `yaml:"medium_weight"`
+	LowWeight        float64 `yaml:"low_weight"`
+	ThresholdCritical float64 `yaml:"threshold_critical"`
+	ThresholdWarning  float64 `yaml:"threshold_warning"`
+	ThresholdGood     float64 `yaml:"threshold_good"`
+	MaxScore          float64 `yaml:"max_score"`
+}
+
+type ReportingConfig struct {
+	IncludeFileDetails    bool `yaml:"include_file_details"`
+	IncludeRecommendations bool `yaml:"include_recommendations"`
+	IncludeAffectedFiles  bool `yaml:"include_affected_files"`
+	MaxFilesToShow        int  `yaml:"max_files_to_show"`
+	MaxIssuesPerFile      int  `yaml:"max_issues_per_file"`
+	ShowSeverityIcons     bool `yaml:"show_severity_icons"`
+	ShowAutofixCommands   bool `yaml:"show_autofix_commands"`
+	TruncateLongMessages  bool `yaml:"truncate_long_messages"`
+	MaxMessageLength      int  `yaml:"max_message_length"`
+}
+
+type FilteringConfig struct {
+	MinSeverity string `yaml:"min_severity"`
+	GroupBy     string `yaml:"group_by"`
+	SortBy      string `yaml:"sort_by"`
+}
+
+type CIConfig struct {
+	FailThreshold  float64 `yaml:"fail_threshold"`
+	WarnThreshold  float64 `yaml:"warn_threshold"`
+	ExitCodes      map[string]int `yaml:"exit_codes"`
+}
 
 type LintIssue struct {
 	File       string `json:"file"`
@@ -63,8 +143,22 @@ type Recommendation struct {
 func main() {
 	dir := flag.String("dir", ".", "Directory to analyze")
 	output := flag.String("output", "", "Output file (default: stdout)")
+	configFile := flag.String("config", ".gorefactor-check.yaml", "Config file (YAML)")
 	jsonOutput := flag.Bool("json", false, "Output as JSON")
+	showConfig := flag.Bool("show-config", false, "Show loaded configuration and exit")
 	flag.Parse()
+
+	// Load configuration
+	cfg, err := loadConfig(*configFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to load config: %v\n", err)
+		cfg = defaultConfig()
+	}
+
+	if *showConfig {
+		printConfigInfo(cfg)
+		return
+	}
 
 	report := &RepoCheckReport{
 		Summary:                Summary{},
@@ -78,11 +172,11 @@ func main() {
 	}
 
 	// Run gorefactor lint
-	runLintAnalysis(*dir, report)
+	runLintAnalysis(*dir, report, cfg)
 
 	// Generate recommendations
-	generateRecommendations(report)
-	calculateHealthScore(report)
+	generateRecommendations(report, cfg)
+	calculateHealthScore(report, cfg)
 
 	// Output
 	if *jsonOutput {
@@ -102,11 +196,112 @@ func main() {
 			fmt.Println(string(data))
 		}
 	} else {
-		printReport(report, *output)
+		printReport(report, *output, cfg)
+	}
+
+	// Exit with appropriate code for CI
+	exitCode := 0
+	if report.Summary.OverallHealthScore < cfg.CI.FailThreshold {
+		exitCode = cfg.CI.ExitCodes["error"]
+	}
+	if exitCode != 0 {
+		os.Exit(exitCode)
 	}
 }
 
-func runLintAnalysis(dir string, report *RepoCheckReport) {
+func loadConfig(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	cfg := &Config{}
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse YAML: %w", err)
+	}
+
+	return cfg, nil
+}
+
+func defaultConfig() *Config {
+	return &Config{
+		Version: "1.0",
+		Checks: ChecksConfig{
+			FileSize:             CheckConfig{Enabled: true, MaxLines: 300, Severity: "error"},
+			GodObject:            CheckConfig{Enabled: true, MaxFields: 10, Severity: "error"},
+			LargeClass:           CheckConfig{Enabled: true, MaxMembers: 15, Severity: "medium"},
+			SwitchStatements:     CheckConfig{Enabled: true, Severity: "medium"},
+			ExcessiveParameters:  CheckConfig{Enabled: true, MaxParameters: 6, Severity: "medium"},
+			DataClumps:           CheckConfig{Enabled: true, MinOccurrences: 3, Severity: "low"},
+			CircularDependencies: CheckConfig{Enabled: true, Severity: "error"},
+			UntestedPackages:     CheckConfig{Enabled: true, Severity: "medium"},
+			Duplication:          CheckConfig{Enabled: true, MinBlockLines: 10, Severity: "low"},
+		},
+		HealthScore: HealthScoreConfig{
+			ErrorWeight:      20.0,
+			MediumWeight:     3.0,
+			LowWeight:        0.5,
+			ThresholdCritical: 40.0,
+			ThresholdWarning:  60.0,
+			ThresholdGood:     80.0,
+			MaxScore:          100.0,
+		},
+		Reporting: ReportingConfig{
+			IncludeFileDetails:    true,
+			IncludeRecommendations: true,
+			IncludeAffectedFiles:  true,
+			MaxFilesToShow:        10,
+			ShowSeverityIcons:     true,
+			ShowAutofixCommands:   true,
+			TruncateLongMessages:  true,
+			MaxMessageLength:      80,
+		},
+		CI: CIConfig{
+			FailThreshold: 50,
+			WarnThreshold: 70,
+		},
+	}
+}
+
+func printConfigInfo(cfg *Config) {
+	fmt.Println("📋 GoRefactor Check Configuration")
+	fmt.Println("═" + strings.Repeat("═", 63))
+	fmt.Printf("\nVersion: %s\n", cfg.Version)
+	fmt.Printf("Name: %s\n\n", cfg.Name)
+
+	fmt.Println("🔍 CHECKS ENABLED:")
+	checks := []struct {
+		name   string
+		config CheckConfig
+	}{
+		{"File Size", cfg.Checks.FileSize},
+		{"God Object", cfg.Checks.GodObject},
+		{"Large Class", cfg.Checks.LargeClass},
+		{"Switch Statements", cfg.Checks.SwitchStatements},
+		{"Excessive Parameters", cfg.Checks.ExcessiveParameters},
+		{"Data Clumps", cfg.Checks.DataClumps},
+		{"Circular Dependencies", cfg.Checks.CircularDependencies},
+		{"Untested Packages", cfg.Checks.UntestedPackages},
+		{"Duplication", cfg.Checks.Duplication},
+	}
+
+	for _, check := range checks {
+		status := "✅"
+		if !check.config.Enabled {
+			status = "❌"
+		}
+		fmt.Printf("  %s %s [%s]\n", status, check.name, check.config.Severity)
+	}
+
+	fmt.Printf("\n📊 HEALTH SCORE WEIGHTS:\n")
+	fmt.Printf("  Error: %.1f | Medium: %.1f | Low: %.1f\n", cfg.HealthScore.ErrorWeight, cfg.HealthScore.MediumWeight, cfg.HealthScore.LowWeight)
+	fmt.Printf("  Critical Threshold: %.0f | Warning: %.0f | Good: %.0f\n\n", cfg.HealthScore.ThresholdCritical, cfg.HealthScore.ThresholdWarning, cfg.HealthScore.ThresholdGood)
+
+	fmt.Printf("📈 CI THRESHOLDS:\n")
+	fmt.Printf("  Fail: %.0f | Warn: %.0f\n\n", cfg.CI.FailThreshold, cfg.CI.WarnThreshold)
+}
+
+func runLintAnalysis(dir string, report *RepoCheckReport, cfg *Config) {
 	cmd := exec.Command("./gorefactor", "lint", dir, "--json")
 	output, err := cmd.Output()
 	if err != nil {
@@ -206,7 +401,7 @@ func extractSmellType(message string) string {
 	return "Other"
 }
 
-func generateRecommendations(report *RepoCheckReport) {
+func generateRecommendations(report *RepoCheckReport, cfg *Config) {
 	if report.Summary.CriticalCount > 0 {
 		report.Recommendations = append(report.Recommendations, Recommendation{
 			Category:    "File Size",
@@ -269,13 +464,13 @@ func generateRecommendations(report *RepoCheckReport) {
 	}
 }
 
-func calculateHealthScore(report *RepoCheckReport) {
-	score := 100.0
+func calculateHealthScore(report *RepoCheckReport, cfg *Config) {
+	score := cfg.HealthScore.MaxScore
 
 	// Deductions based on issue counts and severity
-	score -= float64(report.Summary.ErrorCount) * 20.0
-	score -= float64(report.Summary.MediumCount) * 3.0
-	score -= float64(report.Summary.LowCount) * 0.5
+	score -= float64(report.Summary.ErrorCount) * cfg.HealthScore.ErrorWeight
+	score -= float64(report.Summary.MediumCount) * cfg.HealthScore.MediumWeight
+	score -= float64(report.Summary.LowCount) * cfg.HealthScore.LowWeight
 
 	if score < 0 {
 		score = 0
@@ -284,7 +479,7 @@ func calculateHealthScore(report *RepoCheckReport) {
 	report.Summary.OverallHealthScore = score
 }
 
-func printReport(report *RepoCheckReport, output string) {
+func printReport(report *RepoCheckReport, output string, cfg *Config) {
 	var w *os.File
 	var err error
 	if output != "" {
@@ -306,10 +501,10 @@ func printReport(report *RepoCheckReport, output string) {
 	fmt.Fprintf(w, "📊 SUMMARY\n")
 	fmt.Fprintf(w, "─────────────────────────────────────────────────────────────────\n")
 	healthEmoji := "✅"
-	if report.Summary.OverallHealthScore < 80 {
+	if report.Summary.OverallHealthScore < cfg.HealthScore.ThresholdGood {
 		healthEmoji = "⚠️ "
 	}
-	if report.Summary.OverallHealthScore < 50 {
+	if report.Summary.OverallHealthScore < cfg.HealthScore.ThresholdCritical {
 		healthEmoji = "🚨"
 	}
 	fmt.Fprintf(w, "%s Overall Health Score: %.1f/100\n", healthEmoji, report.Summary.OverallHealthScore)

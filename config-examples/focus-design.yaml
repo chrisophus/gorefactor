@@ -1,0 +1,99 @@
+# Focus Configuration - Design Issues Only
+# Use this when you want to specifically target design and architecture problems
+# Useful for architecture reviews and design pattern improvements
+
+version: "1.0"
+name: "Design Patterns Focus"
+description: "Configuration focusing on design issues and architectural patterns"
+
+analysis:
+  enabled: true
+  exclude:
+    - vendor/
+    - testdata/
+    - "*_test.go"
+
+checks:
+  # Design: Scattered type switching indicates missing abstraction
+  switch_statements:
+    enabled: true
+    severity: "error"
+    pattern_detection: true
+    description: "Type switches across codebase suggest missing abstraction or interface"
+
+  # Design: God objects violate single responsibility
+  god_object:
+    enabled: true
+    max_fields: 10
+    severity: "error"
+    description: "Structs with many fields should be decomposed"
+    autofix_enabled: true
+
+  # Design: Data clumps indicate parameter object opportunity
+  data_clumps:
+    enabled: true
+    min_occurrences: 2
+    severity: "medium"
+    description: "Parameter groups appearing together should become objects"
+
+  # Design: Large classes lack cohesion
+  large_class:
+    enabled: true
+    max_members: 15
+    severity: "medium"
+    description: "Classes with many members have mixed responsibilities"
+
+  # Design: Excessive parameters make functions hard to reason about
+  excessive_parameters:
+    enabled: true
+    max_parameters: 6
+    severity: "medium"
+    description: "Functions with many parameters are complex and error-prone"
+    autofix_enabled: true
+
+  # Architecture: Circular dependencies prevent clean layering
+  circular_dependencies:
+    enabled: true
+    severity: "error"
+    description: "Circular imports violate layered architecture"
+
+  # Disable: non-design-related checks
+  file_size:
+    enabled: false
+  untested_packages:
+    enabled: false
+  duplication:
+    enabled: false
+
+health_score:
+  # Heavy weight on design issues
+  error_weight: 25.0
+  medium_weight: 5.0
+  low_weight: 0.1
+  threshold_critical: 45
+  threshold_warning: 65
+  threshold_good: 85
+  max_score: 100.0
+
+reporting:
+  include_file_details: true
+  include_recommendations: true
+  include_affected_files: true
+  max_files_to_show: 10
+  show_severity_icons: true
+  show_autofix_commands: true
+  truncate_long_messages: false  # Show full design pattern descriptions
+  max_message_length: 200
+
+filtering:
+  min_severity: "low"
+  group_by: "category"
+  sort_by: "severity"
+
+ci:
+  fail_threshold: 60
+  warn_threshold: 75
+  exit_codes:
+    success: 0
+    warning: 0
+    error: 1

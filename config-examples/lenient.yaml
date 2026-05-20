@@ -1,0 +1,95 @@
+# Lenient Configuration - For Legacy and Existing Projects
+# Use this when working with existing codebases where immediate strict compliance isn't possible
+
+version: "1.0"
+name: "Legacy Project Code Quality Standards"
+description: "Lenient configuration for gradually improving existing codebases"
+
+analysis:
+  enabled: true
+  exclude:
+    - vendor/
+    - testdata/
+    - "*_test.go"
+    - "*.pb.go"
+    - legacy/
+    - deprecated/
+
+checks:
+  file_size:
+    enabled: true
+    max_lines: 500        # More lenient: 500 lines
+    severity: "medium"    # Less critical
+    autofix: "gorefactor split <file> --max 500"
+
+  god_object:
+    enabled: true
+    max_fields: 20        # More lenient: 20 fields
+    severity: "low"       # Less critical
+
+  large_class:
+    enabled: true
+    max_members: 25       # More lenient
+    severity: "low"
+
+  switch_statements:
+    enabled: true
+    severity: "low"       # Less critical for legacy
+    pattern_detection: false  # Don't flag every occurrence
+
+  excessive_parameters:
+    enabled: true
+    max_parameters: 8     # More lenient: 8 params
+    severity: "low"
+    autofix_enabled: false  # Don't suggest autofix yet
+
+  data_clumps:
+    enabled: false        # Disabled - too much existing code
+    min_occurrences: 5
+    severity: "low"
+
+  circular_dependencies:
+    enabled: true
+    severity: "medium"    # Less critical initially
+
+  untested_packages:
+    enabled: true
+    severity: "low"       # Informational only
+
+  duplication:
+    enabled: false        # Disabled - high existing duplication
+    min_block_lines: 20
+    severity: "low"
+
+health_score:
+  error_weight: 5.0       # Lenient penalties
+  medium_weight: 1.0
+  low_weight: 0.1
+  threshold_critical: 20
+  threshold_warning: 40
+  threshold_good: 60
+  max_score: 100.0
+
+reporting:
+  include_file_details: true
+  include_recommendations: true
+  include_affected_files: true
+  max_files_to_show: 5
+  max_issues_per_file: 3
+  show_severity_icons: true
+  show_autofix_commands: false  # Don't suggest autofixes
+  truncate_long_messages: true
+  max_message_length: 60
+
+filtering:
+  min_severity: "medium"  # Only show medium+ issues
+  group_by: "category"
+  sort_by: "severity"
+
+ci:
+  fail_threshold: 20      # Low bar - legacy projects may struggle
+  warn_threshold: 40
+  exit_codes:
+    success: 0
+    warning: 0            # Don't fail on warnings
+    error: 1

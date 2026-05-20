@@ -1,0 +1,94 @@
+# Strict Configuration - For Enterprise and High-Standards Projects
+# Use this when you want maximum code quality and are willing to invest in refactoring
+
+version: "1.0"
+name: "Enterprise Strict Code Quality Standards"
+description: "Strict configuration for high-quality codebases"
+
+analysis:
+  enabled: true
+  exclude:
+    - vendor/
+    - testdata/
+    - "*_test.go"
+    - "*.pb.go"
+
+checks:
+  file_size:
+    enabled: true
+    max_lines: 200        # Very strict: 200 lines max
+    severity: "error"
+    autofix: "gorefactor split <file> --max 200"
+
+  god_object:
+    enabled: true
+    max_fields: 8         # Very strict: 8 fields max
+    severity: "error"
+    autofix_enabled: true
+
+  large_class:
+    enabled: true
+    max_members: 12       # Very strict
+    severity: "error"
+
+  switch_statements:
+    enabled: true
+    severity: "error"     # Treat as critical
+    pattern_detection: true
+
+  excessive_parameters:
+    enabled: true
+    max_parameters: 4     # Very strict: 4 params max
+    severity: "error"
+    autofix_enabled: true
+
+  data_clumps:
+    enabled: true
+    min_occurrences: 2    # Flag even if appears twice
+    severity: "medium"
+
+  circular_dependencies:
+    enabled: true
+    severity: "error"     # Critical issue
+
+  untested_packages:
+    enabled: true
+    severity: "error"
+
+  duplication:
+    enabled: true
+    min_block_lines: 5    # Very strict: flag 5+ line dupes
+    severity: "medium"
+
+health_score:
+  error_weight: 25.0      # Harsh penalties
+  medium_weight: 5.0
+  low_weight: 1.0
+  threshold_critical: 50
+  threshold_warning: 70
+  threshold_good: 85
+  max_score: 100.0
+
+reporting:
+  include_file_details: true
+  include_recommendations: true
+  include_affected_files: true
+  max_files_to_show: 20
+  max_issues_per_file: 10
+  show_severity_icons: true
+  show_autofix_commands: true
+  truncate_long_messages: true
+  max_message_length: 100
+
+filtering:
+  min_severity: "low"
+  group_by: "severity"
+  sort_by: "severity"
+
+ci:
+  fail_threshold: 75      # High bar - fail if score < 75
+  warn_threshold: 85      # Warn if score < 85
+  exit_codes:
+    success: 0
+    warning: 0
+    error: 1

@@ -41,9 +41,18 @@ func (pd *PatternDetector) DetectPatterns() []ArchitecturalPattern {
 	return patterns
 }
 
-// detectGodObjects finds large structs that do too much (god objects)
+// detectGodObjects finds large structs that do too much: many fields *and*
+// non-trivial method count. A Go struct with many fields and zero methods is
+// a record/DTO (idiomatic in Go — cf. http.Request, tls.Config), not a god
+// object.
 func (pd *PatternDetector) detectGodObjects() []ArchitecturalPattern {
 	var patterns []ArchitecturalPattern
+	classMethods := make(map[string]int)
+	for _, decl := range pd.file.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv != nil && len(fn.Recv.List) > 0 {
+			classMethods[getReceiverTypeName(fn.Recv.List[0])]++
+		}
+	}
 
 	for _, decl := range pd.file.Decls {
 		if gd, ok := decl.(*ast.GenDecl); ok && gd.Tok == token.TYPE {
@@ -51,12 +60,13 @@ func (pd *PatternDetector) detectGodObjects() []ArchitecturalPattern {
 				if ts, ok := spec.(*ast.TypeSpec); ok {
 					if st, ok := ts.Type.(*ast.StructType); ok {
 						fieldCount := len(st.Fields.List)
-						if fieldCount > 10 {
+						methodCount := classMethods[ts.Name.Name]
+						if fieldCount > 25 && methodCount > 0 {
 							pattern := ArchitecturalPattern{
 								Name:        "God Object",
 								Type:        "smell",
 								Severity:    "medium",
-								Description: fmt.Sprintf("Struct %s has %d fields (>10); consider breaking into smaller types", ts.Name.Name, fieldCount),
+								Description: fmt.Sprintf("Struct %s has %d fields (>25) and %d methods; consider breaking into smaller types", ts.Name.Name, fieldCount, methodCount),
 								Affected:    []string{ts.Name.Name},
 								Suggestion:  "Extract fields into logical sub-types or group by responsibility",
 							}
@@ -78,7 +88,7 @@ func (pd *PatternDetector) detectExcessiveParameters() []ArchitecturalPattern {
 		if fn.Type.Params != nil {
 			count = len(fn.Type.Params.List)
 		}
-		if count > 5 {
+		if count > 7 {
 			return count, "Excessive Parameters", "Create a parameter struct to group related arguments"
 		}
 		return 0, "", ""
@@ -155,7 +165,9 @@ func (pd *PatternDetector) detectInterfaceSegregation() []ArchitecturalPattern {
 	return patterns
 }
 
-// detectLargeClass finds structs with too many methods (>20) or fields (>15)
+// detectLargeClass finds structs with substantial behavior — many methods, or
+// many total members AND at least one method. Pure-data structs (no methods)
+// are records and shouldn't trip this rule, regardless of field count.
 func (pd *PatternDetector) detectLargeClass() []ArchitecturalPattern {
 	var patterns []ArchitecturalPattern
 	classMethods := make(map[string]int)
@@ -183,15 +195,11 @@ func (pd *PatternDetector) detectLargeClass() []ArchitecturalPattern {
 						methodCount := classMethods[ts.Name.Name]
 						totalMembers := fieldCount + methodCount
 
-						if fieldCount > 15 || methodCount > 20 || totalMembers > 30 {
-							severity := "low"
-							if methodCount > 20 || totalMembers > 30 {
-								severity = "medium"
-							}
+						if methodCount > 20 || (totalMembers > 30 && methodCount > 0) {
 							pattern := ArchitecturalPattern{
 								Name:        "Large Class",
 								Type:        "smell",
-								Severity:    severity,
+								Severity:    "medium",
 								Description: fmt.Sprintf("Type %s has %d fields + %d methods = %d total members; consider extraction", ts.Name.Name, fieldCount, methodCount, totalMembers),
 								Affected:    []string{ts.Name.Name},
 								Suggestion:  "Extract cohesive methods into a new type or extract related fields into a sub-type",
@@ -271,11 +279,14 @@ func (pd *PatternDetector) detectDataClumps() []ArchitecturalPattern {
 	return patterns
 }
 
-// detectSwitchStatements finds switch statements on type fields
+// detectSwitchStatements finds type-switch dispatch repeated across many
+// functions in the same file. Type switches over heterogeneous AST/visitor
+// types are idiomatic Go, so thresholds are kept high — only flag when a
+// single function does >1 type switch *and* at least 3 functions in the file
+// do type dispatch.
 func (pd *PatternDetector) detectSwitchStatements() []ArchitecturalPattern {
 	var patterns []ArchitecturalPattern
 	switchCount := make(map[string]int)
-	switchFuncs := make(map[string][]string)
 
 	for _, decl := range pd.file.Decls {
 		if fn, ok := decl.(*ast.FuncDecl); ok {
@@ -287,30 +298,30 @@ func (pd *PatternDetector) detectSwitchStatements() []ArchitecturalPattern {
 					functionName = recvType + ":" + functionName
 				}
 				switchCount[functionName] = count
-				switchFuncs[functionName] = []string{functionName}
 			}
 		}
 	}
 
-	// Flag if switch statements are scattered (multiple functions with switches)
-	if len(switchCount) > 1 {
-		for funcName, count := range switchCount {
-			if count > 0 {
-				severity := "low"
-				if count > 2 {
-					severity = "medium"
-				}
-				pattern := ArchitecturalPattern{
-					Name:        "Switch Statements",
-					Type:        "smell",
-					Severity:    severity,
-					Description: fmt.Sprintf("Function %s contains %d switch statement(s) on type; pattern is scattered across codebase", funcName, count),
-					Affected:    []string{funcName},
-					Suggestion:  "Consider replacing scattered switches with polymorphism (strategy pattern or interface-based dispatch)",
-				}
-				patterns = append(patterns, pattern)
-			}
+	if len(switchCount) < 3 {
+		return patterns
+	}
+	for funcName, count := range switchCount {
+		if count <= 1 {
+			continue
 		}
+		severity := "low"
+		if count > 2 {
+			severity = "medium"
+		}
+		pattern := ArchitecturalPattern{
+			Name:        "Type Switches",
+			Type:        "smell",
+			Severity:    severity,
+			Description: fmt.Sprintf("Function %s contains %d type switches; %d functions in this file do type dispatch", funcName, count, len(switchCount)),
+			Affected:    []string{funcName},
+			Suggestion:  "If types are user-owned (not go/ast etc), consider polymorphism. For closed AST-like type sets, type switches are idiomatic.",
+		}
+		patterns = append(patterns, pattern)
 	}
 
 	return patterns
@@ -371,13 +382,6 @@ func countSwitchStatements(block *ast.BlockStmt) int {
 func countSwitchInStmt(stmt ast.Stmt) int {
 	count := 0
 	switch s := stmt.(type) {
-	case *ast.SwitchStmt:
-		count++
-		if s.Body != nil {
-			for _, s2 := range s.Body.List {
-				count += countSwitchInStmt(s2)
-			}
-		}
 	case *ast.TypeSwitchStmt:
 		count++
 		if s.Body != nil {

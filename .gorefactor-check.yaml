@@ -1,0 +1,146 @@
+# GoRefactor Code Quality Checker Configuration
+# This file configures which checks to run and their thresholds
+
+version: "1.0"
+name: "GoRefactor Repository Quality Standards"
+description: "Configuration for detecting code smells and design issues"
+
+# Global analysis settings
+analysis:
+  enabled: true
+  # Paths to exclude from analysis
+  exclude:
+    - vendor/
+    - third_party/
+    - "*_test.go"
+    - testdata/
+    - ".git/"
+
+# Individual check configurations
+checks:
+
+  # File size check - detects files that are too large
+  file_size:
+    enabled: true
+    max_lines: 300
+    severity: "error"  # error | warning | info
+    description: "Files should not exceed size limits for maintainability"
+    autofix: "gorefactor split <file> --max {max_lines}"
+
+  # God Object check - detects structs with too many fields
+  god_object:
+    enabled: true
+    max_fields: 10
+    severity: "error"
+    description: "Structs with excessive fields should be decomposed"
+    autofix_enabled: false  # Will be enabled when gorefactor decompose-struct is ready
+
+  # Large Class check - similar to god object
+  large_class:
+    enabled: true
+    max_members: 15
+    severity: "medium"
+    description: "Types with too many fields/methods violate Single Responsibility"
+
+  # Switch Statements check - detects scattered type switches
+  switch_statements:
+    enabled: true
+    severity: "medium"
+    description: "Type-based switches scattered across codebase suggest missing abstraction"
+    pattern_detection: true
+
+  # Excessive Parameters check - detects functions with too many params
+  excessive_parameters:
+    enabled: true
+    max_parameters: 6
+    severity: "medium"
+    description: "Functions with many parameters are hard to use and test"
+    autofix_enabled: false  # Will be enabled when gorefactor extract-params is ready
+
+  # Data Clumps check - detects parameter groups appearing together
+  data_clumps:
+    enabled: true
+    min_occurrences: 3  # Only flag if pattern appears 3+ times
+    severity: "low"
+    description: "Parameter groups appearing together should be extracted into types"
+
+  # Circular dependencies check
+  circular_dependencies:
+    enabled: true
+    severity: "error"
+    description: "Circular imports create initialization issues and tight coupling"
+
+  # Untested packages check
+  untested_packages:
+    enabled: true
+    severity: "medium"
+    description: "Packages without tests have reduced reliability"
+
+  # Duplication check - detects duplicate code blocks
+  duplication:
+    enabled: true
+    min_block_lines: 10  # Only flag blocks larger than this
+    severity: "low"
+    description: "Duplicate code increases maintenance burden"
+
+# Health score configuration
+health_score:
+  # Points deducted per issue type
+  error_weight: 20.0      # Critical/Error issues
+  medium_weight: 3.0      # Medium severity issues
+  low_weight: 0.5         # Low severity issues
+
+  # Thresholds for warnings
+  threshold_critical: 40   # Score below this is critical
+  threshold_warning: 60    # Score below this is warning
+  threshold_good: 80       # Score above this is good
+
+  # Maximum possible score
+  max_score: 100.0
+
+# Report configuration
+reporting:
+  # What to include in reports
+  include_file_details: true
+  include_recommendations: true
+  include_affected_files: true
+  max_files_to_show: 10
+  max_issues_per_file: 5
+
+  # Report formatting
+  show_severity_icons: true
+  show_autofix_commands: true
+  truncate_long_messages: true
+  max_message_length: 80
+
+# Filtering and categorization
+filtering:
+  # Which severity levels to include in report
+  min_severity: "low"  # low | medium | error
+
+  # Group issues by
+  group_by: "category"  # category | file | severity
+
+  # Sort by
+  sort_by: "severity"  # severity | file | count
+
+# CI/CD Integration
+ci:
+  # Fail CI if health score is below this
+  fail_threshold: 50
+
+  # Warn in CI if health score is below this
+  warn_threshold: 70
+
+  # Exit code behavior
+  exit_codes:
+    success: 0
+    warning: 0  # Don't fail on warnings by default
+    error: 1
+
+# Rule severity levels (can be overridden per check)
+severity_levels:
+  error: 4    # Critical, must fix
+  medium: 2   # Should fix soon
+  low: 1      # Nice to have
+  info: 0     # Informational only

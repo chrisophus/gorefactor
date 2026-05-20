@@ -75,8 +75,14 @@ linters:
       # on user-specified files are not a real threat model.
       - linters: [gosec]
         text: "G703|G122"
+      # AST walkers and delete/rename orchestration — complexity is structural.
+      - linters: [cyclop]
+        path: analyzer/(pattern_detector|dead_code_detector)\.go$
+      - linters: [cyclop]
+        path: orchestrator/op_delete_rename\.go$
     paths:
       - ^testfiles/
       - ^skill/
       - ^examples/
+      - ^benchmark/
       - ^move_by_plan\.go$

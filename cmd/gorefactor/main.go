@@ -7,6 +7,7 @@ import (
 
 	"github.com/chrisophus/gorefactor/orchestrator"
 	"github.com/chrisophus/gorefactor/parser"
+	"github.com/chrisophus/gorefactor/version"
 )
 
 type Command struct {
@@ -156,6 +157,11 @@ func getCommands() map[string]Command {
 }
 
 func main() {
+	if len(os.Args) >= 2 && (os.Args[1] == "-version" || os.Args[1] == "--version" || os.Args[1] == "version") {
+		fmt.Println(version.Version)
+		return
+	}
+
 	if len(os.Args) >= 2 && os.Args[1] == "undo" {
 		if err := undoRefactoring(os.Args[2:]); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)

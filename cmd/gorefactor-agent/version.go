@@ -1,3 +1,6 @@
 package main
 
-const agentVersion = "0.1.0"
+import "github.com/chrisophus/gorefactor/version"
+
+// agentVersion is the user-facing release string (shared with gorefactor CLI).
+const agentVersion = version.Version

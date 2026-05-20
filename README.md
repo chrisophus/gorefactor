@@ -16,6 +16,11 @@ Legacy: `skill/` (`skill-refactor`) — older Claude Code bridge; prefer `gorefa
 ## Installation
 
 ```bash
+# Pin to a release (recommended)
+go install github.com/chrisophus/gorefactor/cmd/gorefactor@v0.1.0
+go install github.com/chrisophus/gorefactor/cmd/gorefactor-agent@v0.1.0
+
+# Or latest from main
 go install github.com/chrisophus/gorefactor/cmd/gorefactor@latest
 go install github.com/chrisophus/gorefactor/cmd/gorefactor-agent@latest
 ```

@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -210,3 +211,33 @@ func main() {
 		t.Error("File content does not contain correct package name")
 	}
 }
+
+func TestCodeInserter_InsertCode_AtEnd_ReportsRealFileLines(t *testing.T) {
+	inserter := NewCodeInserter()
+	tmpFile := "test_atend_lines_regression.go"
+	defer func() { _ = os.Remove(tmpFile) }()
+
+	var b strings.Builder
+	b.WriteString("package main\n\n")
+	for i := 0; i < 50; i++ {
+		fmt.Fprintf(&b, "var line%d = %d\n", i, i)
+	}
+	existing := b.String()
+	if err := os.WriteFile(tmpFile, []byte(existing), 0644); err != nil {
+		t.Fatalf("write existing: %v", err)
+	}
+	origLines := strings.Count(existing, "\n")
+
+	snippet := "func appended() {}\n"
+	result, err := inserter.InsertCode(tmpFile, &InsertionLocation{Type: "at_end"}, snippet)
+	if err != nil {
+		t.Fatalf("InsertCode: %v", err)
+	}
+	if result.StartLine < origLines-5 {
+		t.Errorf("StartLine=%d but original file had %d lines — line numbers fell out of the snippet's synthetic positions", result.StartLine, origLines)
+	}
+	if result.EndLine < result.StartLine {
+		t.Errorf("EndLine=%d < StartLine=%d", result.EndLine, result.StartLine)
+	}
+}
+

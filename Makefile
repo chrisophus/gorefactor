@@ -84,20 +84,19 @@ watch-test: ## Watch for changes and run tests
 quick-test: ## Run only failing tests (fast feedback)
 	go test ./... -run "TestFind|TestCall|TestInterface" -v
 
-analyze-dir: ## Analyze directory structure
+analyze-dir: ## Analyze directory structure (usage: make analyze-dir [DIR=path])
 	@echo "$(BLUE)Analyzing codebase...$(NC)"
-	./refactor-skill.sh analyze-dir ./analyzer
-	./refactor-skill.sh find-unused ./analyzer
+	./gorefactor lint $(or $(DIR),./analyzer)
 
 find-symbol: ## Find uses of a symbol (usage: make find-symbol SYMBOL=name)
 	@if [ -z "$(SYMBOL)" ]; then echo "$(RED)Error: SYMBOL not specified. Usage: make find-symbol SYMBOL=MyFunction$(NC)"; exit 1; fi
 	@echo "$(BLUE)Finding uses of '$(SYMBOL)'...$(NC)"
-	./refactor-skill.sh find-uses $(SYMBOL)
+	./gorefactor find-uses $(SYMBOL)
 
 find-callers: ## Find callers of a function (usage: make find-callers FUNC=name)
 	@if [ -z "$(FUNC)" ]; then echo "$(RED)Error: FUNC not specified. Usage: make find-callers FUNC=MyFunction$(NC)"; exit 1; fi
 	@echo "$(BLUE)Finding callers of '$(FUNC)'...$(NC)"
-	./refactor-skill.sh find-callers $(FUNC)
+	./gorefactor find-callers $(FUNC)
 
 # Continuous Integration targets
 ci-lint: ## CI: Run linter with strict settings

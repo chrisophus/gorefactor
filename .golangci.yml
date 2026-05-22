@@ -82,7 +82,6 @@ linters:
         path: orchestrator/op_delete_rename\.go$
     paths:
       - ^testfiles/
-      - ^skill/
       - ^examples/
       - ^benchmark/
       - ^move_by_plan\.go$

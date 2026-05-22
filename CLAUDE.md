@@ -86,8 +86,6 @@ The codebase is organized into library packages and command entry points:
    - LLM harness: proposes tool calls, never writes `.go` source directly
    - Completion gate: `go build ./...` + `go test ./...` (see **Agent completion gate** below)
 
-6. **Skill** (`skill/`) — optional legacy `skill-refactor` bridge for Claude Code; prefer `gorefactor` CLI for new work ([SKILL_REFACTOR.md](SKILL_REFACTOR.md))
-
 ### Command Structure
 
 Main commands in `cmd/gorefactor/main.go` (registered in `getCommands()`):
@@ -529,7 +527,7 @@ When you provide feedback with `f`, it's incorporated into the agent's conversat
 # Safety and flexibility
 -dir <path>                        # Target Go module directory (default: .)
 -allow-dirty                       # Skip the clean-git-worktree precondition
--single-shot                       # Use legacy single-shot constrained-plan path
+-single-shot                       # Use single-shot constrained-plan path (required for providers without tool-calling)
 -interactive                       # (agentic mode only) Pause after each step for user feedback
 -no-schema                         # (single-shot only) Disable JSON-schema enforcement
 ```

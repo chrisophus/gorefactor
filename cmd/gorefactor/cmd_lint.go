@@ -146,12 +146,15 @@ func defaultLintRules() []LintRule {
 		fileSizeRule{},
 		extractableRule{},
 		complexityRule{},
+		errWrapRule{},
+		couplingRule{},
 	}
 	rules = append(rules, smellRules()...)
 	rules = append(rules,
 		duplicateRule{},
 		deadCodeRule{},
 		untestedPackageRule{},
+		untestedFunctionRule{},
 		golangciLintRule{},
 	)
 	return rules

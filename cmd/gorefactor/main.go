@@ -158,6 +158,11 @@ func getCommands() map[string]Command {
 			Description: "Interactive REPL mode for step-by-step refactoring",
 			Run:         replCommand,
 		},
+		"architect": {
+			Name:        "architect",
+			Description: "Generate a starter go-arch-lint.yml from the current import graph [--suggest] [--output path] [dir]",
+			Run:         architectCommand,
+		},
 	}
 }
 

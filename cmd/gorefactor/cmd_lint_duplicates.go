@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/chrisophus/gorefactor/analyzer"
 	"strings"
+
+	"github.com/chrisophus/gorefactor/analyzer"
 )
 
 func checkDuplicates(root string) []lintIssue {
@@ -28,4 +29,12 @@ func checkDuplicates(root string) []lintIssue {
 		})
 	}
 	return out
+}
+
+type duplicateRule struct{}
+
+func (duplicateRule) Name() string { return "duplicate-block" }
+
+func (r duplicateRule) Run(ctx LintContext) []lintIssue {
+	return checkDuplicates(ctx.Root)
 }

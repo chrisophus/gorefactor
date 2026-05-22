@@ -54,3 +54,11 @@ func checkUntestedPackages(root string) []lintIssue {
 	}
 	return out
 }
+
+type untestedPackageRule struct{}
+
+func (untestedPackageRule) Name() string { return "untested-package" }
+
+func (r untestedPackageRule) Run(ctx LintContext) []lintIssue {
+	return checkUntestedPackages(ctx.Root)
+}

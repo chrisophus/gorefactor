@@ -29,3 +29,17 @@ func checkExtractable(file string, minPriority int) []lintIssue {
 	}
 	return out
 }
+
+const defaultExtractMinPriority = 8
+
+type extractableRule struct{}
+
+func (extractableRule) Name() string { return "extract-candidate" }
+
+func (r extractableRule) Run(ctx LintContext) []lintIssue {
+	var out []lintIssue
+	for _, f := range ctx.Files {
+		out = append(out, checkExtractable(f, defaultExtractMinPriority)...)
+	}
+	return out
+}

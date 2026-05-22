@@ -49,20 +49,11 @@ func lintCommand(args []string) error {
 		return err
 	}
 
+	rules := defaultLintRules()
+	ctx := LintContext{Root: root, Files: files, MaxSize: maxSize}
 	var issues []lintIssue
-	for _, f := range files {
-		issues = append(issues, checkFileSize(f, maxSize)...)
-		issues = append(issues, checkExtractable(f, 8)...)
-		issues = append(issues, checkSmells(f)...)
-	}
-	if dups := checkDuplicates(root); len(dups) > 0 {
-		issues = append(issues, dups...)
-	}
-	if dead := checkDeadCode(root); len(dead) > 0 {
-		issues = append(issues, dead...)
-	}
-	if untested := checkUntestedPackages(root); len(untested) > 0 {
-		issues = append(issues, untested...)
+	for _, rule := range rules {
+		issues = append(issues, rule.Run(ctx)...)
 	}
 
 	if jsonOut {
@@ -97,7 +88,7 @@ func lintCommand(args []string) error {
 	}
 
 	if fix {
-		applied, failed := applyAutoFixes(issues, maxSize)
+		applied, failed := applyAutoFixes(issues, ctx, rules)
 		fmt.Printf("\nAuto-fixes: %d applied, %d failed\n", applied, failed)
 	}
 	return nil
@@ -107,32 +98,57 @@ func collectGoFiles(root string) ([]string, error) {
 	return analyzer.WalkGoFiles(root, analyzer.DefaultWalkOptions())
 }
 
-func applyAutoFixes(issues []lintIssue, maxSize int) (applied, failed int) {
+func applyAutoFixes(issues []lintIssue, ctx LintContext, rules []LintRule) (applied, failed int) {
+	rulesByName := make(map[string]LintRule, len(rules))
+	for _, r := range rules {
+		rulesByName[r.Name()] = r
+	}
 	for _, iss := range issues {
 		if iss.AutoFixCmd == "" {
 			continue
 		}
-		if iss.Rule == "file-size" {
-			if err := splitCommand([]string{iss.File, "--max", fmt.Sprintf("%d", maxSize)}); err != nil {
-				fmt.Fprintf(os.Stderr, "fix failed for %s: %v\n", iss.File, err)
-				failed++
-				continue
-			}
-			applied++
-		} else if iss.Rule == "dead-code" {
-			// AutoFixCmd is the full intended command, e.g.
-			// "delete <file> <target> --safe"; forward its args
-			// verbatim so the --safe caller-check is preserved.
-			parts := strings.Fields(iss.AutoFixCmd)
-			if len(parts) >= 3 && parts[0] == "delete" {
-				if err := deleteCommand(parts[1:]); err != nil {
-					fmt.Fprintf(os.Stderr, "fix failed for %s: %v\n", iss.File, err)
-					failed++
-					continue
-				}
-				applied++
-			}
+		rule, ok := rulesByName[iss.Rule]
+		if !ok {
+			continue
 		}
+		fixer, ok := rule.(FixableRule)
+		if !ok {
+			continue
+		}
+		if err := fixer.AutoFix(iss, ctx); err != nil {
+			fmt.Fprintf(os.Stderr, "fix failed for %s: %v\n", iss.File, err)
+			failed++
+			continue
+		}
+		applied++
 	}
 	return
+}
+
+type LintContext struct {
+	Root    string
+	Files   []string
+	MaxSize int
+}
+
+type LintRule interface {
+	Name() string
+	Run(ctx LintContext) []lintIssue
+}
+
+type FixableRule interface {
+	LintRule
+	AutoFix(issue lintIssue, ctx LintContext) error
+}
+
+func defaultLintRules() []LintRule {
+	return []LintRule{
+		fileSizeRule{},
+		extractableRule{},
+		smellRule{},
+		duplicateRule{},
+		deadCodeRule{},
+		untestedPackageRule{},
+		golangciLintRule{},
+	}
 }

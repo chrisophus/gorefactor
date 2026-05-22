@@ -48,23 +48,29 @@ func inspectCommand(args []string) error {
 	}
 	fmt.Printf("Lines: %d / %d (%s)\n\n", lines, maxSize, status)
 
+	complexities, _ := analyzer.FileFunctionComplexities(file)
+	cxByName := make(map[string]int, len(complexities))
+	for _, c := range complexities {
+		cxByName[c.Name] = c.Complexity
+	}
 	type declRow struct {
 		kind   string
 		name   string
 		lines  int
 		startL int
+		cx     int
 	}
 	var rows []declRow
 	for _, fn := range info.Functions {
-		rows = append(rows, declRow{"func", fn.Name, fn.EndLine - fn.StartLine + 1, fn.StartLine})
+		rows = append(rows, declRow{"func", fn.Name, fn.EndLine - fn.StartLine + 1, fn.StartLine, cxByName[fn.Name]})
 	}
 	for _, m := range info.Methods {
-		rows = append(rows, declRow{"method", m.Receiver + "." + m.Name, m.EndLine - m.StartLine + 1, m.StartLine})
+		rows = append(rows, declRow{"method", m.Receiver + "." + m.Name, m.EndLine - m.StartLine + 1, m.StartLine, cxByName[m.Name]})
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].startL < rows[j].startL })
 	fmt.Printf("Declarations (%d):\n", len(rows))
 	for _, r := range rows {
-		fmt.Printf("  %-7s  %-40s  %4d lines  (L%d)\n", r.kind, r.name, r.lines, r.startL)
+		fmt.Printf("  %-7s  %-40s  %4d lines  cx=%2d  (L%d)\n", r.kind, r.name, r.lines, r.cx, r.startL)
 	}
 	fmt.Println()
 

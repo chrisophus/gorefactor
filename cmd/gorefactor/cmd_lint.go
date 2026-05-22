@@ -142,13 +142,17 @@ type FixableRule interface {
 }
 
 func defaultLintRules() []LintRule {
-	return []LintRule{
+	rules := []LintRule{
 		fileSizeRule{},
 		extractableRule{},
-		smellRule{},
+		complexityRule{},
+	}
+	rules = append(rules, smellRules()...)
+	rules = append(rules,
 		duplicateRule{},
 		deadCodeRule{},
 		untestedPackageRule{},
 		golangciLintRule{},
-	}
+	)
+	return rules
 }

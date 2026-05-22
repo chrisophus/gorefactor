@@ -138,6 +138,11 @@ func getCommands() map[string]Command {
 			Description: "Aggregate health gate: lint + build + test. Exits non-zero on failure. [--json]",
 			Run:         doctorCommand,
 		},
+		"init-agent-rules": {
+			Name:        "init-agent-rules",
+			Description: "Write the gorefactor agent-rules snippet into CLAUDE.md / .cursorrules / AGENTS.md [--target claude.md|cursor|agents.md|all]",
+			Run:         initAgentRulesCommand,
+		},
 		"extract": {
 			Name:        "extract",
 			Description: "Extract a code block into a new function. Args: <file> <startLine> <endLine> <methodName>",

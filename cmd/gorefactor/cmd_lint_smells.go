@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"go/parser"
 	"go/token"
+	"strings"
 
 	"github.com/chrisophus/gorefactor/analyzer"
 )
@@ -56,4 +58,32 @@ func checkDeadCode(root string) []lintIssue {
 		}
 	}
 	return issues
+}
+
+type smellRule struct{}
+
+func (smellRule) Name() string { return "smell" }
+
+func (r smellRule) Run(ctx LintContext) []lintIssue {
+	var out []lintIssue
+	for _, f := range ctx.Files {
+		out = append(out, checkSmells(f)...)
+	}
+	return out
+}
+
+type deadCodeRule struct{}
+
+func (deadCodeRule) Name() string { return "dead-code" }
+
+func (r deadCodeRule) Run(ctx LintContext) []lintIssue {
+	return checkDeadCode(ctx.Root)
+}
+
+func (r deadCodeRule) AutoFix(issue lintIssue, ctx LintContext) error {
+	parts := strings.Fields(issue.AutoFixCmd)
+	if len(parts) < 3 || parts[0] != "delete" {
+		return fmt.Errorf("malformed autofix command: %q", issue.AutoFixCmd)
+	}
+	return deleteCommand(parts[1:])
 }

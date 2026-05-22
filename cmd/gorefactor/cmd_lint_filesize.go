@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/chrisophus/gorefactor/analyzer"
 )
 
@@ -22,4 +23,20 @@ func checkFileSize(file string, maxSize int) []lintIssue {
 		AutoFix:    "split file",
 		AutoFixCmd: fmt.Sprintf("gorefactor split %s --max %d", file, maxSize),
 	}}
+}
+
+type fileSizeRule struct{}
+
+func (fileSizeRule) Name() string { return "file-size" }
+
+func (r fileSizeRule) Run(ctx LintContext) []lintIssue {
+	var out []lintIssue
+	for _, f := range ctx.Files {
+		out = append(out, checkFileSize(f, ctx.MaxSize)...)
+	}
+	return out
+}
+
+func (r fileSizeRule) AutoFix(issue lintIssue, ctx LintContext) error {
+	return splitCommand([]string{issue.File, "--max", fmt.Sprintf("%d", ctx.MaxSize)})
 }

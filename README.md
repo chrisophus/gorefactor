@@ -11,8 +11,6 @@ A companion binary, **`gorefactor-agent`**, drives the same tools with a cheap o
 | `gorefactor` | Deterministic CLI: analysis, direct edits, lint, plans, undo |
 | `gorefactor-agent` | LLM loop that calls `gorefactor`; never edits `.go` files directly |
 
-Legacy: `skill/` (`skill-refactor`) — older Claude Code bridge; prefer `gorefactor` for new work. See [SKILL_REFACTOR.md](SKILL_REFACTOR.md).
-
 ## Installation
 
 ```bash
@@ -154,7 +152,6 @@ cmd/gorefactor-agent/ LLM harness
 parser/               AST → structured JSON
 analyzer/             Complexity, diffs, file-size, duplicates; `WalkGoFiles` + `WalkOptions` for lint walks
 orchestrator/         JSON plans, semantic targeting, undo snapshots
-skill/                Legacy skill-refactor binary
 ```
 
 Extraction logic lives in **`cmd/gorefactor/cmd_extract.go`** and orchestrator extract operations—not a separate top-level `extractor/` package.

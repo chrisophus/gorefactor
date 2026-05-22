@@ -30,7 +30,7 @@ func main() {
 		printPrompt = flag.Bool("print-prompt", false, "print the assembled prompt for the active mode and exit (no model call)")
 		showVersion = flag.Bool("version", false, "print version and exit")
 		noSchema    = flag.Bool("no-schema", false, "single-shot only: disable decode-time JSON-schema enforcement")
-		singleShot  = flag.Bool("single-shot", false, "use the legacy single-shot constrained-plan path instead of the default agentic gorefactor-tools loop")
+		singleShot  = flag.Bool("single-shot", false, "use the single-shot constrained-plan path (required for providers without tool-calling support; supports -dry-run preview)")
 		interactive = flag.Bool("interactive", false, "agentic mode only: pause after each step for user feedback and guidance")
 		campaign    = flag.Bool("campaign", false, "sensor-driven autonomous mode: gorefactor findings -> agentic fixes -> commit-or-punt (no -spec needed)")
 	)

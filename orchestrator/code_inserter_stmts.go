@@ -45,16 +45,20 @@ func (ci *CodeInserter) insertInsideFunction(filePath string, node *ast.File, fs
 
 // insertAtEnd inserts code at the end of the file
 func (ci *CodeInserter) insertAtEnd(filePath string, node *ast.File, fset *token.FileSet, codeSnippet string) (*InsertionResult, error) {
-	// Parse the code snippet
 	snippetNode, err := ci.parseCodeSnippet(codeSnippet, fset)
 	if err != nil {
 		return nil, err
 	}
 
-	// Insert at the end of the file
+	// Snapshot the original file's last-decl line before mutating node.
+	// parseCodeSnippet adds a synthetic "snippet" file to the same fset;
+	// once snippet decls are appended, node.End() resolves into those
+	// snippet-file positions and the reported lines become nonsense.
+	origEndLine := fset.Position(node.End()).Line
+
 	ci.insertDeclarationsAtEnd(node, snippetNode)
 
-	startLine := fset.Position(node.End()).Line
+	startLine := origEndLine + 1
 	endLine := startLine + len(strings.Split(codeSnippet, "\n")) - 1
 
 	return &InsertionResult{

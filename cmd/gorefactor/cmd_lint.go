@@ -148,6 +148,7 @@ func defaultLintRules() []LintRule {
 		complexityRule{},
 		errWrapRule{},
 		couplingRule{},
+		prematureAbstractionRule{},
 	}
 	rules = append(rules, smellRules()...)
 	rules = append(rules,

@@ -150,9 +150,9 @@ func (pd *PatternDetector) detectInterfaceSegregation() []ArchitecturalPattern {
 								Name:        "Fat Interface",
 								Type:        "smell",
 								Severity:    "medium",
-								Description: fmt.Sprintf("Interface %s has %d methods (>5); consider interface segregation", ts.Name.Name, methodCount),
+								Description: fmt.Sprintf("Interface %s has %d methods (>5); idiomatic Go declares interfaces at the consumer side — move to the package that uses %s and narrow to just the methods that package needs", ts.Name.Name, methodCount, ts.Name.Name),
 								Affected:    []string{ts.Name.Name},
-								Suggestion:  "Split into smaller, focused interfaces following Single Responsibility Principle",
+								Suggestion:  "Relocate to consumer side and narrow, rather than splitting at the declaration site",
 							}
 							patterns = append(patterns, pattern)
 						}

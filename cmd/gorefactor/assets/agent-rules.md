@@ -27,4 +27,6 @@ Common operations (`gorefactor --help` for the full list):
 
 Methods are referenced as `Receiver:Method` (e.g. `Server:Start`). Pointer receivers work without `*`. Any command that takes content accepts `-` as the last argument to read from stdin (avoids shell quoting on multi-line code).
 
+**Idiomatic Go: accept interfaces, return structs.** Declare interfaces at the *consumer* side (the package that uses them), not at the implementation side. When `gorefactor lint` flags a fat interface or premature abstraction, the idiomatic fix is usually to relocate the interface to the consumer and narrow it to just the methods that consumer needs — not to split it at the declaration site. Use `gorefactor find-implementations <Iface>` to count impls before deciding.
+
 **When Write/Edit is acceptable**: non-Go files (Markdown, YAML, JSON, Makefile, go.mod), or the rare case where no gorefactor command fits. For .go file mutations, fall back to Edit only after confirming no command above applies.

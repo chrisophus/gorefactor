@@ -13,6 +13,7 @@ func TestDefaultLintRules_ExpectedSet(t *testing.T) {
 		"complexity",
 		"error-not-wrapped",
 		"high-coupling",
+		"premature-abstraction",
 		"god-object",
 		"excessive-params",
 		"excessive-returns",

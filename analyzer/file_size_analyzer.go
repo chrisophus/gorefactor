@@ -225,3 +225,30 @@ func calculateExtractionPriority(lineCount int, complexity int) int {
 
 	return priority
 }
+
+type FunctionComplexity struct {
+	Name       string
+	Line       int
+	Complexity int
+}
+
+func FileFunctionComplexities(file string) ([]FunctionComplexity, error) {
+	fset := token.NewFileSet()
+	astFile, err := parser.ParseFile(fset, file, nil, 0)
+	if err != nil {
+		return nil, err
+	}
+	var out []FunctionComplexity
+	for _, decl := range astFile.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Body == nil {
+			continue
+		}
+		out = append(out, FunctionComplexity{
+			Name:       fn.Name.Name,
+			Line:       fset.Position(fn.Pos()).Line,
+			Complexity: calculateFunctionComplexity(fn),
+		})
+	}
+	return out, nil
+}

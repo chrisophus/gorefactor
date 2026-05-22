@@ -9,28 +9,6 @@ import (
 	"github.com/chrisophus/gorefactor/analyzer"
 )
 
-// checkSmells parses a Go file and detects architectural patterns and code smells
-func checkSmells(file string) []lintIssue {
-	fset := token.NewFileSet()
-	astFile, err := parser.ParseFile(fset, file, nil, 0)
-	if err != nil {
-		return nil
-	}
-
-	patterns := analyzer.NewPatternDetector(astFile).DetectPatterns()
-	var issues []lintIssue
-	for _, p := range patterns {
-		issue := lintIssue{
-			File:     file,
-			Rule:     "smell",
-			Severity: p.Severity,
-			Message:  p.Name + ": " + p.Description,
-		}
-		issues = append(issues, issue)
-	}
-	return issues
-}
-
 // checkDeadCode detects unused unexported functions/methods per Go package
 // directory. Whole-tree analysis misattributes package-local symbols; one
 // detector per directory matches Go's package boundary and is much faster.
@@ -60,16 +38,51 @@ func checkDeadCode(root string) []lintIssue {
 	return issues
 }
 
-type smellRule struct{}
+// smellRule is parametric so one struct handles all seven smell types.
+// Each instance carries a kebab-case ruleName (the agent-visible Rule
+// field) and the human-readable smellName the PatternDetector emits.
+type smellRule struct {
+	ruleName  string
+	smellName string
+}
 
-func (smellRule) Name() string { return "smell" }
+func (r smellRule) Name() string { return r.ruleName }
 
 func (r smellRule) Run(ctx LintContext) []lintIssue {
 	var out []lintIssue
 	for _, f := range ctx.Files {
-		out = append(out, checkSmells(f)...)
+		fset := token.NewFileSet()
+		astFile, err := parser.ParseFile(fset, f, nil, 0)
+		if err != nil {
+			continue
+		}
+		for _, p := range analyzer.NewPatternDetector(astFile).DetectPatterns() {
+			if p.Name != r.smellName {
+				continue
+			}
+			out = append(out, lintIssue{
+				File:     f,
+				Rule:     r.ruleName,
+				Severity: p.Severity,
+				Message:  p.Description,
+			})
+		}
 	}
 	return out
+}
+
+// smellRules splits the bundled "smell" detector into seven first-class
+// rules so agents can filter or address findings by specific smell type.
+func smellRules() []LintRule {
+	return []LintRule{
+		smellRule{ruleName: "god-object", smellName: "God Object"},
+		smellRule{ruleName: "excessive-params", smellName: "Excessive Parameters"},
+		smellRule{ruleName: "excessive-returns", smellName: "Excessive Return Values"},
+		smellRule{ruleName: "fat-interface", smellName: "Fat Interface"},
+		smellRule{ruleName: "large-class", smellName: "Large Class"},
+		smellRule{ruleName: "data-clumps", smellName: "Data Clumps"},
+		smellRule{ruleName: "type-switch", smellName: "Type Switches"},
+	}
 }
 
 type deadCodeRule struct{}

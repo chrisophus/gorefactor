@@ -11,6 +11,8 @@ func TestDefaultLintRules_ExpectedSet(t *testing.T) {
 		"file-size",
 		"extract-candidate",
 		"complexity",
+		"error-not-wrapped",
+		"high-coupling",
 		"god-object",
 		"excessive-params",
 		"excessive-returns",
@@ -21,6 +23,7 @@ func TestDefaultLintRules_ExpectedSet(t *testing.T) {
 		"duplicate-block",
 		"dead-code",
 		"untested-package",
+		"untested-function",
 		"golangci-lint",
 	}
 	got := defaultLintRules()

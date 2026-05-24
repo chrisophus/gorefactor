@@ -75,6 +75,7 @@ func FindPrematureAbstractionsInDir(dir string) ([]PrematureAbstractionIssue, er
 
 // methodsByReceiver maps each receiver type name → set of its method
 // names declared in the package.
+// nolint:staticcheck // ast.Package is sufficient for simple AST walking
 func methodsByReceiver(pkg *ast.Package) map[string]map[string]bool {
 	out := make(map[string]map[string]bool)
 	for _, file := range pkg.Files {
@@ -124,6 +125,7 @@ func countImpls(ifaceMethods map[string]map[string]bool, methodsByRecv map[strin
 // localInterfaceMethods maps each locally-declared interface name → set
 // of its method names. An interface with zero methods (e.g. any) is
 // recorded as an empty set; countImpls skips those.
+// nolint:staticcheck // ast.Package is sufficient for simple AST walking
 func localInterfaceMethods(pkg *ast.Package) map[string]map[string]bool {
 	out := make(map[string]map[string]bool)
 	for _, file := range pkg.Files {

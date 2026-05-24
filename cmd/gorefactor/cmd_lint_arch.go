@@ -20,7 +20,12 @@ func (r archLintRule) Run(ctx LintContext) []lintIssue {
 	if _, err := exec.LookPath("go-arch-lint"); err != nil {
 		return nil
 	}
-	cmd := exec.Command("go-arch-lint", "check", "--json", "--arch-file", cfgPath)
+	// Convert config path to absolute to ensure subprocess finds it
+	absPath, err := filepath.Abs(cfgPath)
+	if err != nil {
+		return nil
+	}
+	cmd := exec.Command("go-arch-lint", "check", "--json", "--arch-file", absPath)
 	cmd.Dir = ctx.Root
 	out, _ := cmd.Output()
 	if len(out) == 0 {

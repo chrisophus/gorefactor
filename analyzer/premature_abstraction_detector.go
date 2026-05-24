@@ -3,8 +3,9 @@ package analyzer
 import (
 	"fmt"
 	"go/ast"
-	"go/parser"
 	"go/token"
+
+	"golang.org/x/tools/go/packages"
 )
 
 // PrematureAbstractionIssue flags a function that returns an interface
@@ -28,23 +29,30 @@ type PrematureAbstractionIssue struct {
 // interfaces with multiple real impls (e.g. Provider with mock/openai/
 // anthropic backends).
 func FindPrematureAbstractionsInDir(dir string) ([]PrematureAbstractionIssue, error) {
-	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, dir, nil, 0)
+	cfg := &packages.Config{
+		Mode: packages.NeedSyntax | packages.NeedFiles,
+		Dir:  dir,
+	}
+	pkgs, err := packages.Load(cfg, ".")
 	if err != nil {
 		return nil, err
 	}
 
 	var out []PrematureAbstractionIssue
 	for _, pkg := range pkgs {
-		localIfaces := localInterfaceMethods(pkg)
+		if pkg.Errors != nil && len(pkg.Errors) > 0 {
+			continue
+		}
+
+		localIfaces := localInterfaceMethodsFromPackage(pkg)
 		if len(localIfaces) == 0 {
 			continue
 		}
-		methodsByReceiver := methodsByReceiver(pkg)
-		implCount := countImpls(localIfaces, methodsByReceiver)
+		methodsByRecv := methodsByReceiverFromPackage(pkg)
+		implCount := countImpls(localIfaces, methodsByRecv)
 
-		for _, file := range pkg.Files {
-			for _, decl := range file.Decls {
+		for _, syntax := range pkg.Syntax {
+			for _, decl := range syntax.Decls {
 				fn, ok := decl.(*ast.FuncDecl)
 				if !ok || fn.Type.Results == nil {
 					continue
@@ -56,7 +64,7 @@ func FindPrematureAbstractionsInDir(dir string) ([]PrematureAbstractionIssue, er
 				if implCount[ifaceName] != 1 {
 					continue
 				}
-				pos := fset.Position(fn.Pos())
+				pos := pkg.Fset.Position(fn.Pos())
 				out = append(out, PrematureAbstractionIssue{
 					Function:  fn.Name.Name,
 					Interface: ifaceName,
@@ -73,13 +81,12 @@ func FindPrematureAbstractionsInDir(dir string) ([]PrematureAbstractionIssue, er
 	return out, nil
 }
 
-// methodsByReceiver maps each receiver type name → set of its method
+// methodsByReceiverFromPackage maps each receiver type name → set of its method
 // names declared in the package.
-// nolint:staticcheck // ast.Package is sufficient for simple AST walking
-func methodsByReceiver(pkg *ast.Package) map[string]map[string]bool {
+func methodsByReceiverFromPackage(pkg *packages.Package) map[string]map[string]bool {
 	out := make(map[string]map[string]bool)
-	for _, file := range pkg.Files {
-		for _, decl := range file.Decls {
+	for _, syntax := range pkg.Syntax {
+		for _, decl := range syntax.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
 			if !ok || fn.Recv == nil || len(fn.Recv.List) == 0 {
 				continue
@@ -122,14 +129,13 @@ func countImpls(ifaceMethods map[string]map[string]bool, methodsByRecv map[strin
 	return out
 }
 
-// localInterfaceMethods maps each locally-declared interface name → set
+// localInterfaceMethodsFromPackage maps each locally-declared interface name → set
 // of its method names. An interface with zero methods (e.g. any) is
 // recorded as an empty set; countImpls skips those.
-// nolint:staticcheck // ast.Package is sufficient for simple AST walking
-func localInterfaceMethods(pkg *ast.Package) map[string]map[string]bool {
+func localInterfaceMethodsFromPackage(pkg *packages.Package) map[string]map[string]bool {
 	out := make(map[string]map[string]bool)
-	for _, file := range pkg.Files {
-		for _, decl := range file.Decls {
+	for _, syntax := range pkg.Syntax {
+		for _, decl := range syntax.Decls {
 			gd, ok := decl.(*ast.GenDecl)
 			if !ok || gd.Tok != token.TYPE {
 				continue

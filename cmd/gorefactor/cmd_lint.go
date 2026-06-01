@@ -19,52 +19,38 @@ type lintIssue struct {
 }
 
 func lintCommand(args []string) error {
-	root := "."
-	maxSize := defaultSplitMaxLines
-	fix := false
-	jsonOut := false
-	for i := 0; i < len(args); i++ {
-		a := args[i]
-		switch {
-		case a == "--fix":
-			fix = true
-		case a == "--json":
-			jsonOut = true
-		case a == "--max":
-			if i+1 < len(args) {
-				var n int
-				_, _ = fmt.Sscanf(args[i+1], "%d", &n)
-				if n > 0 {
-					maxSize = n
-				}
-				i++
-			}
-		case !strings.HasPrefix(a, "--"):
-			root = a
-		}
-	}
-
-	files, err := collectGoFiles(root)
+	opts, err := parseLintOptions(args)
 	if err != nil {
 		return err
 	}
 
-	rules := defaultLintRules()
-	ctx := LintContext{Root: root, Files: files, MaxSize: maxSize}
+	files, err := collectGoFiles(opts.root)
+	if err != nil {
+		return err
+	}
+
+	rules := filterLintRules(defaultLintRules(), opts)
+	ctx := LintContext{Root: opts.root, Files: files, MaxSize: opts.maxSize}
 	var issues []lintIssue
 	for _, rule := range rules {
 		issues = append(issues, rule.Run(ctx)...)
 	}
 
-	if jsonOut {
+	if opts.jsonOut {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(map[string]interface{}{
+		if err := enc.Encode(map[string]interface{}{
 			"issues": issues,
 			"summary": map[string]int{
 				"total": len(issues),
 			},
-		})
+		}); err != nil {
+			return err
+		}
+		if lintShouldFail(issues, opts.failOn) {
+			return fmt.Errorf("lint: %d issue(s) at or above %s severity", len(issues), opts.failOn)
+		}
+		return nil
 	}
 
 	if len(issues) == 0 {
@@ -87,9 +73,12 @@ func lintCommand(args []string) error {
 		fmt.Printf("  %s: %d\n", rule, n)
 	}
 
-	if fix {
+	if opts.fix {
 		applied, failed := applyAutoFixes(issues, ctx, rules)
 		fmt.Printf("\nAuto-fixes: %d applied, %d failed\n", applied, failed)
+	}
+	if lintShouldFail(issues, opts.failOn) {
+		return fmt.Errorf("lint: %d issue(s) at or above %s severity", len(issues), opts.failOn)
 	}
 	return nil
 }
@@ -126,9 +115,26 @@ func applyAutoFixes(issues []lintIssue, ctx LintContext, rules []LintRule) (appl
 }
 
 type LintContext struct {
-	Root    string
-	Files   []string
-	MaxSize int
+	Root        string
+	Files       []string
+	MaxSize     int
+	MaxSizeTest int
+}
+
+func effectiveMaxSizeForFile(file string, ctx LintContext) int {
+	if strings.HasSuffix(file, "_test.go") {
+		if ctx.MaxSizeTest > 0 {
+			return ctx.MaxSizeTest
+		}
+		if ctx.MaxSize > 0 {
+			return ctx.MaxSize * 2
+		}
+		return defaultTestFileMaxLines
+	}
+	if ctx.MaxSize > 0 {
+		return ctx.MaxSize
+	}
+	return defaultSplitMaxLines
 }
 
 type LintRule interface {
@@ -150,6 +156,7 @@ func defaultLintRules() []LintRule {
 		couplingRule{},
 		prematureAbstractionRule{},
 	}
+	rules = append(rules, logPropagationRules()...)
 	rules = append(rules, smellRules()...)
 	rules = append(rules,
 		duplicateRule{},

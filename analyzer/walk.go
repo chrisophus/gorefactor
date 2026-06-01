@@ -28,6 +28,30 @@ func DefaultWalkOptions() WalkOptions {
 	return WalkOptions{SkipGeneratedGo: true}
 }
 
+// MarketplaceWalkOptions returns walk settings aligned with Marketplace Core generated trees.
+func MarketplaceWalkOptions() WalkOptions {
+	return WalkOptions{
+		SkipGeneratedGo: true,
+		ExtraSkipDirSegments: []string{
+			"api/marketplace-servergen",
+			"internal/data/db",
+		},
+	}
+}
+
+// ShouldSkipGeneratedDataFile reports hand-maintained denylist files under internal/data.
+func ShouldSkipGeneratedDataFile(path string) bool {
+	p := filepath.ToSlash(path)
+	if !pathHasDirSegment(p, "internal/data") {
+		return false
+	}
+	switch filepath.Base(p) {
+	case "model.go", "interface.go", "schema_sql.go":
+		return true
+	}
+	return false
+}
+
 // ShouldSkipDir reports whether a directory path should be pruned during walks.
 func ShouldSkipDir(path string, opts WalkOptions) bool {
 	p := filepath.ToSlash(path)
@@ -53,6 +77,12 @@ func ShouldSkipFile(path string, opts WalkOptions) bool {
 		return true
 	}
 	if opts.SkipGeneratedGo && isGeneratedGoFilename(path) {
+		return true
+	}
+	if ShouldSkipGeneratedDataFile(path) {
+		return true
+	}
+	if pathHasDirSegment(filepath.ToSlash(path), "internal/data/db") {
 		return true
 	}
 	return false

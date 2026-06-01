@@ -116,9 +116,8 @@ func TestLintCommandDetectsOversize(t *testing.T) {
 		b.WriteString(" = 1\n")
 	}
 	writeTempGo(t, dir, "big.go", b.String())
-	// Should not error; we just verify the function runs over the temp dir.
-	if err := lintCommand([]string{dir, "--max", "100"}); err != nil {
-		t.Fatalf("lintCommand: %v", err)
+	if err := lintCommand([]string{dir, "--max", "100", "--rule", "file-size"}); err == nil {
+		t.Fatal("expected lintCommand to fail on oversize file with default --fail-on error")
 	}
 }
 

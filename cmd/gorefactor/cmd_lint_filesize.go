@@ -11,14 +11,10 @@ func checkFileSize(file string, maxSize int) []lintIssue {
 	if err != nil || !issue.IsOversized {
 		return nil
 	}
-	sev := "warning"
-	if issue.OverageSize > maxSize/2 {
-		sev = "error"
-	}
 	return []lintIssue{{
 		File:       file,
 		Rule:       "file-size",
-		Severity:   sev,
+		Severity:   "error",
 		Message:    fmt.Sprintf("%d lines (limit %d, over by %d)", issue.LineCount, issue.MaxRecommended, issue.OverageSize),
 		AutoFix:    "split file",
 		AutoFixCmd: fmt.Sprintf("gorefactor split %s --max %d", file, maxSize),
@@ -32,7 +28,11 @@ func (fileSizeRule) Name() string { return "file-size" }
 func (r fileSizeRule) Run(ctx LintContext) []lintIssue {
 	var out []lintIssue
 	for _, f := range ctx.Files {
-		out = append(out, checkFileSize(f, ctx.MaxSize)...)
+		if analyzer.ShouldSkipFile(f, analyzer.DefaultWalkOptions()) {
+			continue
+		}
+		max := effectiveMaxSizeForFile(f, ctx)
+		out = append(out, checkFileSize(f, max)...)
 	}
 	return out
 }

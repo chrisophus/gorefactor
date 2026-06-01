@@ -12,6 +12,8 @@ import (
 )
 
 const defaultSplitMaxLines = 300
+const defaultTestFileMaxLines = 1000
+const defaultSourceFileMaxLines = 500
 
 type splitDecl struct {
 	name      string

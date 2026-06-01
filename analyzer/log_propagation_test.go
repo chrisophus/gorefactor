@@ -27,19 +27,26 @@ func f() error {
 	}
 }
 
-func TestShouldSkipGeneratedDataFile(t *testing.T) {
+func TestShouldSkipFile_SkipFilePaths(t *testing.T) {
 	t.Parallel()
-	if !ShouldSkipGeneratedDataFile("internal/data/model.go") {
+	opts := WalkOptions{
+		SkipGeneratedGo: true,
+		SkipFilePaths:   []string{"internal/data/model.go"},
+	}
+	if !ShouldSkipFile("internal/data/model.go", opts) {
 		t.Fatal("expected model.go skipped")
 	}
-	if ShouldSkipGeneratedDataFile("internal/data/repository.go") {
+	if ShouldSkipFile("internal/data/repository.go", opts) {
 		t.Fatal("did not expect repository.go skipped")
 	}
 }
 
-func TestMarketplaceWalkOptions_SkipsServergen(t *testing.T) {
+func TestShouldSkipDir_ExtraSegments(t *testing.T) {
 	t.Parallel()
-	opts := MarketplaceWalkOptions()
+	opts := WalkOptions{
+		SkipGeneratedGo:      true,
+		ExtraSkipDirSegments: []string{"api/marketplace-servergen", "internal/data/db"},
+	}
 	if !ShouldSkipDir("api/marketplace-servergen", opts) {
 		t.Fatal("expected marketplace-servergen skipped")
 	}

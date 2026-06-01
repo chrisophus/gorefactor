@@ -147,7 +147,7 @@ func deleteCommand(args []string) error {
 			funcName = target.MethodName
 		}
 		if funcName != "" {
-			pkgFiles, _ := collectGoFiles(pkgDir)
+			pkgFiles, _ := collectGoFiles(pkgDir, analyzer.DefaultWalkOptions())
 			ca := analyzer.NewCallAnalyzer(pkgFiles)
 			receiverType := ""
 			if target.ReceiverType != "" {

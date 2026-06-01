@@ -3,13 +3,20 @@ package main
 import (
 	"fmt"
 	"strings"
+
+	"github.com/chrisophus/gorefactor/analyzer"
+	"github.com/chrisophus/gorefactor/config"
 )
 
 type lintOptions struct {
 	root      string
 	maxSize   int
+	maxSet    bool
 	fix       bool
 	jsonOut   bool
+	configPath string
+	profile   string
+	cfg       *config.File
 	onlyRules map[string]bool
 	skipRules map[string]bool
 	failOn    string // "error" | "warning"
@@ -30,6 +37,18 @@ func parseLintOptions(args []string) (lintOptions, error) {
 			opts.fix = true
 		case a == "--json":
 			opts.jsonOut = true
+		case a == "--config":
+			if i+1 >= len(args) {
+				return opts, fmt.Errorf("--config requires a value")
+			}
+			opts.configPath = args[i+1]
+			i++
+		case a == "--profile":
+			if i+1 >= len(args) {
+				return opts, fmt.Errorf("--profile requires a value")
+			}
+			opts.profile = args[i+1]
+			i++
 		case a == "--max":
 			if i+1 >= len(args) {
 				return opts, fmt.Errorf("--max requires a value")
@@ -39,6 +58,7 @@ func parseLintOptions(args []string) (lintOptions, error) {
 				return opts, fmt.Errorf("--max requires a positive integer")
 			}
 			opts.maxSize = n
+			opts.maxSet = true
 			i++
 		case a == "--rule":
 			if i+1 >= len(args) {
@@ -69,13 +89,46 @@ func parseLintOptions(args []string) (lintOptions, error) {
 			opts.root = a
 		}
 	}
+	if err := opts.loadConfig(); err != nil {
+		return opts, err
+	}
 	return opts, nil
 }
 
-func filterLintRules(all []LintRule, opts lintOptions) []LintRule {
-	if len(opts.onlyRules) == 0 && len(opts.skipRules) == 0 {
-		return all
+func (opts *lintOptions) loadConfig() error {
+	cfg, err := config.Load(opts.configPath, opts.root)
+	if err != nil {
+		return err
 	}
+	opts.cfg = cfg
+	if cfg == nil {
+		return nil
+	}
+	if !opts.maxSet {
+		src, _ := cfg.FileLengthLimits()
+		opts.maxSize = src
+	}
+	return nil
+}
+
+func (opts lintOptions) lintContext(files []string) LintContext {
+	ctx := LintContext{
+		Root:    opts.root,
+		Files:   files,
+		MaxSize: opts.maxSize,
+		WalkOpts: analyzer.DefaultWalkOptions(),
+		Config:  opts.cfg,
+		Profile: opts.profile,
+	}
+	if opts.cfg != nil {
+		ctx.WalkOpts = opts.cfg.WalkOptions()
+		_, test := opts.cfg.FileLengthLimits()
+		ctx.MaxSizeTest = test
+	}
+	return ctx
+}
+
+func filterLintRules(all []LintRule, opts lintOptions) []LintRule {
 	var out []LintRule
 	for _, r := range all {
 		name := r.Name()
@@ -85,7 +138,27 @@ func filterLintRules(all []LintRule, opts lintOptions) []LintRule {
 		if opts.skipRules[name] {
 			continue
 		}
+		if opts.cfg != nil && opts.cfg.HasRules() {
+			tier, ok := opts.cfg.RuleTier(name, opts.profile)
+			if ok && tier == config.TierOff {
+				continue
+			}
+		}
 		out = append(out, r)
+	}
+	return out
+}
+
+func applyConfigSeverity(issues []lintIssue, opts lintOptions) []lintIssue {
+	if opts.cfg == nil || !opts.cfg.HasRules() {
+		return issues
+	}
+	out := make([]lintIssue, len(issues))
+	for i, iss := range issues {
+		out[i] = iss
+		if tier, ok := opts.cfg.RuleTier(iss.Rule, opts.profile); ok && tier != config.TierOff {
+			out[i].Severity = string(tier)
+		}
 	}
 	return out
 }

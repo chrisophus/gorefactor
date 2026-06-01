@@ -58,6 +58,17 @@ func TestWalkGoFiles_SkipsVendorAndGenerated(t *testing.T) {
 	}
 }
 
+func TestShouldSkipFile_ExplicitSkipPath(t *testing.T) {
+	t.Parallel()
+	opts := WalkOptions{
+		SkipGeneratedGo: true,
+		SkipFilePaths:   []string{"pkg/handwritten.go"},
+	}
+	if !ShouldSkipFile("pkg/handwritten.go", opts) {
+		t.Error("expected explicit skip path to be skipped")
+	}
+}
+
 func TestGroupFilesByDir(t *testing.T) {
 	t.Parallel()
 	got := GroupFilesByDir([]string{"/a/x.go", "/a/y.go", "/b/z.go"})

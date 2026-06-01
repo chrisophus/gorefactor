@@ -20,36 +20,14 @@ type WalkOptions struct {
 	// ExtraSkipDirSegments prunes directories whose slash-normalized path contains
 	// any of these segments (e.g. "api/marketplace-servergen", "internal/data/db").
 	ExtraSkipDirSegments []string
+	// SkipFilePaths lists repo-relative file paths to exclude (slash-normalized match).
+	SkipFilePaths []string
 }
 
 // DefaultWalkOptions returns walk settings suitable for hand-authored Go in most repos:
 // skip vendor/.git/node_modules, hidden dirs, and common generated file suffixes.
 func DefaultWalkOptions() WalkOptions {
 	return WalkOptions{SkipGeneratedGo: true}
-}
-
-// MarketplaceWalkOptions returns walk settings aligned with Marketplace Core generated trees.
-func MarketplaceWalkOptions() WalkOptions {
-	return WalkOptions{
-		SkipGeneratedGo: true,
-		ExtraSkipDirSegments: []string{
-			"api/marketplace-servergen",
-			"internal/data/db",
-		},
-	}
-}
-
-// ShouldSkipGeneratedDataFile reports hand-maintained denylist files under internal/data.
-func ShouldSkipGeneratedDataFile(path string) bool {
-	p := filepath.ToSlash(path)
-	if !pathHasDirSegment(p, "internal/data") {
-		return false
-	}
-	switch filepath.Base(p) {
-	case "model.go", "interface.go", "schema_sql.go":
-		return true
-	}
-	return false
 }
 
 // ShouldSkipDir reports whether a directory path should be pruned during walks.
@@ -76,14 +54,18 @@ func ShouldSkipFile(path string, opts WalkOptions) bool {
 	if !strings.HasSuffix(path, ".go") {
 		return true
 	}
+	p := filepath.ToSlash(path)
 	if opts.SkipGeneratedGo && isGeneratedGoFilename(path) {
 		return true
 	}
-	if ShouldSkipGeneratedDataFile(path) {
-		return true
-	}
-	if pathHasDirSegment(filepath.ToSlash(path), "internal/data/db") {
-		return true
+	for _, skip := range opts.SkipFilePaths {
+		skip = filepath.ToSlash(skip)
+		if p == skip || strings.HasSuffix(p, "/"+skip) {
+			return true
+		}
+		if filepath.Base(p) == filepath.Base(skip) && pathHasDirSegment(p, filepath.Dir(skip)) {
+			return true
+		}
 	}
 	return false
 }
@@ -94,6 +76,7 @@ func isGeneratedGoFilename(path string) bool {
 
 // pathHasDirSegment reports whether seg appears as a directory segment in p.
 func pathHasDirSegment(p, seg string) bool {
+	seg = filepath.ToSlash(seg)
 	if p == seg {
 		return true
 	}

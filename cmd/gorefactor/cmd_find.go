@@ -27,7 +27,7 @@ func findCallersCommand(args []string) error {
 		}
 	}
 	name, recv := splitNameReceiver(target)
-	files, err := collectGoFiles(root)
+	files, err := collectGoFiles(root, analyzer.DefaultWalkOptions())
 	if err != nil {
 		return err
 	}
@@ -84,7 +84,7 @@ func findUsesCommand(args []string) error {
 		}
 	}
 	name, recv := splitNameReceiver(target)
-	files, err := collectGoFiles(root)
+	files, err := collectGoFiles(root, analyzer.DefaultWalkOptions())
 	if err != nil {
 		return err
 	}
@@ -123,7 +123,7 @@ func findImplementationsCommand(args []string) error {
 			jsonOut = true
 		}
 	}
-	files, err := collectGoFiles(root)
+	files, err := collectGoFiles(root, analyzer.DefaultWalkOptions())
 	if err != nil {
 		return err
 	}

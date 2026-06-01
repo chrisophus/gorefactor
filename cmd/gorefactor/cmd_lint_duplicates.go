@@ -7,8 +7,8 @@ import (
 	"github.com/chrisophus/gorefactor/analyzer"
 )
 
-func checkDuplicates(root string) []lintIssue {
-	blocks, err := analyzer.FindDuplicateBlocksInDir(root, analyzer.DefaultWalkOptions())
+func checkDuplicates(root string, walk analyzer.WalkOptions) []lintIssue {
+	blocks, err := analyzer.FindDuplicateBlocksInDir(root, walk)
 	if err != nil {
 		return nil
 	}
@@ -36,5 +36,5 @@ type duplicateRule struct{}
 func (duplicateRule) Name() string { return "duplicate-block" }
 
 func (r duplicateRule) Run(ctx LintContext) []lintIssue {
-	return checkDuplicates(ctx.Root)
+	return checkDuplicates(ctx.Root, ctx.WalkOpts)
 }

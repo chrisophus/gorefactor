@@ -54,7 +54,7 @@ type fileLogFn func(file string) ([]analyzer.LogPropagationIssue, error)
 func fileLogPropagationIssues(ctx LintContext, fn fileLogFn) []lintIssue {
 	var out []lintIssue
 	for _, f := range ctx.Files {
-		if analyzer.ShouldSkipGeneratedDataFile(f) {
+		if analyzer.ShouldSkipFile(f, ctx.WalkOpts) {
 			continue
 		}
 		issues, err := fn(f)

@@ -12,8 +12,7 @@ import (
 // checkUntestedPackages walks the tree once and flags directories that
 // contain hand-authored .go files but no *_test.go files. Generated *.gen.go
 // and *_gen.go sources do not count toward "needs tests".
-func checkUntestedPackages(root string) []lintIssue {
-	walk := analyzer.DefaultWalkOptions()
+func checkUntestedPackages(root string, walk analyzer.WalkOptions) []lintIssue {
 	hasGo := map[string]bool{}
 	hasTest := map[string]bool{}
 	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -60,5 +59,5 @@ type untestedPackageRule struct{}
 func (untestedPackageRule) Name() string { return "untested-package" }
 
 func (r untestedPackageRule) Run(ctx LintContext) []lintIssue {
-	return checkUntestedPackages(ctx.Root)
+	return checkUntestedPackages(ctx.Root, ctx.WalkOpts)
 }

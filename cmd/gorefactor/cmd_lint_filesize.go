@@ -28,7 +28,7 @@ func (fileSizeRule) Name() string { return "file-size" }
 func (r fileSizeRule) Run(ctx LintContext) []lintIssue {
 	var out []lintIssue
 	for _, f := range ctx.Files {
-		if analyzer.ShouldSkipFile(f, analyzer.DefaultWalkOptions()) {
+		if analyzer.ShouldSkipFile(f, ctx.WalkOpts) {
 			continue
 		}
 		max := effectiveMaxSizeForFile(f, ctx)

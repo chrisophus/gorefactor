@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/chrisophus/gorefactor/analyzer"
 )
 
 // doctorCommand runs a fast structural+build+test sweep as a final
@@ -30,7 +32,7 @@ func doctorCommand(args []string) error {
 	var stages []stage
 
 	// 1. structural lint
-	files, err := collectGoFiles(root)
+	files, err := collectGoFiles(root, analyzer.DefaultWalkOptions())
 	if err != nil {
 		return err
 	}
@@ -38,10 +40,11 @@ func doctorCommand(args []string) error {
 	for _, f := range files {
 		issues = append(issues, checkFileSize(f, defaultSplitMaxLines)...)
 	}
-	if dups := checkDuplicates(root); len(dups) > 0 {
+	walk := analyzer.DefaultWalkOptions()
+	if dups := checkDuplicates(root, walk); len(dups) > 0 {
 		issues = append(issues, dups...)
 	}
-	if untested := checkUntestedPackages(root); len(untested) > 0 {
+	if untested := checkUntestedPackages(root, walk); len(untested) > 0 {
 		issues = append(issues, untested...)
 	}
 	errCount := 0

@@ -12,9 +12,9 @@ import (
 // checkDeadCode detects unused unexported functions/methods per Go package
 // directory. Whole-tree analysis misattributes package-local symbols; one
 // detector per directory matches Go's package boundary and is much faster.
-func checkDeadCode(root string) []lintIssue {
-	files, err := collectGoFiles(root)
-	if err != nil {
+func checkDeadCode(ctx LintContext) []lintIssue {
+	files := ctx.Files
+	if len(files) == 0 {
 		return nil
 	}
 
@@ -90,7 +90,7 @@ type deadCodeRule struct{}
 func (deadCodeRule) Name() string { return "dead-code" }
 
 func (r deadCodeRule) Run(ctx LintContext) []lintIssue {
-	return checkDeadCode(ctx.Root)
+	return checkDeadCode(ctx)
 }
 
 func (r deadCodeRule) AutoFix(issue lintIssue, ctx LintContext) error {

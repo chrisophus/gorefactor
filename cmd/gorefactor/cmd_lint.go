@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/chrisophus/gorefactor/analyzer"
+	"github.com/chrisophus/gorefactor/config"
 )
 
 type lintIssue struct {
@@ -24,17 +25,19 @@ func lintCommand(args []string) error {
 		return err
 	}
 
-	files, err := collectGoFiles(opts.root)
+	ctx := opts.lintContext(nil)
+	files, err := collectGoFiles(opts.root, ctx.WalkOpts)
 	if err != nil {
 		return err
 	}
+	ctx.Files = files
 
 	rules := filterLintRules(defaultLintRules(), opts)
-	ctx := LintContext{Root: opts.root, Files: files, MaxSize: opts.maxSize}
 	var issues []lintIssue
 	for _, rule := range rules {
 		issues = append(issues, rule.Run(ctx)...)
 	}
+	issues = applyConfigSeverity(issues, opts)
 
 	if opts.jsonOut {
 		enc := json.NewEncoder(os.Stdout)
@@ -83,8 +86,8 @@ func lintCommand(args []string) error {
 	return nil
 }
 
-func collectGoFiles(root string) ([]string, error) {
-	return analyzer.WalkGoFiles(root, analyzer.DefaultWalkOptions())
+func collectGoFiles(root string, walk analyzer.WalkOptions) ([]string, error) {
+	return analyzer.WalkGoFiles(root, walk)
 }
 
 func applyAutoFixes(issues []lintIssue, ctx LintContext, rules []LintRule) (applied, failed int) {
@@ -119,6 +122,9 @@ type LintContext struct {
 	Files       []string
 	MaxSize     int
 	MaxSizeTest int
+	WalkOpts    analyzer.WalkOptions
+	Config      *config.File
+	Profile     string
 }
 
 func effectiveMaxSizeForFile(file string, ctx LintContext) int {

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/chrisophus/gorefactor/analyzer"
 )
 
 func TestCreateCommand(t *testing.T) {
@@ -194,7 +196,7 @@ func TestCheckExtractable(t *testing.T) {
 func TestCheckUntestedPackages(t *testing.T) {
 	dir := t.TempDir()
 	writeTempGo(t, dir, "a.go", "package x\n")
-	issues := checkUntestedPackages(dir)
+	issues := checkUntestedPackages(dir, analyzer.DefaultWalkOptions())
 	if len(issues) != 1 {
 		t.Fatalf("expected 1 untested package issue, got %d", len(issues))
 	}
@@ -203,7 +205,7 @@ func TestCheckUntestedPackages(t *testing.T) {
 	}
 
 	writeTempGo(t, dir, "a_test.go", "package x\n")
-	issues = checkUntestedPackages(dir)
+	issues = checkUntestedPackages(dir, analyzer.DefaultWalkOptions())
 	if len(issues) != 0 {
 		t.Fatalf("expected 0 issues after adding test, got %d", len(issues))
 	}

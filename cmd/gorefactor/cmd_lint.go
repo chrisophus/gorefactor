@@ -57,30 +57,35 @@ func lintCommand(args []string) error {
 	}
 
 	if len(issues) == 0 {
-		fmt.Println("No issues found.")
+		if !opts.quiet {
+			fmt.Println("No issues found.")
+		}
 		return nil
 	}
 
-	byRule := map[string]int{}
-	for _, iss := range issues {
-		byRule[iss.Rule]++
-		fmt.Printf("%s [%s] %s: %s", iss.File, iss.Severity, iss.Rule, iss.Message)
-		if iss.AutoFix != "" {
-			fmt.Printf("  (autofix: %s)", iss.AutoFix)
+	shouldFail := lintShouldFail(issues, opts.failOn)
+	if !opts.quiet || shouldFail {
+		byRule := map[string]int{}
+		for _, iss := range issues {
+			byRule[iss.Rule]++
+			fmt.Printf("%s [%s] %s: %s", iss.File, iss.Severity, iss.Rule, iss.Message)
+			if iss.AutoFix != "" {
+				fmt.Printf("  (autofix: %s)", iss.AutoFix)
+			}
+			fmt.Println()
 		}
 		fmt.Println()
-	}
-	fmt.Println()
-	fmt.Printf("Summary: %d issue(s)\n", len(issues))
-	for rule, n := range byRule {
-		fmt.Printf("  %s: %d\n", rule, n)
-	}
+		fmt.Printf("Summary: %d issue(s)\n", len(issues))
+		for rule, n := range byRule {
+			fmt.Printf("  %s: %d\n", rule, n)
+		}
 
-	if opts.fix {
-		applied, failed := applyAutoFixes(issues, ctx, rules)
-		fmt.Printf("\nAuto-fixes: %d applied, %d failed\n", applied, failed)
+		if opts.fix {
+			applied, failed := applyAutoFixes(issues, ctx, rules)
+			fmt.Printf("\nAuto-fixes: %d applied, %d failed\n", applied, failed)
+		}
 	}
-	if lintShouldFail(issues, opts.failOn) {
+	if shouldFail {
 		return fmt.Errorf("lint: %d issue(s) at or above %s severity", len(issues), opts.failOn)
 	}
 	return nil

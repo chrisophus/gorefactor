@@ -80,6 +80,10 @@ linters:
         path: analyzer/(pattern_detector|dead_code_detector)\.go$
       - linters: [cyclop]
         path: orchestrator/op_delete_rename\.go$
+      # log_propagation's statement-sequence walkers (walkOneStmtLogReturn,
+      # collectErrorsNewSentinels) branch per AST shape — structural complexity.
+      - linters: [cyclop]
+        path: analyzer/log_propagation\.go$
     paths:
       - ^testfiles/
       - ^examples/

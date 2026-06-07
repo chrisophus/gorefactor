@@ -43,29 +43,21 @@ func FileIfErrLogReturnIssues(file string) ([]LogPropagationIssue, error) {
 
 // FileWrapLogReturnIssues flags err := fmt.Errorf("%w"); log; return err sequences.
 func FileWrapLogReturnIssues(file string) ([]LogPropagationIssue, error) {
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, file, nil, 0)
-	if err != nil {
-		return nil, err
-	}
-	var out []LogPropagationIssue
-	report := func(pos token.Position, msg string) {
-		out = append(out, LogPropagationIssue{
-			File: pos.Filename, Line: pos.Line, Column: pos.Column,
-			Rule: "wrap-log-return", Message: msg,
-		})
-	}
-	ast.Inspect(f, func(n ast.Node) bool {
-		if blk, ok := n.(*ast.BlockStmt); ok {
-			scanBlockWrapLogReturn(blk.List, fset, report)
-		}
-		return true
-	})
-	return out, nil
+	return fileBlockLogReturnIssues(file, "wrap-log-return", scanBlockWrapLogReturn)
 }
 
 // FileWrapBridgeLogReturnIssues flags wrap→bridge→log→return quads.
 func FileWrapBridgeLogReturnIssues(file string) ([]LogPropagationIssue, error) {
+	return fileBlockLogReturnIssues(file, "wrap-bridge-log-return", scanBlockWrapBridgeLogReturn)
+}
+
+// fileBlockLogReturnIssues parses file and runs a per-block scanner, tagging
+// every reported issue with rule. It backs the wrap-log-return and
+// wrap-bridge-log-return rules, which differ only in their scanner and rule tag.
+func fileBlockLogReturnIssues(
+	file, rule string,
+	scan func(list []ast.Stmt, fset *token.FileSet, report logReportFn),
+) ([]LogPropagationIssue, error) {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, file, nil, 0)
 	if err != nil {
@@ -75,12 +67,12 @@ func FileWrapBridgeLogReturnIssues(file string) ([]LogPropagationIssue, error) {
 	report := func(pos token.Position, msg string) {
 		out = append(out, LogPropagationIssue{
 			File: pos.Filename, Line: pos.Line, Column: pos.Column,
-			Rule: "wrap-bridge-log-return", Message: msg,
+			Rule: rule, Message: msg,
 		})
 	}
 	ast.Inspect(f, func(n ast.Node) bool {
 		if blk, ok := n.(*ast.BlockStmt); ok {
-			scanBlockWrapBridgeLogReturn(blk.List, fset, report)
+			scan(blk.List, fset, report)
 		}
 		return true
 	})

@@ -14,6 +14,7 @@ type lintOptions struct {
 	maxSet    bool
 	fix       bool
 	jsonOut   bool
+	quiet     bool
 	configPath string
 	profile   string
 	cfg       *config.File
@@ -37,6 +38,8 @@ func parseLintOptions(args []string) (lintOptions, error) {
 			opts.fix = true
 		case a == "--json":
 			opts.jsonOut = true
+		case a == "--quiet":
+			opts.quiet = true
 		case a == "--config":
 			if i+1 >= len(args) {
 				return opts, fmt.Errorf("--config requires a value")

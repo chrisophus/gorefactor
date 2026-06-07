@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"path/filepath"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -37,10 +38,42 @@ func FindPrematureAbstractionsInDir(dir string) ([]PrematureAbstractionIssue, er
 	if err != nil {
 		return nil, err
 	}
+	return findPrematureAbstractions(pkgs), nil
+}
 
+// FindPrematureAbstractionsInDirs scans every directory in one packages.Load
+// call instead of one toolchain invocation per directory. Passing the explicit
+// directory list as patterns (rather than "./...") keeps the scanned set
+// identical to the caller's walk-filtered file set.
+func FindPrematureAbstractionsInDirs(dirs []string) ([]PrematureAbstractionIssue, error) {
+	if len(dirs) == 0 {
+		return nil, nil
+	}
+	patterns := make([]string, 0, len(dirs))
+	for _, d := range dirs {
+		switch {
+		case d == "" || d == ".":
+			patterns = append(patterns, ".")
+		case filepath.IsAbs(d):
+			patterns = append(patterns, d)
+		default:
+			patterns = append(patterns, "./"+filepath.ToSlash(d))
+		}
+	}
+	cfg := &packages.Config{Mode: packages.NeedSyntax | packages.NeedFiles}
+	pkgs, err := packages.Load(cfg, patterns...)
+	if err != nil {
+		return nil, err
+	}
+	return findPrematureAbstractions(pkgs), nil
+}
+
+// findPrematureAbstractions runs the detection heuristic over already-loaded
+// packages.
+func findPrematureAbstractions(pkgs []*packages.Package) []PrematureAbstractionIssue {
 	var out []PrematureAbstractionIssue
 	for _, pkg := range pkgs {
-		if pkg.Errors != nil && len(pkg.Errors) > 0 {
+		if len(pkg.Errors) > 0 {
 			continue
 		}
 
@@ -78,7 +111,7 @@ func FindPrematureAbstractionsInDir(dir string) ([]PrematureAbstractionIssue, er
 			}
 		}
 	}
-	return out, nil
+	return out
 }
 
 // methodsByReceiverFromPackage maps each receiver type name → set of its method

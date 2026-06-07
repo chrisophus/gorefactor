@@ -11,24 +11,26 @@ type prematureAbstractionRule struct{}
 func (prematureAbstractionRule) Name() string { return "premature-abstraction" }
 
 func (r prematureAbstractionRule) Run(ctx LintContext) []lintIssue {
-	dirs := make(map[string]bool, len(ctx.Files))
+	dirSet := make(map[string]bool, len(ctx.Files))
 	for _, f := range ctx.Files {
-		dirs[filepath.Dir(f)] = true
+		dirSet[filepath.Dir(f)] = true
+	}
+	dirs := make([]string, 0, len(dirSet))
+	for d := range dirSet {
+		dirs = append(dirs, d)
+	}
+	issues, err := analyzer.FindPrematureAbstractionsInDirs(dirs)
+	if err != nil {
+		return nil
 	}
 	var out []lintIssue
-	for dir := range dirs {
-		issues, err := analyzer.FindPrematureAbstractionsInDir(dir)
-		if err != nil {
-			continue
-		}
-		for _, e := range issues {
-			out = append(out, lintIssue{
-				File:     e.File,
-				Rule:     "premature-abstraction",
-				Severity: "info",
-				Message:  e.Message,
-			})
-		}
+	for _, e := range issues {
+		out = append(out, lintIssue{
+			File:     e.File,
+			Rule:     "premature-abstraction",
+			Severity: "info",
+			Message:  e.Message,
+		})
 	}
 	return out
 }

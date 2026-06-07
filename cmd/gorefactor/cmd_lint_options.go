@@ -21,6 +21,10 @@ type lintOptions struct {
 	onlyRules map[string]bool
 	skipRules map[string]bool
 	failOn    string // "error" | "warning"
+
+	// Hidden profiling flags (not advertised in help).
+	cpuProfile   string // --cpuprofile <path>: write a CPU profile of the rule phase
+	profileRules bool   // --profile-rules: print per-rule timing to stderr
 }
 
 func parseLintOptions(args []string) (lintOptions, error) {
@@ -40,6 +44,14 @@ func parseLintOptions(args []string) (lintOptions, error) {
 			opts.jsonOut = true
 		case a == "--quiet":
 			opts.quiet = true
+		case a == "--cpuprofile":
+			if i+1 >= len(args) {
+				return opts, fmt.Errorf("--cpuprofile requires a path")
+			}
+			opts.cpuProfile = args[i+1]
+			i++
+		case a == "--profile-rules":
+			opts.profileRules = true
 		case a == "--config":
 			if i+1 >= len(args) {
 				return opts, fmt.Errorf("--config requires a value")

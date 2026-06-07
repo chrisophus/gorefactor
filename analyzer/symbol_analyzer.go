@@ -85,6 +85,7 @@ type UseAnalyzer struct {
 	currentPackage  string
 	currentFile     string
 	receiverContext map[ast.Node]string // Maps method bodies to receiver types
+	parsed          bool                // Parse() is idempotent; guards re-parsing
 }
 
 // NewUseAnalyzer creates a new symbol analyzer
@@ -100,8 +101,13 @@ func NewUseAnalyzer(files []string) *UseAnalyzer {
 	}
 }
 
-// Parse loads and parses all files
+// Parse loads and parses all files. It is idempotent: repeated calls reuse the
+// ASTs parsed on the first call (callers such as FindCallers invoke it per query).
 func (ua *UseAnalyzer) Parse() error {
+	if ua.parsed {
+		return nil
+	}
+	ua.parsed = true
 	for _, filePath := range ua.files {
 		if !strings.HasSuffix(filePath, ".go") {
 			continue

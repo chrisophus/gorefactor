@@ -4,10 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"runtime"
+	"runtime/pprof"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/chrisophus/gorefactor/analyzer"
 	"github.com/chrisophus/gorefactor/config"
+	"golang.org/x/sync/errgroup"
 )
 
 type lintIssue struct {
@@ -33,11 +38,9 @@ func lintCommand(args []string) error {
 	ctx.Files = files
 
 	rules := filterLintRules(defaultLintRules(), opts)
-	var issues []lintIssue
-	for _, rule := range rules {
-		issues = append(issues, rule.Run(ctx)...)
-	}
+	issues := runLintRules(rules, ctx, opts)
 	issues = applyConfigSeverity(issues, opts)
+	sortLintIssues(issues)
 
 	if opts.jsonOut {
 		enc := json.NewEncoder(os.Stdout)
@@ -93,6 +96,83 @@ func lintCommand(args []string) error {
 
 func collectGoFiles(root string, walk analyzer.WalkOptions) ([]string, error) {
 	return analyzer.WalkGoFiles(root, walk)
+}
+
+// sortLintIssues orders issues deterministically so output is stable regardless
+// of rule execution order (rules run concurrently) or map-iteration order
+// inside individual rules.
+func sortLintIssues(issues []lintIssue) {
+	sort.SliceStable(issues, func(i, j int) bool {
+		a, b := issues[i], issues[j]
+		if a.File != b.File {
+			return a.File < b.File
+		}
+		if a.Rule != b.Rule {
+			return a.Rule < b.Rule
+		}
+		if a.Severity != b.Severity {
+			return a.Severity < b.Severity
+		}
+		return a.Message < b.Message
+	})
+}
+
+// runLintRules executes the given rules and aggregates their issues. It honors
+// the hidden --cpuprofile and --profile-rules options for performance work.
+func runLintRules(rules []LintRule, ctx LintContext, opts lintOptions) []lintIssue {
+	if opts.cpuProfile != "" {
+		f, err := os.Create(opts.cpuProfile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "cpuprofile: %v\n", err)
+		} else {
+			defer f.Close()
+			if err := pprof.StartCPUProfile(f); err != nil {
+				fmt.Fprintf(os.Stderr, "cpuprofile: %v\n", err)
+			} else {
+				defer pprof.StopCPUProfile()
+			}
+		}
+	}
+
+	type ruleTiming struct {
+		name string
+		dur  time.Duration
+	}
+	timings := make([]ruleTiming, len(rules))
+	wallStart := time.Now()
+
+	// Rules are read-only and independent, so run them concurrently. Results are
+	// written to an index-aligned slice to keep aggregation order deterministic
+	// (identical to the previous sequential append order).
+	results := make([][]lintIssue, len(rules))
+	var g errgroup.Group
+	g.SetLimit(runtime.GOMAXPROCS(0))
+	for i, rule := range rules {
+		g.Go(func() error {
+			start := time.Now()
+			results[i] = rule.Run(ctx)
+			timings[i] = ruleTiming{rule.Name(), time.Since(start)}
+			return nil
+		})
+	}
+	_ = g.Wait()
+
+	var issues []lintIssue
+	for _, res := range results {
+		issues = append(issues, res...)
+	}
+
+	if opts.profileRules {
+		wall := time.Since(wallStart)
+		sort.Slice(timings, func(i, j int) bool { return timings[i].dur > timings[j].dur })
+		fmt.Fprintln(os.Stderr, "── lint rule timings ──")
+		for _, t := range timings {
+			fmt.Fprintf(os.Stderr, "  %-26s %8.1fms\n", t.name, float64(t.dur.Microseconds())/1000)
+		}
+		fmt.Fprintf(os.Stderr, "  %-26s %8.1fms\n", "TOTAL (wall)", float64(wall.Microseconds())/1000)
+	}
+
+	return issues
 }
 
 func applyAutoFixes(issues []lintIssue, ctx LintContext, rules []LintRule) (applied, failed int) {

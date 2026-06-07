@@ -46,7 +46,8 @@ type CallAnalyzer struct {
 	files          []string
 	callGraph      map[string][]CallSite // Maps function name to all callers
 	definitions    map[string]*SymbolDefinition
-	visitedChains  map[string]bool // For cycle detection
+	visitedChains  map[string]bool     // For cycle detection
+	snippetLines   map[string][]string // Cache of file -> lines for snippet extraction
 }
 
 // NewCallAnalyzer creates a new call analyzer
@@ -57,6 +58,7 @@ func NewCallAnalyzer(files []string) *CallAnalyzer {
 		callGraph:      make(map[string][]CallSite),
 		definitions:    make(map[string]*SymbolDefinition),
 		visitedChains:  make(map[string]bool),
+		snippetLines:   make(map[string][]string),
 	}
 }
 

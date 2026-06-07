@@ -8,6 +8,9 @@ import (
 
 // buildCallGraph builds a complete call graph by analyzing all symbol uses
 func (ca *CallAnalyzer) buildCallGraph(targetName, targetReceiver string) {
+	// Reset so repeated calls (e.g. dead-code probes every function) rebuild a
+	// fresh graph instead of accumulating duplicate call sites across queries.
+	ca.callGraph = make(map[string][]CallSite)
 	for file, fileAST := range ca.symbolAnalyzer.fileASTs {
 		// Get current function/method context as we walk
 		ca.walkFileForCalls(file, fileAST)
@@ -156,14 +159,21 @@ func (ca *CallAnalyzer) typeExprToString(expr ast.Expr) string {
 	}
 }
 
-// getCodeSnippet extracts a code snippet from a file
+// getCodeSnippet extracts a code snippet from a file. File contents are read
+// and split once per file, then cached, since the call-graph walk requests many
+// snippets from the same files.
 func (ca *CallAnalyzer) getCodeSnippet(file string, line int) string {
-	content, err := os.ReadFile(file)
-	if err != nil {
-		return ""
+	lines, ok := ca.snippetLines[file]
+	if !ok {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			ca.snippetLines[file] = nil
+			return ""
+		}
+		lines = strings.Split(string(content), "\n")
+		ca.snippetLines[file] = lines
 	}
 
-	lines := strings.Split(string(content), "\n")
 	if line > 0 && line <= len(lines) {
 		return strings.TrimSpace(lines[line-1])
 	}

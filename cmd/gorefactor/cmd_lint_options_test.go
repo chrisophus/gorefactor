@@ -10,6 +10,7 @@ func TestParseLintOptions_RuleFlags(t *testing.T) {
 		"--rule", "untested-package",
 		"--skip-rule", "golangci-lint",
 		"--fail-on", "warning",
+		"--fail-only",
 		"--max", "500",
 	})
 	if err != nil {
@@ -23,6 +24,9 @@ func TestParseLintOptions_RuleFlags(t *testing.T) {
 	}
 	if opts.failOn != "warning" {
 		t.Fatalf("failOn = %q, want warning", opts.failOn)
+	}
+	if !opts.failOnly {
+		t.Fatal("expected --fail-only to be enabled")
 	}
 	if opts.maxSize != 500 {
 		t.Fatalf("maxSize = %d, want 500", opts.maxSize)
@@ -67,6 +71,21 @@ func TestFailingIssueCount(t *testing.T) {
 	}
 	if got := failingIssueCount(issues, "warning"); got != len(issues) {
 		t.Fatalf("failingIssueCount(warning) = %d, want %d", got, len(issues))
+	}
+}
+
+func TestFailingIssues(t *testing.T) {
+	issues := []lintIssue{
+		{Severity: "info"},
+		{Severity: "warning"},
+		{Severity: "error"},
+		{Severity: "error"},
+	}
+	if got := failingIssues(issues, "error"); len(got) != 2 {
+		t.Fatalf("len(failingIssues(error)) = %d, want 2", len(got))
+	}
+	if got := failingIssues(issues, "warning"); len(got) != len(issues) {
+		t.Fatalf("len(failingIssues(warning)) = %d, want %d", len(got), len(issues))
 	}
 }
 

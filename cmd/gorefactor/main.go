@@ -75,7 +75,7 @@ func getCommands() map[string]Command {
 		},
 		"lint": {
 			Name:        "lint",
-			Description: "Run structural lints (file size, duplicates) [--fix] [--json] [--max N]",
+			Description: "Run structural lints (file size, duplicates) [--fix] [--json] [--max N] [--fail-only]",
 			Run:         lintCommand,
 		},
 		"create": {

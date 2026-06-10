@@ -54,7 +54,12 @@ func lintCommand(args []string) error {
 			return err
 		}
 		if lintShouldFail(issues, opts.failOn) {
-			return fmt.Errorf("lint: %d issue(s) at or above %s severity", len(issues), opts.failOn)
+			return fmt.Errorf(
+				"lint: %d issue(s) at or above %s severity (%d total issue(s))",
+				failingIssueCount(issues, opts.failOn),
+				opts.failOn,
+				len(issues),
+			)
 		}
 		return nil
 	}
@@ -82,16 +87,34 @@ func lintCommand(args []string) error {
 		for rule, n := range byRule {
 			fmt.Printf("  %s: %d\n", rule, n)
 		}
-
+		
 		if opts.fix {
 			applied, failed := applyAutoFixes(issues, ctx, rules)
 			fmt.Printf("\nAuto-fixes: %d applied, %d failed\n", applied, failed)
 		}
 	}
 	if shouldFail {
-		return fmt.Errorf("lint: %d issue(s) at or above %s severity", len(issues), opts.failOn)
+		return fmt.Errorf(
+			"lint: %d issue(s) at or above %s severity (%d total issue(s))",
+			failingIssueCount(issues, opts.failOn),
+			opts.failOn,
+			len(issues),
+		)
 	}
 	return nil
+}
+
+func failingIssueCount(issues []lintIssue, failOn string) int {
+	if failOn == "warning" {
+		return len(issues)
+	}
+	count := 0
+	for _, iss := range issues {
+		if iss.Severity == "error" {
+			count++
+		}
+	}
+	return count
 }
 
 func collectGoFiles(root string, walk analyzer.WalkOptions) ([]string, error) {

@@ -55,6 +55,21 @@ func TestLintShouldFail(t *testing.T) {
 	}
 }
 
+func TestFailingIssueCount(t *testing.T) {
+	issues := []lintIssue{
+		{Severity: "info"},
+		{Severity: "warning"},
+		{Severity: "error"},
+		{Severity: "error"},
+	}
+	if got := failingIssueCount(issues, "error"); got != 2 {
+		t.Fatalf("failingIssueCount(error) = %d, want 2", got)
+	}
+	if got := failingIssueCount(issues, "warning"); got != len(issues) {
+		t.Fatalf("failingIssueCount(warning) = %d, want %d", got, len(issues))
+	}
+}
+
 func ruleNames(rules []LintRule) []string {
 	out := make([]string, len(rules))
 	for i, r := range rules {

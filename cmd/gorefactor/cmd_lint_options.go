@@ -128,12 +128,12 @@ func (opts *lintOptions) loadConfig() error {
 
 func (opts lintOptions) lintContext(files []string) LintContext {
 	ctx := LintContext{
-		Root:    opts.root,
-		Files:   files,
-		MaxSize: opts.maxSize,
+		Root:     opts.root,
+		Files:    files,
+		MaxSize:  opts.maxSize,
 		WalkOpts: analyzer.DefaultWalkOptions(),
-		Config:  opts.cfg,
-		Profile: opts.profile,
+		Config:   opts.cfg,
+		Profile:  opts.profile,
 	}
 	if opts.cfg != nil {
 		ctx.WalkOpts = opts.cfg.WalkOptions()

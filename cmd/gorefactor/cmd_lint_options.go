@@ -9,18 +9,19 @@ import (
 )
 
 type lintOptions struct {
-	root      string
-	maxSize   int
-	maxSet    bool
-	fix       bool
-	jsonOut   bool
-	quiet     bool
+	root       string
+	maxSize    int
+	maxSet     bool
+	fix        bool
+	jsonOut    bool
+	quiet      bool
+	failOnly   bool
 	configPath string
-	profile   string
-	cfg       *config.File
-	onlyRules map[string]bool
-	skipRules map[string]bool
-	failOn    string // "error" | "warning"
+	profile    string
+	cfg        *config.File
+	onlyRules  map[string]bool
+	skipRules  map[string]bool
+	failOn     string // "error" | "warning"
 
 	// Hidden profiling flags (not advertised in help).
 	cpuProfile   string // --cpuprofile <path>: write a CPU profile of the rule phase
@@ -44,6 +45,8 @@ func parseLintOptions(args []string) (lintOptions, error) {
 			opts.jsonOut = true
 		case a == "--quiet":
 			opts.quiet = true
+		case a == "--fail-only":
+			opts.failOnly = true
 		case a == "--cpuprofile":
 			if i+1 >= len(args) {
 				return opts, fmt.Errorf("--cpuprofile requires a path")

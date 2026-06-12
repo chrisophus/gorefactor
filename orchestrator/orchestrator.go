@@ -46,7 +46,7 @@ func (o *Orchestrator) LoadPlan(filePath string) (*RefactoringPlan, error) {
 
 // ExecutePlan executes a refactoring plan
 func (o *Orchestrator) ExecutePlan(planName string) (*ExecutionResult, error) {
-	if p, ok := o.plans[planName]; ok {
+	if p, ok := o.plans[planName]; ok && !o.SkipSnapshot {
 		if err := o.createSnapshot(p, SnapshotDir(planName)); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: snapshot failed: %v\n", err)
 		}

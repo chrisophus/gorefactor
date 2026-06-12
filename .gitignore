@@ -57,3 +57,6 @@ go.work
 
 # Benchmark runner binary
 /benchmark/benchmark_runner
+
+# Claude Code agent worktrees (ephemeral)
+.claude/worktrees/

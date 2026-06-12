@@ -177,7 +177,14 @@ func (o *Orchestrator) executeOperation(operation *RefactoringOperation) *Operat
 		Operation: operation,
 		Changes:   make([]*CodeChange, 0),
 	}
-	if !o.checkConditions(operation.Conditions) {
+	conditionsMet, condErr := o.checkConditions(operation)
+	if condErr != nil {
+		result.Success = false
+		result.Applied = false
+		result.Error = fmt.Sprintf("condition evaluation failed: %v", condErr)
+		return result
+	}
+	if !conditionsMet {
 		result.Success = false
 		result.Applied = false
 		result.Message = "Conditions not met"

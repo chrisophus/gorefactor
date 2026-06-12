@@ -7,9 +7,21 @@ import (
 	"os"
 )
 
+func init() {
+	registerCommand(Command{
+		Name:        "orchestrate",
+		Description: "Execute refactoring operations from JSON plan files",
+		Usage:       "orchestrate <plan.json> [result-output.json] [--dry-run]",
+		MinArgs:     1,
+		MaxArgs:     2,
+		Flags:       map[string]bool{"--dry-run": false},
+		Run:         orchestrateRefactoring,
+	})
+}
+
 func orchestrateRefactoring(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("missing plan file path")
+		return usageErrorf("missing plan file path")
 	}
 
 	planFile := args[0]
@@ -71,11 +83,24 @@ func orchestrateRefactoring(args []string) error {
 		return nil
 	}
 
+	// Capture pre-execution content of every file the plan may touch so the
+	// run can be journaled alongside direct mutations (the legacy per-plan
+	// snapshot in .gorefactor/snapshots/<plan-name> is still written too).
+	planFiles := planAffectedFiles(plan)
+	before := map[string][]byte{}
+	for _, f := range planFiles {
+		if b, rerr := os.ReadFile(f); rerr == nil {
+			before[f] = b
+		}
+	}
+
 	// Execute the plan
 	result, err := orch.ExecutePlan(plan.Name)
 	if err != nil {
 		return fmt.Errorf("failed to execute plan: %w", err)
 	}
+
+	journalPlanRun(plan, planFiles, before)
 
 	// Output results
 	fmt.Printf("\nExecution completed at: %s\n", result.Executed.Format("2006-01-02 15:04:05"))
@@ -115,4 +140,54 @@ func orchestrateRefactoring(args []string) error {
 	}
 
 	return nil
+}
+
+// planAffectedFiles lists the files a plan's operations may touch (operation
+// files plus move/create destinations).
+func planAffectedFiles(plan *orchestrator.RefactoringPlan) []string {
+	seen := map[string]bool{}
+	var files []string
+	add := func(f string) {
+		if f != "" && !seen[f] {
+			seen[f] = true
+			files = append(files, f)
+		}
+	}
+	for _, op := range plan.Operations {
+		add(op.File)
+		if op.Parameters != nil {
+			if nf, ok := op.Parameters["newFile"].(string); ok {
+				add(nf)
+			}
+		}
+	}
+	return files
+}
+
+// journalPlanRun records an executed plan in the mutation journal so `undo`
+// can roll it back like any direct mutation.
+func journalPlanRun(plan *orchestrator.RefactoringPlan, planFiles []string, before map[string][]byte) {
+	var created []string
+	changed := map[string][]byte{}
+	anyChange := false
+	for _, f := range planFiles {
+		after, rerr := os.ReadFile(f)
+		b, existed := before[f]
+		switch {
+		case rerr != nil:
+			continue
+		case !existed:
+			created = append(created, f)
+			anyChange = true
+		case string(b) != string(after):
+			changed[f] = b
+			anyChange = true
+		}
+	}
+	if !anyChange {
+		return
+	}
+	if _, err := orchestrator.RecordOperation("orchestrate", "plan "+plan.Name, changed, created); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: journal write failed: %v\n", err)
+	}
 }

@@ -8,9 +8,21 @@ import (
 	"github.com/chrisophus/gorefactor/analyzer"
 )
 
+func init() {
+	registerCommand(Command{
+		Name:        "doctor",
+		Description: "Aggregate health gate: lint + build + test. Exits non-zero on failure. [--json]",
+		Usage:       "doctor [dir] [--json]",
+		MinArgs:     0,
+		MaxArgs:     1,
+		Flags:       map[string]bool{"--json": false},
+		Run:         doctorCommand,
+	})
+}
+
 // doctorCommand runs a fast structural+build+test sweep as a final
-// gate after a refactor batch. It returns non-zero on any failure so
-// it can be wired into a pre-commit hook or CI step. Output is
+// gate after a refactor batch. It returns non-zero (exit code 4) on any
+// failure so it can be wired into a pre-commit hook or CI step. Output is
 // human-readable; pass --json for machine-parseable.
 func doctorCommand(args []string) error {
 	root := "."
@@ -97,7 +109,7 @@ func doctorCommand(args []string) error {
 
 	for _, s := range stages {
 		if !s.ok {
-			return fmt.Errorf("doctor: %s failed", s.name)
+			return gateErrorf("doctor: %s failed", s.name)
 		}
 	}
 	return nil

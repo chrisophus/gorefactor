@@ -128,18 +128,42 @@ func TestExecuteOperation_UnknownType(t *testing.T) {
 func TestCheckConditions_ValidConditions(t *testing.T) {
 	orch := NewOrchestrator()
 
-	conditions := []*Condition{
-		{
-			Type:     "complexity",
-			Property: "controlStructures",
-			Value:    2,
-			Operator: "gte",
+	testFile := filepath.Join(t.TempDir(), "cond.go")
+	code := `package main
+
+func complexFunc(items []int) int {
+	total := 0
+	for _, item := range items {
+		if item > 0 {
+			total += item
+		}
+	}
+	return total
+}
+`
+	if err := os.WriteFile(testFile, []byte(code), 0644); err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
+
+	operation := &RefactoringOperation{
+		Type:   "move_method",
+		File:   testFile,
+		Target: &TargetSpecification{FunctionName: "complexFunc"},
+		Conditions: []*Condition{
+			{
+				Type:     "complexity",
+				Property: "controlStructures",
+				Value:    2,
+				Operator: "gte",
+			},
 		},
 	}
 
-	// This is a simplified test since the condition evaluation is simplified
-	result := orch.checkConditions(conditions)
-	if !result {
+	met, err := orch.checkConditions(operation)
+	if err != nil {
+		t.Fatalf("checkConditions failed: %v", err)
+	}
+	if !met {
 		t.Error("Expected conditions to pass")
 	}
 }
@@ -147,8 +171,11 @@ func TestCheckConditions_ValidConditions(t *testing.T) {
 func TestCheckConditions_EmptyConditions(t *testing.T) {
 	orch := NewOrchestrator()
 
-	result := orch.checkConditions([]*Condition{})
-	if !result {
+	met, err := orch.checkConditions(&RefactoringOperation{Conditions: []*Condition{}})
+	if err != nil {
+		t.Fatalf("checkConditions failed: %v", err)
+	}
+	if !met {
 		t.Error("Expected empty conditions to pass")
 	}
 }
@@ -156,8 +183,11 @@ func TestCheckConditions_EmptyConditions(t *testing.T) {
 func TestCheckConditions_NilConditions(t *testing.T) {
 	orch := NewOrchestrator()
 
-	result := orch.checkConditions(nil)
-	if !result {
+	met, err := orch.checkConditions(&RefactoringOperation{})
+	if err != nil {
+		t.Fatalf("checkConditions failed: %v", err)
+	}
+	if !met {
 		t.Error("Expected nil conditions to pass")
 	}
 }

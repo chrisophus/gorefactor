@@ -3,11 +3,11 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"github.com/chrisophus/gorefactor/orchestrator"
 	"go/ast"
 	"go/printer"
 	"go/token"
 	"go/types"
-	"github.com/chrisophus/gorefactor/orchestrator"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -16,29 +16,46 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+var extractFlags = mutFlagSpec(nil)
+
+func init() {
+	registerCommand(Command{
+		Name:        "extract",
+		Description: "Extract a code block into a new function. Args: <file> <startLine> <endLine> <methodName>",
+		Usage:       "extract <file> <startLine> <endLine> <methodName> [--json] [--dry-run] [--gate]",
+		MinArgs:     4,
+		MaxArgs:     4,
+		Flags:       extractFlags,
+		Run:         extractCommand,
+	})
+}
+
 // extractCommand implements `gorefactor extract <file> <startLine> <endLine> <methodName>`.
 // It type-checks the enclosing package, derives parameter and return types
 // for the selected block, synthesizes a new function, and rewrites the block
 // as a call to it. Designed for free functions and methods at the body level;
 // see the doc-comment caveats inside for v1 limitations.
 func extractCommand(args []string) error {
-	if len(args) < 4 {
-		return fmt.Errorf("usage: extract <file> <startLine> <endLine> <methodName>")
+	pos, flags := parseFlags(args, extractFlags)
+	if len(pos) < 4 {
+		return usageErrorf("usage: extract <file> <startLine> <endLine> <methodName>")
 	}
-	file := args[0]
-	startLine, err := strconv.Atoi(args[1])
+	file := pos[0]
+	m := &mutation{op: "extract", file: file}
+	m.setCommonFlags(flags)
+	startLine, err := strconv.Atoi(pos[1])
 	if err != nil || startLine < 1 {
-		return fmt.Errorf("invalid startLine: %q", args[1])
+		return m.fail(usageErrorf("invalid startLine: %q", pos[1]))
 	}
-	endLine, err := strconv.Atoi(args[2])
+	endLine, err := strconv.Atoi(pos[2])
 	if err != nil || endLine < startLine {
-		return fmt.Errorf("invalid endLine: %q", args[2])
+		return m.fail(usageErrorf("invalid endLine: %q", pos[2]))
 	}
-	methodName := args[3]
+	methodName := pos[3]
 
 	absFile, err := filepath.Abs(file)
 	if err != nil {
-		return err
+		return m.fail(err)
 	}
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax |
@@ -48,37 +65,38 @@ func extractCommand(args []string) error {
 	}
 	pkgs, err := packages.Load(cfg, "./...")
 	if err != nil {
-		return fmt.Errorf("load package: %w", err)
+		return m.fail(fmt.Errorf("load package: %w", err))
 	}
 	pkg, fileAST := findFileInPackages(pkgs, absFile)
 	if pkg == nil {
-		return fmt.Errorf("file %s not in any loaded package", file)
+		return m.fail(notFoundErrorf("file %s not in any loaded package", file))
 	}
 	fset := pkg.Fset
 
 	enclosing, blockStmts, err := findExtractionTarget(fileAST, fset, startLine, endLine)
 	if err != nil {
-		return err
+		return m.fail(notFoundErrorf("%v", err))
 	}
 	if containsReturn(blockStmts) {
-		return fmt.Errorf("block contains a return statement; v1 extract does not handle this")
+		return m.fail(fmt.Errorf("block contains a return statement; v1 extract does not handle this"))
 	}
 
 	params, returns, err := analyzeBlockTypes(pkg, fileAST, enclosing, blockStmts)
 	if err != nil {
-		return err
+		return m.fail(err)
 	}
 
 	newFunc, callSite, err := buildExtractedFunc(fset, methodName, blockStmts, params, returns)
 	if err != nil {
-		return err
+		return m.fail(err)
 	}
 
-	if err := rewriteExtraction(absFile, fset, enclosing, blockStmts, newFunc, callSite); err != nil {
-		return err
-	}
-	fmt.Printf("Extracted %s (params=%d, returns=%d)\n", methodName, len(params), len(returns))
-	return nil
+	return m.run(func() (string, error) {
+		if err := rewriteExtraction(absFile, fset, enclosing, blockStmts, newFunc, callSite); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("Extracted %s (params=%d, returns=%d)", methodName, len(params), len(returns)), nil
+	})
 }
 
 func findFileInPackages(pkgs []*packages.Package, absFile string) (*packages.Package, *ast.File) {

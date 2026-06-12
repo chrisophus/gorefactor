@@ -9,6 +9,17 @@ import (
 	"github.com/chrisophus/gorefactor/orchestrator"
 )
 
+func init() {
+	registerCommand(Command{
+		Name:        "format",
+		Description: "Format Go files (gofmt + goimports) in-place; pass dir/file paths or default '.'",
+		Usage:       "format [path ...]",
+		MinArgs:     0,
+		MaxArgs:     -1,
+		Run:         formatCommand,
+	})
+}
+
 func formatCommand(args []string) error {
 	targets := args
 	if len(targets) == 0 {
@@ -44,11 +55,13 @@ func formatCommand(args []string) error {
 			files = append(files, t)
 		}
 	}
-	for _, f := range files {
-		if err := orchestrator.FormatImports(f); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: %s: %v\n", f, err)
+	m := &mutation{op: "format", files: files}
+	return m.run(func() (string, error) {
+		for _, f := range files {
+			if err := orchestrator.FormatImports(f); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: %s: %v\n", f, err)
+			}
 		}
-	}
-	fmt.Printf("Formatted %d files\n", len(files))
-	return nil
+		return fmt.Sprintf("Formatted %d files", len(files)), nil
+	})
 }

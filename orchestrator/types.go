@@ -127,4 +127,7 @@ type ExecutionStatistics struct {
 
 type Orchestrator struct {
 	plans map[string]*RefactoringPlan
+	// SkipSnapshot disables the per-plan snapshot in ExecutePlan. Set by
+	// callers (e.g. direct CLI mutations) that journal snapshots themselves.
+	SkipSnapshot bool
 }

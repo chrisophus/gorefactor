@@ -8,26 +8,38 @@ import (
 	"strings"
 )
 
+var splitFlags = map[string]bool{
+	"--max":     true,
+	"--dry-run": false,
+	"--json":    false,
+	"--gate":    false,
+}
+
+func init() {
+	registerCommand(Command{
+		Name:        "split",
+		Description: "Auto-split a Go file over the line limit into multiple files [--max N] [--dry-run]",
+		Usage:       "split <file.go> [--max N] [--dry-run] [--json] [--gate]",
+		MinArgs:     1,
+		MaxArgs:     1,
+		Flags:       splitFlags,
+		Run:         splitCommand,
+	})
+}
+
 func splitCommand(args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("usage: split <file.go> [--max N] [--dry-run]")
+	pos, flags := parseFlags(args, splitFlags)
+	if len(pos) < 1 {
+		return usageErrorf("usage: split <file.go> [--max N] [--dry-run]")
 	}
-	file := args[0]
+	file := pos[0]
 	maxSize := defaultSplitMaxLines
-	dryRun := false
-	for i := 1; i < len(args); i++ {
-		switch args[i] {
-		case "--max":
-			if i+1 < len(args) {
-				var n int
-				_, _ = fmt.Sscanf(args[i+1], "%d", &n)
-				if n > 0 {
-					maxSize = n
-				}
-				i++
-			}
-		case "--dry-run":
-			dryRun = true
+	dryRun := flags["--dry-run"] != ""
+	if v, ok := flags["--max"]; ok {
+		var n int
+		_, _ = fmt.Sscanf(v, "%d", &n)
+		if n > 0 {
+			maxSize = n
 		}
 	}
 
@@ -84,39 +96,53 @@ func splitCommand(args []string) error {
 		return nil
 	}
 
-	orch := orchestrator.NewOrchestrator()
-	plan := &orchestrator.RefactoringPlan{
-		Version:    "1.0",
-		Name:       "split-" + stem,
-		Operations: []*orchestrator.RefactoringOperation{},
-	}
+	affected := []string{file}
+	seenDest := map[string]bool{file: true}
 	for _, m := range moves {
-		target := splitTargetFromName(m[0])
-		op := &orchestrator.RefactoringOperation{
-			Type:   "move_method",
-			File:   file,
-			Target: target,
-			Parameters: map[string]interface{}{
-				"newFile": m[1],
-			},
-		}
-		plan.Operations = append(plan.Operations, op)
-	}
-	if err := orch.RegisterPlan(plan); err != nil {
-		return err
-	}
-	result, err := orch.ExecutePlan(plan.Name)
-	if err != nil {
-		return err
-	}
-	applied := 0
-	for _, op := range result.Operations {
-		if op.Applied {
-			applied++
+		if !seenDest[m[1]] {
+			seenDest[m[1]] = true
+			affected = append(affected, m[1])
 		}
 	}
-	fmt.Printf("Applied %d/%d operations\n", applied, len(plan.Operations))
-	return nil
+	mu := &mutation{op: "split", file: file, files: affected}
+	mu.setCommonFlags(flags)
+	mu.dryRun = false // split's --dry-run prints the plan above instead
+
+	return mu.run(func() (string, error) {
+		orch := orchestrator.NewOrchestrator()
+		orch.SkipSnapshot = true
+		plan := &orchestrator.RefactoringPlan{
+			Version:    "1.0",
+			Name:       "split-" + stem,
+			Operations: []*orchestrator.RefactoringOperation{},
+		}
+		for _, m := range moves {
+			target := splitTargetFromName(m[0])
+			op := &orchestrator.RefactoringOperation{
+				Type:   "move_method",
+				File:   file,
+				Target: target,
+				Parameters: map[string]interface{}{
+					"newFile": m[1],
+				},
+			}
+			plan.Operations = append(plan.Operations, op)
+		}
+		if err := orch.RegisterPlan(plan); err != nil {
+			return "", err
+		}
+		result, err := orch.ExecutePlan(plan.Name)
+		if err != nil {
+			return "", err
+		}
+		applied := 0
+		for _, op := range result.Operations {
+			if op.Applied {
+				applied++
+			}
+		}
+		return fmt.Sprintf("Applied %d/%d operations", applied, len(plan.Operations)), nil
+	})
 }
 
 func splitTargetFromName(s string) *orchestrator.TargetSpecification {

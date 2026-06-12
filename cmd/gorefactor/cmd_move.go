@@ -2,18 +2,37 @@ package main
 
 import (
 	"fmt"
-	"github.com/chrisophus/gorefactor/orchestrator"
 	"strings"
+
+	"github.com/chrisophus/gorefactor/orchestrator"
 )
 
+var moveFlags = mutFlagSpec(nil)
+
+func init() {
+	registerCommand(Command{
+		Name:        "move",
+		Description: "Move a function or method to a different file",
+		Usage:       "move <source-file> <Func|Receiver:Method> <destination-file> [--json] [--dry-run] [--gate]",
+		MinArgs:     3,
+		MaxArgs:     3,
+		Flags:       moveFlags,
+		Run:         moveCode,
+	})
+}
+
 func moveCode(args []string) error {
-	if len(args) < 3 {
-		return fmt.Errorf("usage: move <source-file> <target-name> <destination-file>\n\nExamples:\n  gorefactor move service.go GetUser utils.go\n  gorefactor move handler.go Handler:Process helpers.go")
+	pos, flags := parseFlags(args, moveFlags)
+	if len(pos) < 3 {
+		return usageErrorf("usage: move <source-file> <target-name> <destination-file>\n\nExamples:\n  gorefactor move service.go GetUser utils.go\n  gorefactor move handler.go Handler:Process helpers.go")
 	}
 
-	sourceFile := args[0]
-	targetName := args[1]
-	destFile := args[2]
+	sourceFile := pos[0]
+	targetName := pos[1]
+	destFile := pos[2]
+
+	m := &mutation{op: "move", file: sourceFile, files: []string{sourceFile, destFile}}
+	m.setCommonFlags(flags)
 
 	// Parse target name - could be "FunctionName" or "Receiver:MethodName"
 	var functionName, receiverType string
@@ -29,52 +48,56 @@ func moveCode(args []string) error {
 		functionName = targetName
 	}
 
-	// Create a refactoring plan and execute it
-	plan := &orchestrator.RefactoringPlan{
-		Version:     "1.0",
-		Name:        "move_operation",
-		Description: fmt.Sprintf("Move %s to %s", targetName, destFile),
-		Operations: []*orchestrator.RefactoringOperation{
-			{
-				Type:        "move_method",
-				Description: fmt.Sprintf("Move %s from %s to %s", targetName, sourceFile, destFile),
-				File:        sourceFile,
-				Target: &orchestrator.TargetSpecification{
-					FunctionName: functionName,
-					MethodName:   functionName,
-					ReceiverType: receiverType,
-				},
-				Parameters: map[string]interface{}{
-					"newFile": destFile,
+	// Verify the target exists in the source file before executing.
+	normalized := functionName
+	if receiverType != "" {
+		normalized = strings.TrimPrefix(receiverType, "*") + ":" + functionName
+	}
+	if err := validateDeclTarget(sourceFile, normalized); err != nil {
+		return m.fail(err)
+	}
+
+	return m.run(func() (string, error) {
+		plan := &orchestrator.RefactoringPlan{
+			Version:     "1.0",
+			Name:        "move_operation",
+			Description: fmt.Sprintf("Move %s to %s", targetName, destFile),
+			Operations: []*orchestrator.RefactoringOperation{
+				{
+					Type:        "move_method",
+					Description: fmt.Sprintf("Move %s from %s to %s", targetName, sourceFile, destFile),
+					File:        sourceFile,
+					Target: &orchestrator.TargetSpecification{
+						FunctionName: functionName,
+						MethodName:   functionName,
+						ReceiverType: receiverType,
+					},
+					Parameters: map[string]interface{}{
+						"newFile": destFile,
+					},
 				},
 			},
-		},
-	}
+		}
 
-	// Execute the plan
-	orch := orchestrator.NewOrchestrator()
-	if err := orch.RegisterPlan(plan); err != nil {
-		return fmt.Errorf("failed to register plan: %w", err)
-	}
+		orch := orchestrator.NewOrchestrator()
+		orch.SkipSnapshot = true
+		if err := orch.RegisterPlan(plan); err != nil {
+			return "", fmt.Errorf("failed to register plan: %w", err)
+		}
 
-	result, err := orch.ExecutePlan(plan.Name)
-	if err != nil {
-		return fmt.Errorf("failed to move code: %w", err)
-	}
+		result, err := orch.ExecutePlan(plan.Name)
+		if err != nil {
+			return "", fmt.Errorf("failed to move code: %w", err)
+		}
+		if !result.Success {
+			return "", fmt.Errorf("move operation failed: %s", strings.Join(result.Errors, "; "))
+		}
 
-	// Output results
-	if result.Success {
-		fmt.Printf("✓ Successfully moved %s to %s\n", targetName, destFile)
+		var b strings.Builder
+		fmt.Fprintf(&b, "✓ Successfully moved %s to %s", targetName, destFile)
 		for _, change := range result.Operations[0].Changes {
-			fmt.Printf("  %s: %s (lines %d-%d)\n", change.Type, change.Description, change.StartLine, change.EndLine)
+			fmt.Fprintf(&b, "\n  %s: %s (lines %d-%d)", change.Type, change.Description, change.StartLine, change.EndLine)
 		}
-	} else {
-		fmt.Printf("✗ Failed to move %s\n", targetName)
-		for _, err := range result.Errors {
-			fmt.Printf("  Error: %s\n", err)
-		}
-		return fmt.Errorf("move operation failed")
-	}
-
-	return nil
+		return b.String(), nil
+	})
 }

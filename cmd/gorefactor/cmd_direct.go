@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	goparser "go/parser"
+	"go/token"
 	"io"
 	"os"
 	"path/filepath"
@@ -10,6 +12,62 @@ import (
 	"github.com/chrisophus/gorefactor/analyzer"
 	"github.com/chrisophus/gorefactor/orchestrator"
 )
+
+var (
+	createFlags  = mutFlagSpec(nil)
+	insertFlags  = mutFlagSpec(nil)
+	replaceFlags = mutFlagSpec(nil)
+	deleteFlags  = mutFlagSpec(map[string]bool{"--safe": false})
+	renameFlags  = mutFlagSpec(map[string]bool{"--strict": false})
+)
+
+func init() {
+	registerCommand(Command{
+		Name:        "create",
+		Description: "Create a new file with content from arg or stdin",
+		Usage:       "create <path> [content|-] [--json] [--dry-run] [--gate]",
+		MinArgs:     1,
+		MaxArgs:     2,
+		Flags:       createFlags,
+		Run:         createCommand,
+	})
+	registerCommand(Command{
+		Name:        "insert",
+		Description: "Insert code into a file at a location (at-end | at-beginning | before:Func | after:Func | inside:Func)",
+		Usage:       "insert <file> <at-end|at-beginning|before:Func|after:Func|inside:Func> [content|-] [--json] [--dry-run] [--gate]",
+		MinArgs:     2,
+		MaxArgs:     3,
+		Flags:       insertFlags,
+		Run:         insertCommand,
+	})
+	registerCommand(Command{
+		Name:        "replace",
+		Description: "Replace a code pattern inside a function/method (AST: pattern must be a full statement)",
+		Usage:       "replace <file> <Func|Receiver:Method> <old-stmt> <new-stmt> [--json] [--dry-run] [--gate]",
+		MinArgs:     4,
+		MaxArgs:     4,
+		Flags:       replaceFlags,
+		Run:         replaceCommand,
+	})
+	registerCommand(Command{
+		Name:        "delete",
+		Description: "Delete a declaration (function, method, or type) from a file",
+		Usage:       "delete <file> <Func|Receiver:Method> [--safe] [--json] [--dry-run] [--gate]",
+		MinArgs:     2,
+		MaxArgs:     2,
+		Flags:       deleteFlags,
+		Run:         deleteCommand,
+	})
+	registerCommand(Command{
+		Name:        "rename",
+		Description: "Rename an unexported symbol across the package",
+		Usage:       "rename <file> <oldname> <newname> [--strict] [--json] [--dry-run] [--gate]",
+		MinArgs:     3,
+		MaxArgs:     3,
+		Flags:       renameFlags,
+		Run:         renameCommand,
+	})
+}
 
 func readContentArg(args []string, idx int) (string, error) {
 	if idx < len(args) && args[idx] != "-" {
@@ -22,33 +80,62 @@ func readContentArg(args []string, idx int) (string, error) {
 	return string(b), nil
 }
 
-func createCommand(args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("usage: create <path> [content] (else stdin)")
+// validateGoSnippet checks that content parses as a complete Go file, as
+// top-level declarations, or as statements. Returns an exit-3 error when
+// none of the forms parse.
+func validateGoSnippet(content string) error {
+	fset := token.NewFileSet()
+	_, fileErr := goparser.ParseFile(fset, "snippet.go", content, 0)
+	if fileErr == nil {
+		return nil
 	}
-	path := args[0]
-	content, err := readContentArg(args, 1)
+	if _, err := goparser.ParseFile(fset, "snippet.go", "package p\n"+content, 0); err == nil {
+		return nil
+	}
+	if _, err := goparser.ParseFile(fset, "snippet.go", "package p\nfunc _() {\n"+content+"\n}", 0); err == nil {
+		return nil
+	}
+	return parseErrorf("content does not parse as a Go file, declarations, or statements: %v", fileErr)
+}
+
+func createCommand(args []string) error {
+	pos, flags := parseFlags(args, createFlags)
+	if len(pos) < 1 {
+		return usageErrorf("usage: create <path> [content] (else stdin)")
+	}
+	path := pos[0]
+	content, err := readContentArg(pos, 1)
 	if err != nil {
 		return err
 	}
-	if dir := filepath.Dir(path); dir != "." && dir != "" {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return err
-		}
-	}
+	m := &mutation{op: "create", file: path}
+	m.setCommonFlags(flags)
+
 	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("file already exists: %s (use replace or insert)", path)
-	}
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		return err
+		return m.fail(fmt.Errorf("file already exists: %s (use replace or insert)", path))
 	}
 	if strings.HasSuffix(path, ".go") {
-		if err := orchestrator.FormatImports(path); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", path, err)
+		fset := token.NewFileSet()
+		if _, perr := goparser.ParseFile(fset, path, content, 0); perr != nil {
+			return m.fail(parseErrorf("content does not parse as a Go file: %v", perr))
 		}
 	}
-	fmt.Printf("Created %s\n", path)
-	return nil
+	return m.run(func() (string, error) {
+		if dir := filepath.Dir(path); dir != "." && dir != "" {
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return "", err
+			}
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			return "", err
+		}
+		if strings.HasSuffix(path, ".go") {
+			if err := orchestrator.FormatImports(path); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", path, err)
+			}
+		}
+		return fmt.Sprintf("Created %s", path), nil
+	})
 }
 
 func parseLocSpec(s string) (*orchestrator.InsertionLocation, error) {
@@ -64,55 +151,78 @@ func parseLocSpec(s string) (*orchestrator.InsertionLocation, error) {
 	case strings.HasPrefix(s, "inside:"):
 		return &orchestrator.InsertionLocation{Type: "inside_function", FunctionName: strings.TrimPrefix(s, "inside:")}, nil
 	}
-	return nil, fmt.Errorf("unknown location %q; use at-end | at-beginning | before:Func | after:Func | inside:Func", s)
+	return nil, usageErrorf("unknown location %q; valid forms: at-end | at-beginning | before:Func | after:Func | inside:Func", s)
 }
 
 func insertCommand(args []string) error {
-	if len(args) < 2 {
-		return fmt.Errorf("usage: insert <file> <at-end|at-beginning|before:Func|after:Func|inside:Func> [content] (else stdin)")
+	pos, flags := parseFlags(args, insertFlags)
+	if len(pos) < 2 {
+		return usageErrorf("usage: insert <file> <at-end|at-beginning|before:Func|after:Func|inside:Func> [content] (else stdin)")
 	}
-	file := args[0]
-	loc, err := parseLocSpec(args[1])
+	file := pos[0]
+	m := &mutation{op: "insert", file: file}
+	m.setCommonFlags(flags)
+	loc, err := parseLocSpec(pos[1])
 	if err != nil {
-		return err
+		return m.fail(err)
 	}
-	content, err := readContentArg(args, 2)
+	content, err := readContentArg(pos, 2)
 	if err != nil {
-		return err
+		return m.fail(err)
 	}
-	ci := orchestrator.NewCodeInserter()
-	ins, err := ci.InsertCode(file, loc, content)
-	if err != nil {
-		return err
+	if err := validateFuncTarget(file, loc); err != nil {
+		return m.fail(err)
 	}
-	if err := orchestrator.FormatImports(file); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", file, err)
+	if err := validateGoSnippet(content); err != nil {
+		return m.fail(err)
 	}
-	fmt.Printf("Inserted into %s at lines %d-%d\n", file, ins.StartLine, ins.EndLine)
-	return nil
+	return m.run(func() (string, error) {
+		ci := orchestrator.NewCodeInserter()
+		ins, err := ci.InsertCode(file, loc, content)
+		if err != nil {
+			return "", err
+		}
+		if err := orchestrator.FormatImports(file); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", file, err)
+		}
+		return fmt.Sprintf("Inserted into %s at lines %d-%d", file, ins.StartLine, ins.EndLine), nil
+	})
 }
 
 func replaceCommand(args []string) error {
-	if len(args) < 4 {
-		return fmt.Errorf("usage: replace <file> <funcname-or-Receiver:Method> <pattern> <replacement>")
+	pos, flags := parseFlags(args, replaceFlags)
+	if len(pos) < 4 {
+		return usageErrorf("usage: replace <file> <funcname-or-Receiver:Method> <pattern> <replacement>")
 	}
-	file := args[0]
-	loc, err := parseFuncLocator(args[1])
+	file := pos[0]
+	m := &mutation{op: "replace", file: file}
+	m.setCommonFlags(flags)
+	loc, err := parseFuncLocator(pos[1])
 	if err != nil {
-		return err
+		return m.fail(err)
 	}
-	pattern := args[2]
-	replacement := args[3]
-	ci := orchestrator.NewCodeInserter()
-	ins, err := ci.ReplaceCodeBlock(file, loc, pattern, replacement)
-	if err != nil {
-		return err
+	pattern := pos[2]
+	replacement := pos[3]
+	if err := validateFuncTarget(file, loc); err != nil {
+		return m.fail(err)
 	}
-	if err := orchestrator.FormatImports(file); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", file, err)
+	if err := validateGoSnippet(replacement); err != nil {
+		return m.fail(err)
 	}
-	fmt.Printf("Replaced in %s at lines %d-%d\n", file, ins.StartLine, ins.EndLine)
-	return nil
+	return m.run(func() (string, error) {
+		ci := orchestrator.NewCodeInserter()
+		ins, err := ci.ReplaceCodeBlock(file, loc, pattern, replacement)
+		if err != nil {
+			if strings.Contains(err.Error(), "no statement matching") {
+				return "", notFoundErrorf("%v\nhint: the pattern must be a complete statement; use replace-text for partial text", err)
+			}
+			return "", err
+		}
+		if err := orchestrator.FormatImports(file); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", file, err)
+		}
+		return fmt.Sprintf("Replaced in %s at lines %d-%d", file, ins.StartLine, ins.EndLine), nil
+	})
 }
 
 func parseFuncLocator(s string) (*orchestrator.InsertionLocation, error) {
@@ -126,17 +236,18 @@ func parseFuncLocator(s string) (*orchestrator.InsertionLocation, error) {
 }
 
 func deleteCommand(args []string) error {
-	if len(args) < 2 {
-		return fmt.Errorf("usage: delete <file> <funcname-or-Receiver:Method> [--safe]")
+	pos, flags := parseFlags(args, deleteFlags)
+	if len(pos) < 2 {
+		return usageErrorf("usage: delete <file> <funcname-or-Receiver:Method> [--safe]")
 	}
-	file := args[0]
-	name := args[1]
+	file := pos[0]
+	name := pos[1]
+	safe := flags["--safe"] != ""
+	m := &mutation{op: "delete", file: file}
+	m.setCommonFlags(flags)
 
-	safe := false
-	for _, a := range args[2:] {
-		if a == "--safe" {
-			safe = true
-		}
+	if err := validateDeclTarget(file, name); err != nil {
+		return m.fail(err)
 	}
 
 	if safe {
@@ -159,66 +270,55 @@ func deleteCommand(args []string) error {
 				for _, c := range analysis.DirectCallers {
 					fmt.Fprintf(os.Stderr, "  %s:%d  %s\n", c.File, c.Line, c.CallerName)
 				}
-				return fmt.Errorf("use find-callers %s to review, then remove callers before deleting", name)
+				return m.fail(fmt.Errorf("use find-callers %s to review, then remove callers before deleting", name))
 			}
 		}
 	}
 
-	target := parseTargetSpec(name)
-	plan := &orchestrator.RefactoringPlan{
-		Version: "1.0",
-		Name:    "delete-decl",
-		Operations: []*orchestrator.RefactoringOperation{{
+	return m.run(func() (string, error) {
+		target := parseTargetSpec(name)
+		err := runPlanOps("delete-decl", []*orchestrator.RefactoringOperation{{
 			Type:   "delete_declaration",
 			File:   file,
 			Target: target,
-		}},
-	}
-	orch := orchestrator.NewOrchestrator()
-	if err := orch.RegisterPlan(plan); err != nil {
-		return err
-	}
-	_, err := orch.ExecutePlan(plan.Name)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Deleted %s from %s\n", name, file)
-	return nil
+		}})
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("Deleted %s from %s", name, file), nil
+	})
 }
 
 func renameCommand(args []string) error {
-	if len(args) < 3 {
-		return fmt.Errorf("usage: rename <file> <oldname> <newname> [--strict]")
+	pos, flags := parseFlags(args, renameFlags)
+	if len(pos) < 3 {
+		return usageErrorf("usage: rename <file> <oldname> <newname> [--strict]")
 	}
-	file := args[0]
-	oldName := args[1]
-	newName := args[2]
-	strict := false
-
-	for i := 3; i < len(args); i++ {
-		if args[i] == "--strict" {
-			strict = true
-		}
-	}
+	file := pos[0]
+	oldName := pos[1]
+	newName := pos[2]
+	strict := flags["--strict"] != ""
+	m := &mutation{op: "rename", file: file, files: packageGoFiles(file)}
+	m.setCommonFlags(flags)
 
 	// Validate rename if --strict flag is set
 	if strict {
 		pkgDir := filepath.Dir(file)
 		validator, err := analyzer.NewExportedRenameValidator(pkgDir)
 		if err != nil {
-			return fmt.Errorf("failed to initialize validator: %w", err)
+			return m.fail(fmt.Errorf("failed to initialize validator: %w", err))
 		}
 
 		validation, err := validator.ValidateRename(oldName, newName)
 		if err != nil {
-			return fmt.Errorf("validation failed: %w", err)
+			return m.fail(fmt.Errorf("validation failed: %w", err))
 		}
 
 		// Print validation report
 		fmt.Println(validation.SafetyReport(oldName, newName))
 
 		if !validation.SafeToRename {
-			return fmt.Errorf("rename is not safe; review warnings above")
+			return m.fail(fmt.Errorf("rename is not safe; review warnings above"))
 		}
 
 		if validation.IsExported && len(validation.Warnings) > 0 {
@@ -226,28 +326,29 @@ func renameCommand(args []string) error {
 		}
 	}
 
-	plan := &orchestrator.RefactoringPlan{
-		Version: "1.0",
-		Name:    "rename",
-		Operations: []*orchestrator.RefactoringOperation{{
+	return m.run(func() (string, error) {
+		err := runPlanOps("rename", []*orchestrator.RefactoringOperation{{
 			Type:   "rename_declaration",
 			File:   file,
 			Target: &orchestrator.TargetSpecification{FunctionName: oldName},
 			Parameters: map[string]interface{}{
 				"newName": newName,
 			},
-		}},
-	}
-	orch := orchestrator.NewOrchestrator()
-	if err := orch.RegisterPlan(plan); err != nil {
-		return err
-	}
-	_, err := orch.ExecutePlan(plan.Name)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Renamed %s -> %s in %s and dependent files\n", oldName, newName, file)
-	return nil
+		}})
+		if err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				_, all, derr := fileDecls(file)
+				if derr != nil {
+					all = nil
+				}
+				return "", notFoundError(
+					fmt.Sprintf("symbol %q not found in package of %s", oldName, file),
+					oldName, all)
+			}
+			return "", err
+		}
+		return fmt.Sprintf("Renamed %s -> %s in %s and dependent files", oldName, newName, file), nil
+	})
 }
 
 func parseTargetSpec(s string) *orchestrator.TargetSpecification {

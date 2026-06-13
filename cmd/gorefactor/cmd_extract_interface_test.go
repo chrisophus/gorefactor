@@ -38,9 +38,13 @@ func TestExtractInterfaceAllMethods(t *testing.T) {
 	if ifaceStart == -1 {
 		t.Fatalf("interface block not found:\n%s", src)
 	}
-	ifaceBlock := src[ifaceStart:]
-	if strings.Contains(ifaceBlock, "private") {
-		t.Fatalf("unexported method should not appear in interface block:\n%s", ifaceBlock)
+	// Bound the check to just the interface body (between the opening { and its matching }).
+	ifaceBody := src[ifaceStart:]
+	if end := strings.Index(ifaceBody, "\n}"); end >= 0 {
+		ifaceBody = ifaceBody[:end+2]
+	}
+	if strings.Contains(ifaceBody, "private") {
+		t.Fatalf("unexported method should not appear in interface body:\n%s", ifaceBody)
 	}
 }
 

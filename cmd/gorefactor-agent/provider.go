@@ -129,6 +129,47 @@ type toolChatter interface {
 	ChatTools(ctx context.Context, messages []chatMessage, tools []toolDef) (chatMessage, error)
 }
 
+// doWithRetry posts buf to endpoint with exponential-backoff retry on
+// 429 / 5xx responses — mirrors anthropicProvider.doWithRetry.
+func (p *openAIProvider) doWithRetry(ctx context.Context, endpoint string, buf []byte) (int, []byte, error) {
+	const maxAttempts = 5
+	var lastErr error
+	var prevResp *http.Response
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if attempt > 0 {
+			delay := retryDelay(attempt, prevResp)
+			provDebugf("openai retry %d/%d after %s backoff (last: %v)",
+				attempt+1, maxAttempts, delay, lastErr)
+			if err := retrySleep(ctx, delay); err != nil {
+				return 0, nil, err
+			}
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(buf))
+		if err != nil {
+			return 0, nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if p.apiKey != "" {
+			req.Header.Set("Authorization", "Bearer "+p.apiKey)
+		}
+		resp, err := p.client.Do(req)
+		if err != nil {
+			lastErr = err
+			prevResp = nil
+			continue
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			lastErr = fmt.Errorf("openai HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+			prevResp = resp
+			continue
+		}
+		return resp.StatusCode, body, nil
+	}
+	return 0, nil, fmt.Errorf("openai request failed after %d attempts: %w", maxAttempts, lastErr)
+}
+
 // ChatTools implements toolChatter for any OpenAI-compatible endpoint.
 func (p *openAIProvider) ChatTools(ctx context.Context, messages []chatMessage, tools []toolDef) (chatMessage, error) {
 	reqBody := map[string]any{
@@ -148,30 +189,17 @@ func (p *openAIProvider) ChatTools(ctx context.Context, messages []chatMessage, 
 	provDebugf("openai ChatTools -> POST %s model=%s msgs=%d tools=%d reqBytes=%d",
 		endpoint, p.model, len(messages), len(tools), len(buf))
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		endpoint, bytes.NewReader(buf))
-	if err != nil {
-		return chatMessage{}, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if p.apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+p.apiKey)
-	}
-
 	start := time.Now()
-	resp, err := p.client.Do(req)
+	status, body, err := p.doWithRetry(ctx, endpoint, buf)
+	elapsed := time.Since(start)
 	if err != nil {
-		provDebugf("openai ChatTools FAILED after %s: %v", time.Since(start), err)
+		provDebugf("openai ChatTools FAILED after %s: %v", elapsed, err)
 		return chatMessage{}, err
 	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	elapsed := time.Since(start)
-	if resp.StatusCode != http.StatusOK {
+	if status != http.StatusOK {
 		provDebugf("openai ChatTools <- HTTP %d in %s (%d bytes): %s",
-			resp.StatusCode, elapsed, len(body), strings.TrimSpace(string(body)))
-		return chatMessage{}, fmt.Errorf("provider HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+			status, elapsed, len(body), strings.TrimSpace(string(body)))
+		return chatMessage{}, fmt.Errorf("provider HTTP %d: %s", status, strings.TrimSpace(string(body)))
 	}
 	ptBefore, ctBefore := p.promptToks, p.completionToks
 	p.addUsage(body)

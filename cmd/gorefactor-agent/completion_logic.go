@@ -1,11 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 )
@@ -33,25 +31,12 @@ func (p *openAIProvider) complete(ctx context.Context, system, user, schema stri
 		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		p.baseURL+"/chat/completions", bytes.NewReader(buf))
+	status, body, err := p.doWithRetry(ctx, p.baseURL+"/chat/completions", buf)
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	if p.apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+p.apiKey)
-	}
-
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("provider HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	if status != http.StatusOK {
+		return "", fmt.Errorf("provider HTTP %d: %s", status, strings.TrimSpace(string(body)))
 	}
 	p.addUsage(body)
 

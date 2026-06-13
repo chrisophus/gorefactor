@@ -44,11 +44,14 @@ func (r untestedFunctionRule) Run(ctx LintContext) []lintIssue {
 			continue
 		}
 		loc := strings.TrimSuffix(fields[0], ":")
+		// Extract just the file path (without :line) for the autofixCmd.
+		filePath := strings.SplitN(loc, ":", 2)[0]
 		findings = append(findings, lintIssue{
-			File:     loc,
-			Rule:     "untested-function",
-			Severity: "info",
-			Message:  fmt.Sprintf("exported %s has 0%% coverage", fnName),
+			File:       loc,
+			Rule:       "untested-function",
+			Severity:   "info",
+			Message:    fmt.Sprintf("exported %s has 0%% coverage", fnName),
+			AutoFixCmd: fmt.Sprintf("add-test %s %s", filePath, fnName),
 		})
 	}
 	return findings

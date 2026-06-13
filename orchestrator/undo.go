@@ -33,27 +33,43 @@ func (o *Orchestrator) createSnapshot(plan *RefactoringPlan, snapshotDir string)
 }
 
 func RestoreSnapshot(snapshotDir string) (int, error) {
+	absSnapDir, err := filepath.Abs(snapshotDir)
+	if err != nil {
+		absSnapDir = snapshotDir
+	}
 	count := 0
-	err := filepath.Walk(snapshotDir, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(absSnapDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if info.IsDir() {
 			return nil
 		}
-		rel, err := filepath.Rel(snapshotDir, path)
-		if err != nil {
-			return err
+		rel, rerr := filepath.Rel(absSnapDir, path)
+		if rerr != nil {
+			return rerr
 		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("read snapshot %s: %w", path, err)
+		// When the snapshot was created from an absolute file path the
+		// snapshot entry lives at <snapDir>/<abs-path-without-leading-slash>.
+		// filepath.Rel gives us back that path without the leading slash.
+		// Reconstruct the absolute destination by prepending the separator.
+		dest := rel
+		reconstructed := string(filepath.Separator) + rel
+		if filepath.IsAbs(reconstructed) {
+			// The reconstructed path is a valid absolute path (on Unix, all
+			// paths starting with "/" satisfy this). Use it so that files
+			// snapshotted by absolute path are restored to the right place.
+			dest = reconstructed
 		}
-		if err := os.MkdirAll(filepath.Dir(rel), 0755); err != nil {
-			return err
+		data, rerr := os.ReadFile(path)
+		if rerr != nil {
+			return fmt.Errorf("read snapshot %s: %w", path, rerr)
 		}
-		if err := os.WriteFile(rel, data, 0644); err != nil {
-			return fmt.Errorf("restore %s: %w", rel, err)
+		if merr := os.MkdirAll(filepath.Dir(dest), 0755); merr != nil {
+			return merr
+		}
+		if werr := os.WriteFile(dest, data, 0644); werr != nil {
+			return fmt.Errorf("restore %s: %w", dest, werr)
 		}
 		count++
 		return nil

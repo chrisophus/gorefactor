@@ -2,7 +2,9 @@ package orchestrator
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -53,48 +55,199 @@ func (o *Orchestrator) ExecutePlanDryRun(planName string) (*DryRunResult, error)
 	return result, nil
 }
 
-// dryRunOperation simulates what a single operation would do
+// dryRunOperation simulates what a single operation would do by running the
+// transformation against in-memory copies of all affected files and computing
+// per-file diffs. The original files are never modified.
 func (o *Orchestrator) dryRunOperation(operation *RefactoringOperation) *DryRunOperationResult {
 	opResult := &DryRunOperationResult{
 		Operation: operation,
 		Changes:   make([]*FileDiff, 0),
 	}
 
-	// Read the file contents for simulation
-	content, err := os.ReadFile(operation.File)
+	diffs, err := o.simulateOperationChange(operation)
 	if err != nil {
 		opResult.Success = false
-		opResult.Error = fmt.Sprintf("failed to read file: %v", err)
+		opResult.Error = err.Error()
 		return opResult
 	}
 
-	oldCode := string(content)
-
-	// Simulate the operation (this would need to be customized per operation type)
-	// For now, we'll just record that the file would be changed
-	newCode, changed := o.simulateOperationChange(operation, oldCode)
-
-	if changed {
-		opResult.Changes = append(opResult.Changes, &FileDiff{
-			File:    operation.File,
-			OldCode: oldCode,
-			NewCode: newCode,
-			Summary: fmt.Sprintf("Operation: %s", operation.Type),
-		})
-		opResult.Success = true
-	} else {
+	if len(diffs) == 0 {
 		opResult.Success = true
 		opResult.Error = "No changes would be made"
+		return opResult
 	}
 
+	opResult.Changes = diffs
+	opResult.Success = true
 	return opResult
 }
 
-// simulateOperationChange simulates the change an operation would make
-func (o *Orchestrator) simulateOperationChange(operation *RefactoringOperation, oldCode string) (string, bool) {
-	// This is a placeholder; actual implementation would depend on operation type
-	// For now, we'll just note that changes would occur
-	return oldCode, true
+// simulateOperationChange runs an operation's transformation against temporary
+// copies of the affected files and returns per-file diffs without writing back
+// to the originals. It returns an error if the operation itself would fail.
+func (o *Orchestrator) simulateOperationChange(operation *RefactoringOperation) ([]*FileDiff, error) {
+	// Collect the set of files this operation may touch so we can snapshot them.
+	affected := dryRunAffectedFiles(operation)
+
+	// Snapshot the pre-operation content for every file that exists.
+	before := make(map[string]string, len(affected))
+	for _, f := range affected {
+		b, err := os.ReadFile(f)
+		if err == nil {
+			before[f] = string(b)
+		}
+	}
+	if len(before) == 0 && operation.File != "" {
+		// Source file does not exist — cannot simulate.
+		return nil, fmt.Errorf("source file %s not found", operation.File)
+	}
+
+	// Build a sandboxed copy: rewrite the operation's file references to temp
+	// paths so the real orchestrator runs in a throw-away directory.
+	tempDir, err := os.MkdirTemp("", "gorefactor-dryrun-*")
+	if err != nil {
+		return nil, fmt.Errorf("dry-run: create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Map real path → temp path.
+	pathMap := make(map[string]string, len(before))
+	for realPath, content := range before {
+		// Preserve the base name so package-clause detection works.
+		tmpFile := filepath.Join(tempDir, filepath.Base(realPath))
+		// Disambiguate when two files share a basename.
+		for i := 1; ; i++ {
+			if _, exists := pathMap[tmpFile]; !exists {
+				break
+			}
+			tmpFile = filepath.Join(tempDir, fmt.Sprintf("%d_%s", i, filepath.Base(realPath)))
+		}
+		if err := os.WriteFile(tmpFile, []byte(content), 0600); err != nil {
+			return nil, fmt.Errorf("dry-run: write temp file: %w", err)
+		}
+		pathMap[realPath] = tmpFile
+	}
+
+	// Clone the operation, rewriting all file references to temp paths.
+	cloned := cloneOperationWithPaths(operation, pathMap)
+
+	// Execute the cloned operation using a fresh, snapshot-less orchestrator.
+	inner := NewOrchestrator()
+	inner.SkipSnapshot = true
+	execResult, execErr := inner.ExecuteOperations([]*RefactoringOperation{cloned})
+	if execErr != nil {
+		return nil, fmt.Errorf("dry-run execution failed: %w", execErr)
+	}
+	if execResult != nil && !execResult.Success && len(execResult.Errors) > 0 {
+		return nil, fmt.Errorf("dry-run execution failed: %s", strings.Join(execResult.Errors, "; "))
+	}
+
+	// Compare temp files to the original snapshots to produce per-file diffs.
+	var diffs []*FileDiff
+	for realPath, tmpPath := range pathMap {
+		newContent, err := os.ReadFile(tmpPath)
+		if err != nil {
+			// Temp file may have been deleted (e.g. source removed during move).
+			newContent = nil
+		}
+		oldContent := before[realPath]
+		newStr := string(newContent)
+		if oldContent == newStr {
+			continue // no change for this file
+		}
+		diffs = append(diffs, &FileDiff{
+			File:    realPath,
+			OldCode: oldContent,
+			NewCode: newStr,
+			Summary: fmt.Sprintf("Operation: %s", operation.Type),
+		})
+	}
+
+	// Also capture files created by the operation (e.g. move destination).
+	if newFile, ok := operation.Parameters["newFile"].(string); ok && newFile != "" {
+		if tmpNewFile, ok := pathMap[newFile]; !ok {
+			// Destination was not in our snapshot (new file); look in temp dir.
+			tmpCreated := filepath.Join(tempDir, filepath.Base(newFile))
+			if content, err := os.ReadFile(tmpCreated); err == nil {
+				diffs = append(diffs, &FileDiff{
+					File:    newFile,
+					OldCode: "",
+					NewCode: string(content),
+					Summary: fmt.Sprintf("Created by %s", operation.Type),
+				})
+			}
+		} else {
+			// Already captured above via pathMap; ensure we didn't miss it.
+			_ = tmpNewFile
+		}
+	}
+
+	return diffs, nil
+}
+
+// dryRunAffectedFiles returns all files an operation may read or write,
+// including the destination file for move operations.
+func dryRunAffectedFiles(op *RefactoringOperation) []string {
+	seen := map[string]bool{}
+	var files []string
+	add := func(f string) {
+		if f != "" && !seen[f] {
+			seen[f] = true
+			files = append(files, f)
+		}
+	}
+	add(op.File)
+	if op.Parameters != nil {
+		if nf, ok := op.Parameters["newFile"].(string); ok {
+			add(nf)
+		}
+	}
+	return files
+}
+
+// cloneOperationWithPaths returns a shallow copy of op with all file paths
+// rewritten according to pathMap (real path → temp path).
+func cloneOperationWithPaths(op *RefactoringOperation, pathMap map[string]string) *RefactoringOperation {
+	remap := func(p string) string {
+		if tmp, ok := pathMap[p]; ok {
+			return tmp
+		}
+		return p
+	}
+
+	cloned := *op
+	cloned.File = remap(op.File)
+
+	if op.Parameters != nil {
+		newParams := make(map[string]interface{}, len(op.Parameters))
+		for k, v := range op.Parameters {
+			if k == "newFile" {
+				if s, ok := v.(string); ok {
+					newParams[k] = remap(s)
+					continue
+				}
+			}
+			newParams[k] = v
+		}
+		cloned.Parameters = newParams
+	}
+	return &cloned
+}
+
+// copyFileForDryRun copies src to dst; used when we need an exact replica.
+func copyFileForDryRun(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, in)
+	return err
 }
 
 // generateDryRunSummary creates a human-readable summary of what would change

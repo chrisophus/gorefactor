@@ -62,18 +62,10 @@ func addTestCommand(args []string) error {
 	base := strings.TrimSuffix(filepath.Base(file), ".go")
 	testFile := filepath.Join(filepath.Dir(file), base+"_test.go")
 
-	// Verify the scaffold itself parses before writing.
-	if _, parseErr := goparser.ParseFile(token.NewFileSet(), "test.go", scaffold, 0); parseErr != nil {
-		return m.fail(parseErrorf("generated scaffold does not parse: %v", parseErr))
-	}
-
 	var newContent string
 	if _, statErr := os.Stat(testFile); os.IsNotExist(statErr) {
 		// Create new test file.
 		header := fmt.Sprintf("package %s\n\nimport \"testing\"\n\n", pkg.Name)
-		if needsTarget(scaffold) {
-			header = fmt.Sprintf("package %s\n\nimport (\n\t\"testing\"\n)\n\n", pkg.Name)
-		}
 		newContent = header + scaffold
 	} else {
 		// Append to existing test file.
@@ -85,6 +77,11 @@ func addTestCommand(args []string) error {
 			return m.fail(notFoundErrorf("test %s already exists in %s", testFuncName, testFile))
 		}
 		newContent = strings.TrimRight(string(existing), "\n") + "\n\n" + scaffold
+	}
+
+	// Verify the full content parses before writing.
+	if _, parseErr := goparser.ParseFile(token.NewFileSet(), testFile, newContent, 0); parseErr != nil {
+		return m.fail(parseErrorf("generated test does not parse: %v", parseErr))
 	}
 
 	m.file = testFile
@@ -158,11 +155,31 @@ func buildTestScaffold(pkg *packages.Package, fn *ast.FuncDecl, recv, target str
 
 	var buf bytes.Buffer
 
+	// reserved names that cannot be param field names in the test struct.
+	reserved := map[string]bool{"name": true, "wantErr": true}
+	for i, r := range results {
+		_ = r
+		wn := fmt.Sprintf("want%d", i+1)
+		if i == 0 && len(results) <= 2 {
+			wn = "want"
+		}
+		reserved[wn] = true
+	}
+	// Map param names to safe struct field names.
+	paramFields := make([]string, len(params))
+	for i, p := range params {
+		fn := p.name
+		if reserved[fn] {
+			fn = "in" + strings.ToUpper(p.name[:1]) + p.name[1:]
+		}
+		paramFields[i] = fn
+	}
+
 	fmt.Fprintf(&buf, "func %s(t *testing.T) {\n", testName)
 	fmt.Fprintf(&buf, "\tcases := []struct {\n")
 	fmt.Fprintf(&buf, "\t\tname string\n")
-	for _, p := range params {
-		fmt.Fprintf(&buf, "\t\t%s %s\n", p.name, p.typStr)
+	for i, p := range params {
+		fmt.Fprintf(&buf, "\t\t%s %s\n", paramFields[i], p.typStr)
 	}
 	if len(results) > 0 {
 		// Only include non-error want fields.
@@ -186,8 +203,8 @@ func buildTestScaffold(pkg *packages.Package, fn *ast.FuncDecl, recv, target str
 
 	// Build the call expression.
 	callArgs := make([]string, len(params))
-	for i, p := range params {
-		callArgs[i] = "tc." + p.name
+	for i := range params {
+		callArgs[i] = "tc." + paramFields[i]
 	}
 	callExpr := fn.Name.Name + "(" + strings.Join(callArgs, ", ") + ")"
 	if recv != "" {

@@ -194,6 +194,23 @@ func runGate(dir string) (bool, string) {
 	return true, ""
 }
 
+// runInWithStdin runs a command with the given string piped to stdin.
+func runInWithStdin(dir, stdin, name string, args ...string) (string, error) {
+	c := exec.Command(name, args...)
+	c.Dir = dir
+	env := append(os.Environ(), "GOTOOLCHAIN=auto")
+	if v := os.Getenv("GOTMPDIR"); v != "" {
+		env = append(env, "GOTMPDIR="+v)
+	}
+	if v := os.Getenv("GOCACHE"); v != "" {
+		env = append(env, "GOCACHE="+v)
+	}
+	c.Env = env
+	c.Stdin = strings.NewReader(stdin)
+	b, err := c.CombinedOutput()
+	return trim(string(b), 1500), err
+}
+
 func runIn(dir, name string, args ...string) (string, error) {
 	c := exec.Command(name, args...)
 	c.Dir = dir
@@ -244,8 +261,15 @@ func indent(s string) string {
 
 func trim(s string, max int) string {
 	s = strings.TrimSpace(s)
-	if len(s) > max {
+	if len(s) <= max {
+		return s
+	}
+	// Head+tail: preserve first error context (head) and final state (tail).
+	head := max * 2 / 3
+	tail := max - head - 30
+	if tail < 60 {
 		return s[:max] + "\n…(truncated)"
 	}
-	return s
+	omitted := len(s) - head - tail
+	return s[:head] + fmt.Sprintf("\n…(%d bytes omitted)…\n", omitted) + s[len(s)-tail:]
 }

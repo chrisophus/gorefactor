@@ -12,6 +12,14 @@ func toolCatalog() []toolDef {
 			obj(map[string]any{"file": strProp("path")}, "file")),
 		tool("find_references", "Lines mentioning a symbol across the repo.",
 			obj(map[string]any{"symbol": strProp("identifier")}, "symbol")),
+		tool("inspect_file", "One-page file summary: declarations, sizes, lint hints, and extraction candidates.",
+			obj(map[string]any{"file": strProp("path")}, "file")),
+		tool("skeleton", "Show a file with function bodies replaced by stub comments — fast structural overview.",
+			obj(map[string]any{"file": strProp("path")}, "file")),
+		tool("review_changes", "Per-function quality regression report vs a git ref (line growth, complexity, nesting).",
+			obj(map[string]any{"ref": strProp("git ref to compare against, default HEAD")}, )),
+		tool("lint_path", "Run gorefactor lint on a path and return findings with autofixCmd hints.",
+			obj(map[string]any{"path": strProp("directory or file to lint, default '.'")}, )),
 
 		// mutation
 		tool("extract_method", "Extract lines into a new function. Get line numbers via list_symbols+read_excerpt first.",
@@ -55,6 +63,17 @@ func toolCatalog() []toolDef {
 		tool("remove_code_block", "Remove a block matching an exact pattern.",
 			obj(map[string]any{"file": strProp("path"), "code_pattern": strProp("exact block")},
 				"file", "code_pattern")),
+		tool("split_file", "Auto-split an oversized file by grouping related declarations into sibling files.",
+			obj(map[string]any{"file": strProp("path to the oversized file")}, "file")),
+		tool("wrap_errors", "Rewrite bare 'return err' statements inside an 'if err != nil' block to use fmt.Errorf wrapping.",
+			obj(map[string]any{"file": strProp("path"), "function": strProp("enclosing function name")},
+				"file", "function")),
+		tool("set_doc", "Set or replace the godoc comment on a top-level declaration.",
+			obj(map[string]any{
+				"file":        strProp("path"),
+				"declaration": strProp("name of the func/type/var/const"),
+				"doc":         strProp("doc comment text (the // prefix is added automatically)"),
+			}, "file", "declaration", "doc")),
 
 		// control
 		tool("report", "Return the answer for an analysis-only task and finish WITHOUT the build/test gate. Use for find-callers / find-uses / \"where is X\" questions.",

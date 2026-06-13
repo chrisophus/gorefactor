@@ -52,6 +52,55 @@ func senseFileSize(file string) string {
 	return trim(b.String(), 1000)
 }
 
+// senseInspect runs `gorefactor inspect <file>` for a one-page file summary.
+func senseInspect(file string) string {
+	if file == "" {
+		return "ERROR: 'file' required"
+	}
+	out, err := runIn(".", gorefactorBin(), "inspect", file)
+	if err != nil {
+		return "ERROR inspecting: " + trim(out, 300)
+	}
+	return trim(out, 2000)
+}
+
+// senseSkeleton runs `gorefactor skeleton <file>` showing bodies as stubs.
+func senseSkeleton(file string) string {
+	if file == "" {
+		return "ERROR: 'file' required"
+	}
+	out, err := runIn(".", gorefactorBin(), "skeleton", file)
+	if err != nil {
+		return "ERROR: " + trim(out, 300)
+	}
+	return trim(out, 3000)
+}
+
+// senseReview runs `gorefactor review [ref]` reporting quality regressions.
+func senseReview(ref string) string {
+	args := []string{"review"}
+	if ref != "" {
+		args = append(args, ref)
+	}
+	out, err := runIn(".", gorefactorBin(), args...)
+	if err != nil {
+		return "ERROR: " + trim(out, 300)
+	}
+	return trim(out, 2000)
+}
+
+// senseLint runs `gorefactor lint <path>` and returns formatted findings.
+func senseLint(path string) string {
+	if path == "" {
+		path = "."
+	}
+	out, err := runIn(".", gorefactorBin(), "lint", path)
+	if err != nil && strings.TrimSpace(out) == "" {
+		return "ERROR: " + err.Error()
+	}
+	return trim(out, 2000)
+}
+
 func senseFindRefs(symbol string) string {
 	if symbol == "" {
 		return "ERROR: 'symbol' required"

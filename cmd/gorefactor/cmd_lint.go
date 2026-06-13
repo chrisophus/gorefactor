@@ -283,7 +283,6 @@ func defaultLintRules() []LintRule {
 		complexityRule{},
 		longFunctionRule{},
 		deepNestingRule{},
-		missingGodocRule{},
 		errWrapRule{},
 		couplingRule{},
 		prematureAbstractionRule{},

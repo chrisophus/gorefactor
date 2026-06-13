@@ -13,7 +13,6 @@ func TestDefaultLintRules_ExpectedSet(t *testing.T) {
 		"complexity",
 		"long-function",
 		"deep-nesting",
-		"missing-godoc",
 		"error-not-wrapped",
 		"high-coupling",
 		"premature-abstraction",

@@ -71,6 +71,7 @@ func newSampleRepo(t *testing.T) string {
 		{"init", "-q"},
 		{"config", "user.email", "t@example.com"},
 		{"config", "user.name", "t"},
+		{"config", "commit.gpgsign", "false"},
 		{"add", "-A"},
 		{"commit", "-q", "-m", "init"},
 	} {

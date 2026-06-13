@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/chrisophus/gorefactor/analyzer"
@@ -141,11 +142,120 @@ type campaignMetrics struct {
 	Note             string `json:"note"`
 }
 
-// enumerateFindings runs gorefactor's deterministic sensors. v1:
-// file-size oversize (fully deterministic detection; no LLM, no
-// judgement). Future sensors (duplicates, extract candidates) append
-// here behind the same delegate-or-punt contract.
+// lintIssueJSON mirrors the JSON shape that `gorefactor lint --json` emits.
+type lintIssueJSON struct {
+	File       string `json:"file"`
+	Rule       string `json:"rule"`
+	Severity   string `json:"severity"`
+	Message    string `json:"message"`
+	AutoFix    string `json:"autofix,omitempty"`
+	AutoFixCmd string `json:"autofixCmd,omitempty"`
+}
+
+// enumerateFindings runs gorefactor's deterministic sensors and returns one
+// finding per fixable lint issue. When the gorefactor binary is available it
+// uses `lint --json` so every rule with an autofixCmd is autonomously fixable;
+// otherwise it falls back to the direct file-size check.
 func enumerateFindings(root string) []finding {
+	if findings, ok := enumerateFindingsViaLint(root); ok {
+		return findings
+	}
+	return enumerateFindingsFileSizeOnly(root)
+}
+
+// enumerateFindingsViaLint shells out to `gorefactor lint . --json`. Returns
+// (nil, false) if the binary is unavailable or returns no parseable output.
+func enumerateFindingsViaLint(root string) ([]finding, bool) {
+	out, err := runIn(root, gorefactorBin(), "lint", ".", "--json")
+	if err != nil && strings.TrimSpace(out) == "" {
+		return nil, false
+	}
+
+	var result struct {
+		Issues []lintIssueJSON `json:"issues"`
+	}
+	if jerr := json.Unmarshal([]byte(out), &result); jerr != nil {
+		return nil, false
+	}
+
+	// Group by (file, rule) so we create at most one finding per pair.
+	// This keeps finding count bounded and gives the agent one clear task.
+	type key struct{ file, rule string }
+	seen := map[key]bool{}
+	var findings []finding
+	for _, iss := range result.Issues {
+		if iss.AutoFixCmd == "" {
+			continue
+		}
+		k := key{iss.File, iss.Rule}
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		findings = append(findings, finding{
+			kind:   iss.Rule,
+			path:   iss.File,
+			detail: iss.Message,
+			spec:   specFromLintIssue(iss),
+		})
+	}
+	return findings, true
+}
+
+// specFromLintIssue builds an agent-friendly task description from one lint issue.
+func specFromLintIssue(iss lintIssueJSON) string {
+	parts := strings.Fields(iss.AutoFixCmd)
+	if len(parts) < 2 {
+		return fmt.Sprintf("Fix %s issue in %s: %s", iss.Rule, iss.File, iss.Message)
+	}
+	switch parts[1] {
+	case "split":
+		return fmt.Sprintf(
+			"File %s is oversized. Use split_file to split it into smaller sibling files "+
+				"in the same package (same directory, descriptive snake_case names). "+
+				"Move whole top-level declarations only — never change logic. "+
+				"If it cannot be done safely, punt.", iss.File)
+	case "wrap-errors":
+		fn := ""
+		if len(parts) >= 4 {
+			fn = parts[3]
+		}
+		return fmt.Sprintf(
+			"Function %s in %s has bare 'return err' statements that should be wrapped. "+
+				"Use wrap_errors to rewrite them with fmt.Errorf context. "+
+				"If the function does not exist or the wrapping would break logic, punt.", fn, iss.File)
+	case "set-doc":
+		decl := ""
+		if len(parts) >= 4 {
+			decl = parts[3]
+		}
+		return fmt.Sprintf(
+			"Declaration %s in %s is missing a godoc comment. "+
+				"Use set_doc to add a brief one-sentence documentation comment "+
+				"that describes what it does. Do not describe implementation details.", decl, iss.File)
+	case "recommend":
+		return fmt.Sprintf(
+			"File %s has extraction candidates: %s. "+
+				"Use inspect_file to find the most complex block, then use extract_method to extract it. "+
+				"If no safe extraction is possible, punt.", iss.File, iss.Message)
+	case "add-test":
+		fn := ""
+		if len(parts) >= 4 {
+			fn = parts[3]
+		}
+		return fmt.Sprintf(
+			"Function %s in %s has no test. "+
+				"Use insert_code with at_end in the corresponding _test.go file to add a "+
+				"table-driven test scaffold. If the file doesn't exist, create_file it first.", fn, iss.File)
+	default:
+		return fmt.Sprintf("Fix %s issue in %s: %s (hint: %s)",
+			iss.Rule, iss.File, iss.Message, iss.AutoFixCmd)
+	}
+}
+
+// enumerateFindingsFileSizeOnly is the fallback when the gorefactor binary is
+// not available. It only detects file-size overages via the Go analyzer API.
+func enumerateFindingsFileSizeOnly(root string) []finding {
 	var out []finding
 	for _, f := range goFiles(root) {
 		iss, err := analyzer.AnalyzeFileSize(f, campaignFileSizeLimit)

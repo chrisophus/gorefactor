@@ -39,7 +39,11 @@ func dispatchTool(call toolCall, cfg Config, gateFails *int) (string, toolStatus
 	case "finish":
 		ok, out := runGate(".")
 		if ok {
-			return "gate green", stSuccess
+			msg := "gate green"
+			if advisory := runLintAdvisory("."); advisory != "" {
+				msg += "\n" + advisory
+			}
+			return msg, stSuccess
 		}
 		*gateFails++
 		return "gate FAILED (not done). Fix and call finish again:\n" + trim(out, 1200), stContinue
@@ -47,7 +51,11 @@ func dispatchTool(call toolCall, cfg Config, gateFails *int) (string, toolStatus
 	case "run_gate":
 		ok, out := runGate(".")
 		if ok {
-			return "gate green", stContinue
+			msg := "gate green"
+			if advisory := runLintAdvisory("."); advisory != "" {
+				msg += "\n" + advisory
+			}
+			return msg, stContinue
 		}
 		return "gate red:\n" + trim(out, 1000), stContinue
 
@@ -63,6 +71,18 @@ func dispatchTool(call toolCall, cfg Config, gateFails *int) (string, toolStatus
 	case "find_references":
 		return senseFindRefs(str("symbol")), stContinue
 
+	case "inspect_file":
+		return senseInspect(str("file")), stContinue
+
+	case "skeleton":
+		return senseSkeleton(str("file")), stContinue
+
+	case "review_changes":
+		return senseReview(str("ref")), stContinue
+
+	case "lint_path":
+		return senseLint(str("path")), stContinue
+
 	case "extract_method":
 		intStr := func(k string) string {
 			if v, ok := a[k].(float64); ok {
@@ -72,6 +92,15 @@ func dispatchTool(call toolCall, cfg Config, gateFails *int) (string, toolStatus
 			return strings.TrimSpace(s)
 		}
 		return applyExtractMethod(str("file"), intStr("start_line"), intStr("end_line"), str("new_function_name")), stContinue
+
+	case "split_file":
+		return applySplitFile(str("file")), stContinue
+
+	case "wrap_errors":
+		return applyWrapErrors(str("file"), str("function")), stContinue
+
+	case "set_doc":
+		return applySetDoc(str("file"), str("declaration"), str("doc")), stContinue
 
 	case "rename_declaration", "replace_code", "insert_code",
 		"create_file", "move_function", "move_method", "delete_declaration", "remove_code_block":

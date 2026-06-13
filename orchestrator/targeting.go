@@ -186,10 +186,65 @@ func (o *Orchestrator) calculateSemanticScore(node ast.Node, target *TargetSpeci
 		scoreVariableNames(node, target) +
 		scoreFunctionCalls(node, target)
 }
+
+// ReceiverNone is the TargetSpecification.ReceiverType value that restricts
+// matching to plain functions (no receiver). It disambiguates a top-level
+// function from a method of the same name.
+const ReceiverNone = "-"
+
+// receiverTypeName returns the receiver type name of a method declaration
+// ("" for plain functions). Pointer receivers are reported without the '*';
+// generic receivers without their type arguments.
+func receiverTypeName(fn *ast.FuncDecl) string {
+	if fn.Recv == nil || len(fn.Recv.List) == 0 {
+		return ""
+	}
+	t := fn.Recv.List[0].Type
+	if star, ok := t.(*ast.StarExpr); ok {
+		t = star.X
+	}
+	switch e := t.(type) {
+	case *ast.Ident:
+		return e.Name
+	case *ast.IndexExpr:
+		if id, ok := e.X.(*ast.Ident); ok {
+			return id.Name
+		}
+	case *ast.IndexListExpr:
+		if id, ok := e.X.(*ast.Ident); ok {
+			return id.Name
+		}
+	}
+	return ""
+}
+
+// receiverMatches reports whether a function declaration satisfies the
+// receiverType constraint of a target specification. An empty constraint
+// matches anything; ReceiverNone matches only plain functions.
+func receiverMatches(fn *ast.FuncDecl, target *TargetSpecification) bool {
+	if target.ReceiverType == "" {
+		return true
+	}
+	recv := receiverTypeName(fn)
+	if target.ReceiverType == ReceiverNone {
+		return recv == ""
+	}
+	return recv == strings.TrimPrefix(target.ReceiverType, "*")
+}
+
 func (o *Orchestrator) matchFuncDecl(funcDecl *ast.FuncDecl, target *TargetSpecification, fset *token.FileSet, filePath string) (*TargetLocation, int) {
+	// receiverType is a hard constraint: when specified, declarations with a
+	// non-matching receiver are disqualified outright so that
+	// "Receiver:Method" style targets are unambiguous.
+	if !receiverMatches(funcDecl, target) {
+		return nil, 0
+	}
 	score := o.calculateSemanticScore(funcDecl, target, fset)
 	if score == 0 {
 		return nil, 0
+	}
+	if target.ReceiverType != "" && target.ReceiverType != ReceiverNone {
+		score += 10
 	}
 	loc := &TargetLocation{
 		File:      filePath,
@@ -197,13 +252,7 @@ func (o *Orchestrator) matchFuncDecl(funcDecl *ast.FuncDecl, target *TargetSpeci
 		EndLine:   fset.Position(funcDecl.End()).Line,
 		Function:  funcDecl.Name.Name,
 	}
-	if funcDecl.Recv != nil && len(funcDecl.Recv.List) > 0 {
-		if t, ok := funcDecl.Recv.List[0].Type.(*ast.StarExpr); ok {
-			if ident, ok := t.X.(*ast.Ident); ok {
-				loc.Method = ident.Name
-			}
-		}
-	}
+	loc.Method = receiverTypeName(funcDecl)
 	return loc, score
 }
 func (o *Orchestrator) matchGenDecl(genDecl *ast.GenDecl, target *TargetSpecification, fset *token.FileSet, filePath string) (*TargetLocation, int) {
@@ -232,32 +281,76 @@ func (o *Orchestrator) matchGenDecl(genDecl *ast.GenDecl, target *TargetSpecific
 	}
 	return bestMatch, bestScore
 }
+
+// semanticCandidate is one scored match found during semantic targeting.
+type semanticCandidate struct {
+	loc   *TargetLocation
+	score int
+	kind  string
+}
+
+func (c semanticCandidate) describe() string {
+	name := c.loc.Function
+	if name == "" {
+		name = "(declaration)"
+	}
+	if c.loc.Method != "" {
+		name = c.loc.Method + ":" + name
+	}
+	return fmt.Sprintf("%s %s (%s:%d)", c.kind, name, c.loc.File, c.loc.StartLine)
+}
+
 func (o *Orchestrator) findTargetBySemantics(target *TargetSpecification, filePath string) (*TargetLocation, error) {
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse file: %w", err)
 	}
-	var bestMatch *TargetLocation
-	var bestScore int
+	var candidates []semanticCandidate
 	ast.Inspect(node, func(n ast.Node) bool {
 		if n == nil {
 			return false
 		}
 		if funcDecl, ok := n.(*ast.FuncDecl); ok {
-			if m, s := o.matchFuncDecl(funcDecl, target, fset, filePath); s > bestScore {
-				bestMatch, bestScore = m, s
+			if m, s := o.matchFuncDecl(funcDecl, target, fset, filePath); s > 0 {
+				kind := "func"
+				if funcDecl.Recv != nil {
+					kind = "method"
+				}
+				candidates = append(candidates, semanticCandidate{loc: m, score: s, kind: kind})
 			}
 		}
 		if genDecl, ok := n.(*ast.GenDecl); ok {
-			if m, s := o.matchGenDecl(genDecl, target, fset, filePath); s > bestScore {
-				bestMatch, bestScore = m, s
+			if m, s := o.matchGenDecl(genDecl, target, fset, filePath); s > 0 {
+				candidates = append(candidates, semanticCandidate{loc: m, score: s, kind: "decl"})
 			}
 		}
 		return true
 	})
-	if bestMatch != nil && bestScore > 0 {
-		return bestMatch, nil
+	if len(candidates) == 0 {
+		return nil, fmt.Errorf("no suitable target found using semantic matching")
 	}
-	return nil, fmt.Errorf("no suitable target found using semantic matching")
+
+	best := candidates[0]
+	var tied []semanticCandidate
+	for _, c := range candidates {
+		switch {
+		case c.score > best.score:
+			best = c
+			tied = tied[:0]
+		case c.score == best.score && c.loc.StartLine != best.loc.StartLine:
+			tied = append(tied, c)
+		}
+	}
+	if len(tied) > 0 {
+		all := append([]semanticCandidate{best}, tied...)
+		var lines []string
+		for _, c := range all {
+			lines = append(lines, "  "+c.describe())
+		}
+		return nil, fmt.Errorf(
+			"ambiguous target: %d candidates tie with score %d:\n%s\ndisambiguate with receiverType (use %q for a plain function) or a more specific codePattern",
+			len(all), best.score, strings.Join(lines, "\n"), ReceiverNone)
+	}
+	return best.loc, nil
 }

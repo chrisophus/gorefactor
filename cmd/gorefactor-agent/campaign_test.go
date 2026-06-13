@@ -32,7 +32,8 @@ func newBigRepo(t *testing.T) string {
 	write("small.go", "package big\n\nfunc Small() int { return 1 }\n")
 	for _, args := range [][]string{
 		{"init", "-q"}, {"config", "user.email", "t@e.com"},
-		{"config", "user.name", "t"}, {"add", "-A"}, {"commit", "-q", "-m", "init"},
+		{"config", "user.name", "t"}, {"config", "commit.gpgsign", "false"},
+		{"add", "-A"}, {"commit", "-q", "-m", "init"},
 	} {
 		c := exec.Command("git", append([]string{"-C", dir}, args...)...)
 		if out, err := c.CombinedOutput(); err != nil {
@@ -113,7 +114,8 @@ func TestCampaign_NoFindingsIsClean(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "a.go"), []byte("package ok\n\nfunc A() {}\n"), 0o644)
 	for _, args := range [][]string{
 		{"init", "-q"}, {"config", "user.email", "t@e.com"},
-		{"config", "user.name", "t"}, {"add", "-A"}, {"commit", "-q", "-m", "i"},
+		{"config", "user.name", "t"}, {"config", "commit.gpgsign", "false"},
+		{"add", "-A"}, {"commit", "-q", "-m", "i"},
 	} {
 		exec.Command("git", append([]string{"-C", dir}, args...)...).Run()
 	}

@@ -281,6 +281,8 @@ func defaultLintRules() []LintRule {
 		fileSizeRule{},
 		extractableRule{},
 		complexityRule{},
+		longFunctionRule{},
+		deepNestingRule{},
 		errWrapRule{},
 		couplingRule{},
 		prematureAbstractionRule{},

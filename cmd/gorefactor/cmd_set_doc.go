@@ -1,0 +1,178 @@
+package main
+
+import (
+	"fmt"
+	"go/ast"
+	goparser "go/parser"
+	"go/token"
+	"os"
+	"strings"
+
+	"github.com/chrisophus/gorefactor/orchestrator"
+)
+
+var setDocFlags = mutFlagSpec(nil)
+
+// docCommentWidth is the soft wrap column for generated doc comments,
+// including the "// " prefix.
+const docCommentWidth = 100
+
+func init() {
+	registerCommand(Command{
+		Name:        "set-doc",
+		Description: "Set or replace the doc comment on a top-level declaration (func, method, type, const/var)",
+		Usage:       "set-doc <file> <Decl|Receiver:Method> [text|-] [--json] [--dry-run] [--gate]",
+		MinArgs:     2,
+		MaxArgs:     3,
+		Flags:       setDocFlags,
+		Run:         setDocCommand,
+	})
+}
+
+// setDocCommand sets the doc comment of any top-level declaration. The text
+// is taken as plain prose; it is wrapped at ~100 columns and prefixed with
+// the declaration name per Go doc convention when missing.
+func setDocCommand(args []string) error {
+	pos, flags := parseFlags(args, setDocFlags)
+	if len(pos) < 2 {
+		return usageErrorf("usage: set-doc <file> <Decl|Receiver:Method> [text] (else stdin)")
+	}
+	file := pos[0]
+	locator := pos[1]
+	m := &mutation{op: "set-doc", file: file}
+	m.setCommonFlags(flags)
+
+	text, err := readContentArg(pos, 2)
+	if err != nil {
+		return m.fail(err)
+	}
+	if strings.TrimSpace(text) == "" {
+		return m.fail(usageErrorf("set-doc requires non-empty text"))
+	}
+
+	src, err := os.ReadFile(file)
+	if err != nil {
+		return m.fail(err)
+	}
+	fset := token.NewFileSet()
+	node, err := goparser.ParseFile(fset, file, src, goparser.ParseComments)
+	if err != nil {
+		return m.fail(parseErrorf("failed to parse %s: %v", file, err))
+	}
+
+	decl, docName, err := findTopLevelDecl(node, locator)
+	if err != nil {
+		_, all, derr := fileDecls(file)
+		if derr != nil {
+			all = nil
+		}
+		return m.fail(notFoundError(
+			fmt.Sprintf("declaration %q not found in %s", locator, file),
+			locator, all))
+	}
+
+	declStart := fset.Position(decl.Pos()).Offset
+	replaceFrom := declStart
+	if doc := declDoc(decl); doc != nil {
+		replaceFrom = fset.Position(doc.Pos()).Offset
+	}
+	comment := formatDocComment(docName, text)
+
+	var out []byte
+	out = append(out, src[:replaceFrom]...)
+	out = append(out, []byte(comment)...)
+	out = append(out, src[declStart:]...)
+
+	if _, perr := goparser.ParseFile(token.NewFileSet(), file, out, 0); perr != nil {
+		return m.fail(parseErrorf("doc comment would produce a malformed file: %v", perr))
+	}
+
+	return m.run(func() (string, error) {
+		if err := os.WriteFile(file, out, 0644); err != nil {
+			return "", err
+		}
+		if err := orchestrator.FormatImports(file); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", file, err)
+		}
+		return fmt.Sprintf("Set doc comment on %s in %s", locator, file), nil
+	})
+}
+
+// findTopLevelDecl locates a top-level declaration by name. Functions are
+// matched as "Name", methods as "Receiver:Method", and GenDecls (type, var,
+// const) when any contained spec declares the name. docName is the name the
+// doc comment should start with (the method name for Receiver:Method).
+func findTopLevelDecl(node *ast.File, locator string) (decl ast.Decl, docName string, err error) {
+	recv, name := "", locator
+	if i := strings.Index(locator, ":"); i >= 0 {
+		recv, name = locator[:i], locator[i+1:]
+	}
+	for _, d := range node.Decls {
+		switch d := d.(type) {
+		case *ast.FuncDecl:
+			if d.Name.Name != name {
+				continue
+			}
+			declRecv := ""
+			if d.Recv != nil && len(d.Recv.List) > 0 {
+				declRecv = receiverTypeName(d.Recv.List[0].Type)
+			}
+			if declRecv == recv {
+				return d, name, nil
+			}
+		case *ast.GenDecl:
+			if recv != "" {
+				continue
+			}
+			for _, spec := range d.Specs {
+				switch s := spec.(type) {
+				case *ast.TypeSpec:
+					if s.Name.Name == name {
+						return d, name, nil
+					}
+				case *ast.ValueSpec:
+					for _, n := range s.Names {
+						if n.Name == name {
+							return d, name, nil
+						}
+					}
+				}
+			}
+		}
+	}
+	return nil, "", fmt.Errorf("declaration %q not found", locator)
+}
+
+// declDoc returns the doc comment group attached to a top-level declaration.
+func declDoc(decl ast.Decl) *ast.CommentGroup {
+	switch d := decl.(type) {
+	case *ast.FuncDecl:
+		return d.Doc
+	case *ast.GenDecl:
+		return d.Doc
+	}
+	return nil
+}
+
+// formatDocComment renders plain text as a `// ` comment block wrapped at
+// docCommentWidth columns. Per Go convention the comment starts with the
+// declaration name; it is prepended when missing.
+func formatDocComment(name, text string) string {
+	words := strings.Fields(text)
+	if len(words) == 0 || words[0] != name {
+		words = append([]string{name}, words...)
+	}
+	var b strings.Builder
+	line := "//"
+	for _, w := range words {
+		if len(line)+1+len(w) > docCommentWidth && line != "//" {
+			b.WriteString(line)
+			b.WriteString("\n")
+			line = "//"
+		}
+		line += " " + w
+	}
+	b.WriteString(line)
+	b.WriteString("\n")
+	return b.String()
+}

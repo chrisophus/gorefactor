@@ -105,7 +105,7 @@ func inlineCommand(args []string) error {
 	}
 
 	// Build per-file edit lists.
-	edits := map[string][]textEdit{}
+	edits := map[string][]inlineTextEdit{}
 	for _, s := range sites {
 		argTexts := make([]string, len(s.call.Args))
 		for i := range s.call.Args {
@@ -124,7 +124,7 @@ func inlineCommand(args []string) error {
 		} else {
 			start, end = s.stmtStart, s.stmtEnd
 		}
-		edits[s.file] = append(edits[s.file], textEdit{start: start, end: end, text: text})
+		edits[s.file] = append(edits[s.file], inlineTextEdit{start: start, end: end, text: text})
 	}
 
 	// Delete the declaration (including its doc comment).
@@ -136,7 +136,7 @@ func inlineCommand(args []string) error {
 	for delEnd < len(declSrc) && declSrc[delEnd] == '\n' {
 		delEnd++
 	}
-	edits[file] = append(edits[file], textEdit{start: delStart, end: delEnd, text: ""})
+	edits[file] = append(edits[file], inlineTextEdit{start: delStart, end: delEnd, text: ""})
 
 	// Apply edits in memory, parse-verify every file, then write.
 	results := map[string][]byte{}
@@ -145,7 +145,7 @@ func inlineCommand(args []string) error {
 		if err != nil {
 			return m.fail(err)
 		}
-		out, err := applyTextEdits(src, list)
+		out, err := applyInlineEdits(src, list)
 		if err != nil {
 			return m.fail(err)
 		}
@@ -168,13 +168,13 @@ func inlineCommand(args []string) error {
 	})
 }
 
-// textEdit is a byte-range replacement within one file.
-type textEdit struct {
+// inlineTextEdit is a byte-range replacement within one file (in-memory).
+type inlineTextEdit struct {
 	start, end int
 	text       string
 }
 
-func applyTextEdits(src []byte, edits []textEdit) ([]byte, error) {
+func applyInlineEdits(src []byte, edits []inlineTextEdit) ([]byte, error) {
 	sort.Slice(edits, func(i, j int) bool { return edits[i].start > edits[j].start })
 	out := src
 	last := -1

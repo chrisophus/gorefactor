@@ -24,14 +24,10 @@ func (r longFunctionRule) Run(ctx LintContext) []lintIssue {
 			if m.Lines < longFunctionThreshold {
 				continue
 			}
-			sev := "warning"
-			if m.Lines >= longFunctionThreshold*2 {
-				sev = "error"
-			}
 			out = append(out, lintIssue{
 				File:       f,
 				Rule:       "long-function",
-				Severity:   sev,
+				Severity:   "warning",
 				Message:    fmt.Sprintf("%s is %d lines (threshold %d, line %d) — consider extracting", m.Key(), m.Lines, longFunctionThreshold, m.Line),
 				AutoFixCmd: fmt.Sprintf("gorefactor recommend %s --function %s", f, m.Key()),
 			})

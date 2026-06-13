@@ -75,7 +75,7 @@ func TestLintRules_RuleFieldMatchesName(t *testing.T) {
 }
 
 func TestFixableRule_OnlyFileSizeAndDeadCode(t *testing.T) {
-	want := map[string]bool{"file-size": true, "dead-code": true}
+	want := map[string]bool{"file-size": true, "dead-code": true, "error-not-wrapped": true}
 	got := make(map[string]bool)
 	for _, r := range defaultLintRules() {
 		if _, ok := r.(FixableRule); ok {

@@ -1,6 +1,10 @@
 package main
 
 import (
+	"fmt"
+	"os/exec"
+	"strings"
+
 	"github.com/chrisophus/gorefactor/analyzer"
 )
 
@@ -16,13 +20,34 @@ func (r errWrapRule) Run(ctx LintContext) []lintIssue {
 			continue
 		}
 		for _, e := range issues {
+			autoFixCmd := fmt.Sprintf("wrap-errors %s %s", f, e.Function)
 			out = append(out, lintIssue{
-				File:     f,
-				Rule:     "error-not-wrapped",
-				Severity: "warning",
-				Message:  e.Message,
+				File:       f,
+				Rule:       "error-not-wrapped",
+				Severity:   "warning",
+				Message:    e.Message,
+				AutoFix:    "wrap-errors",
+				AutoFixCmd: autoFixCmd,
 			})
 		}
 	}
 	return out
+}
+
+// AutoFix implements FixableRule: runs the wrap-errors command for the issue.
+func (r errWrapRule) AutoFix(issue lintIssue, _ LintContext) error {
+	if issue.AutoFixCmd == "" {
+		return nil
+	}
+	parts := strings.Fields(issue.AutoFixCmd)
+	if len(parts) < 2 {
+		return fmt.Errorf("invalid autofixCmd: %q", issue.AutoFixCmd)
+	}
+	// parts[0] = "wrap-errors", rest = args for wrap-errors subcommand.
+	args := parts[1:]
+	cmd := exec.Command("gorefactor", append([]string{"wrap-errors"}, args...)...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("wrap-errors %v: %w\n%s", args, err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }

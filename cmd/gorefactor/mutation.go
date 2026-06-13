@@ -159,11 +159,17 @@ func (m *mutation) run(apply func() (string, error)) error {
 				createdOnly = append(createdOnly, f)
 			}
 		}
-		entry, jerr := orchestrator.RecordOperation(m.op, detail, beforeChanged, createdOnly)
-		if jerr != nil {
-			fmt.Fprintf(os.Stderr, "warning: journal write failed: %v\n", jerr)
+		if activeTxn != nil {
+			// Inside a transaction the txn command journals once for the
+			// whole batch; individual operations only feed the collector.
+			activeTxn.record(beforeChanged, createdOnly)
 		} else {
-			undoToken = entry.ID
+			entry, jerr := orchestrator.RecordOperation(m.op, detail, beforeChanged, createdOnly)
+			if jerr != nil {
+				fmt.Fprintf(os.Stderr, "warning: journal write failed: %v\n", jerr)
+			} else {
+				undoToken = entry.ID
+			}
 		}
 	}
 

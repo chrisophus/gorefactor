@@ -3,7 +3,10 @@ package orchestrator
 import (
 	"encoding/json"
 	"fmt"
+	"go/parser"
+	"go/token"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -151,9 +154,81 @@ func (o *Orchestrator) executeRemoveCodeBlock(operation *RefactoringOperation, r
 	return nil
 }
 
+// isCrossPackageMove returns true when the destination file is in a different
+// package than the source file. It checks by comparing absolute directory
+// paths; if either file cannot be stat'd or parsed the comparison falls back
+// to directory inequality only.
+func isCrossPackageMove(sourceFile, destFile string) bool {
+	srcAbs, err1 := filepath.Abs(filepath.Dir(sourceFile))
+	dstAbs, err2 := filepath.Abs(filepath.Dir(destFile))
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	if srcAbs == dstAbs {
+		return false // same directory → same package
+	}
+	// Different directories: check whether the destination package name
+	// differs from the source package name (a destination in a sibling
+	// directory that keeps the same package name is still a cross-pkg move).
+	srcPkg := filePackageName(sourceFile)
+	dstPkg := detectDestPackageName(destFile)
+	if srcPkg == "" || dstPkg == "" {
+		// Cannot determine package names — treat as cross-package when dirs differ.
+		return true
+	}
+	return srcPkg != dstPkg
+}
+
+// filePackageName returns the package name declared in a Go source file, or
+// empty string on error.
+func filePackageName(path string) string {
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, path, nil, parser.PackageClauseOnly)
+	if err != nil || node == nil || node.Name == nil {
+		return ""
+	}
+	return node.Name.Name
+}
+
+// detectDestPackageName returns the package name for a destination file.
+// If the file does not exist yet it falls back to sibling files in the
+// destination directory, then to a name derived from the directory.
+func detectDestPackageName(destFile string) string {
+	fset := token.NewFileSet()
+	if _, err := os.Stat(destFile); err == nil {
+		node, err := parser.ParseFile(fset, destFile, nil, parser.PackageClauseOnly)
+		if err == nil && node != nil && node.Name != nil {
+			return node.Name.Name
+		}
+	}
+	// Destination file does not exist yet — look at siblings.
+	dir := filepath.Dir(destFile)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".go" {
+			continue
+		}
+		full := filepath.Join(dir, e.Name())
+		node, err := parser.ParseFile(fset, full, nil, parser.PackageClauseOnly)
+		if err == nil && node != nil && node.Name != nil && node.Name.Name != "" {
+			return node.Name.Name
+		}
+	}
+	return sanitizePackageName(filepath.Base(dir))
+}
+
 func (o *Orchestrator) dispatchOperation(operation *RefactoringOperation, target *TargetLocation, result *OperationResult) error {
 	switch operation.Type {
 	case "move_method":
+		// Auto-detect cross-package move: when newFile is in a different package,
+		// route to the cross-package handler which rewrites call sites and imports.
+		newFile, _ := operation.Parameters["newFile"].(string)
+		if newFile != "" && isCrossPackageMove(operation.File, newFile) {
+			return o.executeCrossPackageMove(operation, target, result)
+		}
 		return o.executeMoveMethod(operation, target, result)
 	case "insert_code":
 		return o.executeInsertCode(operation, result)
@@ -172,12 +247,66 @@ func (o *Orchestrator) dispatchOperation(operation *RefactoringOperation, target
 	}
 }
 
+// executeCrossPackageMove routes a move_method / move_function operation to
+// the cross-package handler when the destination is in a different package.
+// It fails loudly (listing affected call sites) when the move would break
+// the build — unexported refs, unexported function with callers, import cycle.
+func (o *Orchestrator) executeCrossPackageMove(operation *RefactoringOperation, target *TargetLocation, result *OperationResult) error {
+	newFile, _ := operation.Parameters["newFile"].(string)
+	if newFile == "" {
+		return fmt.Errorf("newFile parameter is required for cross-package move")
+	}
+
+	// Determine function name from the resolved target or operation target spec.
+	funcName := ""
+	if target != nil && target.Function != "" {
+		funcName = target.Function
+	} else if target != nil && target.Method != "" {
+		funcName = target.Method
+	} else if operation.Target != nil {
+		if operation.Target.FunctionName != "" {
+			funcName = operation.Target.FunctionName
+		} else if operation.Target.MethodName != "" {
+			funcName = operation.Target.MethodName
+		}
+	}
+	if funcName == "" {
+		return fmt.Errorf("cross-package move: cannot determine function name from target (set functionName or methodName in the target spec)")
+	}
+
+	h := NewCrossPackageOperationHandler()
+	if err := h.MoveAcrossPackages(operation.File, newFile, funcName); err != nil {
+		// MoveAcrossPackages already produces a detailed error message with
+		// the call-site list when callers would break.
+		return fmt.Errorf("cross-package move of %s from %s to %s failed: %w", funcName, operation.File, newFile, err)
+	}
+
+	result.Changes = append(result.Changes, &CodeChange{
+		Type:        "move_method",
+		File:        operation.File,
+		Description: fmt.Sprintf("Moved %s to %s (cross-package)", funcName, newFile),
+	})
+	result.Changes = append(result.Changes, &CodeChange{
+		Type:        "move_method",
+		File:        newFile,
+		Description: fmt.Sprintf("Added %s from %s (cross-package)", funcName, operation.File),
+	})
+	return nil
+}
+
 func (o *Orchestrator) executeOperation(operation *RefactoringOperation) *OperationResult {
 	result := &OperationResult{
 		Operation: operation,
 		Changes:   make([]*CodeChange, 0),
 	}
-	if !o.checkConditions(operation.Conditions) {
+	conditionsMet, condErr := o.checkConditions(operation)
+	if condErr != nil {
+		result.Success = false
+		result.Applied = false
+		result.Error = fmt.Sprintf("condition evaluation failed: %v", condErr)
+		return result
+	}
+	if !conditionsMet {
 		result.Success = false
 		result.Applied = false
 		result.Message = "Conditions not met"

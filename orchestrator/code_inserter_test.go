@@ -240,4 +240,3 @@ func TestCodeInserter_InsertCode_AtEnd_ReportsRealFileLines(t *testing.T) {
 		t.Errorf("EndLine=%d < StartLine=%d", result.EndLine, result.StartLine)
 	}
 }
-

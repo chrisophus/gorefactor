@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
-	"sort"
-	"strings"
 )
 
 // DetectPatterns finds all architectural patterns and smells
@@ -192,70 +190,6 @@ func (pd *PatternDetector) detectLargeClass() []ArchitecturalPattern {
 		}
 	}
 
-	return patterns
-}
-
-// detectDataClumps finds typed parameter groups (>=3 params) that recur
-// across >=2 functions in the file -- a Fowler "data clump" that likely
-// wants to become its own struct. The signature is keyed on (name,type)
-// pairs so int/string params are never conflated, order-normalized so a
-// reordered group still matches, and emitted in deterministic order so
-// the output does not depend on map iteration.
-func (pd *PatternDetector) detectDataClumps() []ArchitecturalPattern {
-	type clump struct {
-		display string   // human-readable "name type, name type"
-		params  []string // affected param names (first occurrence order)
-		count   int
-	}
-	clumps := make(map[string]*clump)
-
-	for _, decl := range pd.file.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Type.Params == nil {
-			continue
-		}
-		var pairs, names []string
-		for _, field := range fn.Type.Params.List {
-			t := paramTypeString(field.Type)
-			for _, name := range field.Names {
-				pairs = append(pairs, name.Name+" "+t)
-				names = append(names, name.Name)
-			}
-		}
-		if len(pairs) < 3 {
-			continue
-		}
-		key := append([]string(nil), pairs...)
-		sort.Strings(key)
-		sig := strings.Join(key, ", ")
-		c := clumps[sig]
-		if c == nil {
-			c = &clump{display: strings.Join(pairs, ", "), params: names}
-			clumps[sig] = c
-		}
-		c.count++
-	}
-
-	var sigs []string
-	for sig, c := range clumps {
-		if c.count >= 2 {
-			sigs = append(sigs, sig)
-		}
-	}
-	sort.Strings(sigs)
-
-	var patterns []ArchitecturalPattern
-	for _, sig := range sigs {
-		c := clumps[sig]
-		patterns = append(patterns, ArchitecturalPattern{
-			Name:        "Data Clumps",
-			Type:        "smell",
-			Severity:    "low",
-			Description: fmt.Sprintf("Parameter group [%s] appears in %d functions; consider creating a struct", c.display, c.count),
-			Affected:    c.params,
-			Suggestion:  "Create a struct grouping these related fields, use it in function signatures",
-		})
-	}
 	return patterns
 }
 

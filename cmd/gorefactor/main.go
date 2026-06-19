@@ -1,9 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
+	"github.com/chrisophus/gorefactor/orchestrator"
+	"github.com/chrisophus/gorefactor/parser"
 	"github.com/chrisophus/gorefactor/version"
 )
 
@@ -71,6 +74,63 @@ func runMain(argv []string) int {
 		return exitCodeFor(err)
 	}
 	return exitOK
+}
+func generateTemplates(args []string) error {
+	if len(args) < 1 {
+		return usageErrorf("missing output directory")
+	}
+
+	outputDir := args[0]
+
+	tg := orchestrator.NewTemplateGenerator()
+
+	if err := tg.GenerateAllTemplates(outputDir); err != nil {
+		return fmt.Errorf("failed to generate templates: %w", err)
+	}
+
+	fmt.Printf("Templates generated successfully in: %s\n", outputDir)
+	fmt.Println("\nAvailable templates:")
+	tg.PrintTemplateHelp()
+
+	return nil
+}
+
+func listFunctions(args []string) error {
+	if len(args) < 1 {
+		return usageErrorf("missing file path")
+	}
+
+	info, err := parser.ParseFile(args[0])
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Functions:")
+	for _, fn := range info.Functions {
+		fmt.Printf("  %s (lines %d-%d, %d lines)\n", fn.Name, fn.StartLine, fn.EndLine, fn.EndLine-fn.StartLine+1)
+	}
+
+	fmt.Println("\nMethods:")
+	for _, m := range info.Methods {
+		fmt.Printf("  %s.%s (lines %d-%d, %d lines)\n", m.Receiver, m.Name, m.StartLine, m.EndLine, m.EndLine-m.StartLine+1)
+	}
+
+	return nil
+}
+
+func parseFile(args []string) error {
+	if len(args) < 1 {
+		return usageErrorf("missing file path")
+	}
+
+	info, err := parser.ParseFile(args[0])
+	if err != nil {
+		return err
+	}
+
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(info)
 }
 
 // Output as JSON

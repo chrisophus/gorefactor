@@ -174,3 +174,18 @@ func fileLineCount(filePath string) (int, error) {
 	}
 	return n, scanner.Err()
 }
+func (g splitGroup) totalLines() int {
+	n := 0
+	for _, d := range g.decls {
+		n += d.lines()
+	}
+	return n
+}
+
+func (d splitDecl) targetName() string {
+	if d.isMethod {
+		return d.receiver + ":" + d.name
+	}
+	return d.name
+}
+func (d splitDecl) lines() int { return d.endLine - d.startLine + 1 }

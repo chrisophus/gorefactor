@@ -124,30 +124,6 @@ type txnResult struct {
 
 // deleted by a later op
 
-// Commit: one journal entry for the whole batch.
-
-// txnFail renders a failed transaction for --json consumers and returns the
-// error (with its semantic exit code) unchanged.
-func txnFail(jsonOut bool, ops []txnOpResult, collector *txnCollector, err error) error {
-	if jsonOut {
-		res := txnResult{Success: false, Operation: "txn", Ops: ops, Error: err.Error()}
-		if collector != nil {
-			res.FilesChanged = nil // everything was rolled back
-		}
-		emitJSON(res)
-	}
-	return err
-}
-
-func txnCommandList() []string {
-	var names []string
-	for n := range txnAllowedCommands {
-		names = append(names, n)
-	}
-	sort.Strings(names)
-	return names
-}
-
 // readTxnScript reads the script from the positional file argument or stdin.
 func readTxnScript(pos []string) (string, error) {
 	if len(pos) >= 1 && pos[0] != "-" {

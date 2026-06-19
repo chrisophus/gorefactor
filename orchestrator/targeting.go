@@ -210,3 +210,14 @@ type semanticCandidate struct {
 	score int
 	kind  string
 }
+
+func (c semanticCandidate) describe() string {
+	name := c.loc.Function
+	if name == "" {
+		name = "(declaration)"
+	}
+	if c.loc.Method != "" {
+		name = c.loc.Method + ":" + name
+	}
+	return fmt.Sprintf("%s %s (%s:%d)", c.kind, name, c.loc.File, c.loc.StartLine)
+}

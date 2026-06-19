@@ -163,6 +163,47 @@ func recvPrefix(recv string) string {
 	}
 	return recv + "."
 }
+func findPackageDepsCommand(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: find-package-deps <dir> [--json]")
+	}
+	dir := args[0]
+	jsonOut := false
+	for i := 1; i < len(args); i++ {
+		if args[i] == "--json" {
+			jsonOut = true
+		}
+	}
+
+	graph, err := analyzer.NewPackageGraph(dir)
+	if err != nil {
+		return fmt.Errorf("failed to build dependency graph: %w", err)
+	}
+
+	if jsonOut {
+
+		result := map[string]interface{}{
+			"packages": graph.AllPackages(),
+			"summary":  graph.Summary(),
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(result)
+	}
+
+	fmt.Println(graph.Summary())
+	fmt.Println(graph.PrintGraph())
+
+	cycles := graph.HasCircularDependencies()
+	if len(cycles) > 0 {
+		fmt.Println("\n⚠️  Circular dependencies detected:")
+		for i, cycle := range cycles {
+			fmt.Printf("  Cycle %d: %v\n", i+1, cycle)
+		}
+	}
+
+	return nil
+}
 
 // Output all packages and their imports as JSON
 

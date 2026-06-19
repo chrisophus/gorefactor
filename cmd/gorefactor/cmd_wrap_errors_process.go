@@ -21,10 +21,6 @@ func processWrapErrorsInFunc(fset *token.FileSet, fn *ast.FuncDecl, file string,
 			continue
 		}
 		// Must be `if err != nil` with no init statement.
-		if ifStmt.Init != nil {
-			// Allow `if err := ...; err != nil` pattern — extract context from init.
-		}
-
 		if !isErrNotNil(ifStmt) {
 			continue
 		}

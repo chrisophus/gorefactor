@@ -182,7 +182,7 @@ func matchASTNodes(pat, node interface{}) bool {
 		return false
 	}
 	switch pv.Kind() {
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if pv.IsNil() || nv.IsNil() {
 			return pv.IsNil() == nv.IsNil()
 		}

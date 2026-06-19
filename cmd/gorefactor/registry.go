@@ -105,14 +105,7 @@ func parseFlags(args []string, spec map[string]bool) (positional []string, flags
 			positional = append(positional, a)
 			continue
 		}
-		name := a
-		value := ""
-		hasInlineValue := false
-		if eq := strings.Index(a, "="); eq >= 0 {
-			name = a[:eq]
-			value = a[eq+1:]
-			hasInlineValue = true
-		}
+		name, value, hasInlineValue := strings.Cut(a, "=")
 		takesValue, known := spec[name]
 		if !known {
 			continue // checkCommandArgs already rejected unknown flags

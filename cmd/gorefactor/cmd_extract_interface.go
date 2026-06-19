@@ -140,7 +140,7 @@ func extractInterfaceCommand(args []string) error {
 
 	// Build the interface declaration text.
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("\n// %s is implemented by %s.\ntype %s interface {\n", ifaceName, typeName, ifaceName))
+	fmt.Fprintf(&sb, "\n// %s is implemented by %s.\ntype %s interface {\n", ifaceName, typeName, ifaceName)
 	for _, me := range methods {
 		sb.WriteString(me.text)
 		sb.WriteString("\n")

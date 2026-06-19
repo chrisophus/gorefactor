@@ -82,7 +82,7 @@ func (o *Orchestrator) simulateOperationChange(operation *RefactoringOperation) 
 	if err != nil {
 		return nil, fmt.Errorf("dry-run: create temp dir: %w", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Map real path → temp path.
 	pathMap := make(map[string]string, len(before))

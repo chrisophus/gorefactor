@@ -1,7 +1,6 @@
 package analyzer
 
 import (
-	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -79,155 +78,7 @@ func fileBlockLogReturnIssues(
 	return out, nil
 }
 
-// PackageDuplicateBareSentinelIssues flags bare returns of the same errors.New sentinel.
-func PackageDuplicateBareSentinelIssues(files []string) ([]LogPropagationIssue, error) {
-	if len(files) == 0 {
-		return nil, nil
-	}
-	fset := token.NewFileSet()
-	var astFiles []*ast.File
-	var paths []string
-	for _, path := range files {
-		if strings.HasSuffix(path, "_test.go") {
-			continue
-		}
-		f, err := parser.ParseFile(fset, path, nil, 0)
-		if err != nil {
-			continue
-		}
-		astFiles = append(astFiles, f)
-		paths = append(paths, path)
-	}
-	if len(astFiles) == 0 {
-		return nil, nil
-	}
-	sentinels := collectErrorsNewSentinels(astFiles, paths)
-	bare := bareSentinelReturnPositions(astFiles, paths, fset, sentinels)
-	var out []LogPropagationIssue
-	for name, positions := range bare {
-		if len(positions) < 2 {
-			continue
-		}
-		msg := fmt.Sprintf(
-			"duplicate bare return of %s (%d sites in package); wrap each with fmt.Errorf(\"…: %%w\", %s)",
-			name, len(positions), name)
-		for _, pos := range positions {
-			out = append(out, LogPropagationIssue{
-				File: pos.Filename, Line: pos.Line, Column: pos.Column,
-				Rule: "duplicate-bare-sentinel", Message: msg,
-			})
-		}
-	}
-	return out, nil
-}
-
 type logReportFn func(pos token.Position, msg string)
-
-func walkIfStmtLogReturn(s *ast.IfStmt, logSeen bool, fset *token.FileSet, report logReportFn) bool {
-	thenSeen := walkStmtListLogReturn(s.Body.List, logSeen, fset, report)
-	if s.Else == nil {
-		return thenSeen
-	}
-	var elseSeen bool
-	switch e := s.Else.(type) {
-	case *ast.BlockStmt:
-		elseSeen = walkStmtListLogReturn(e.List, logSeen, fset, report)
-	case *ast.IfStmt:
-		elseSeen = walkIfStmtLogReturn(e, logSeen, fset, report)
-	}
-	return thenSeen || elseSeen
-}
-
-func walkStmtListLogReturn(list []ast.Stmt, logSeen bool, fset *token.FileSet, report logReportFn) bool {
-	for _, stmt := range list {
-		logSeen = walkOneStmtLogReturn(stmt, logSeen, fset, report)
-	}
-	return logSeen
-}
-
-func walkOneStmtLogReturn(stmt ast.Stmt, logSeen bool, fset *token.FileSet, report logReportFn) bool {
-	switch s := stmt.(type) {
-	case *ast.ExprStmt:
-		if call, ok := s.X.(*ast.CallExpr); ok && isStructuredLogWithErr(call) {
-			return true
-		}
-		return logSeen
-	case *ast.ReturnStmt:
-		if !logSeen {
-			return logSeen
-		}
-		switch {
-		case isBareReturnErr(s):
-			report(fset.Position(s.Pos()), "log then return err")
-		case isReturnFmtErrorfWrappingErr(s):
-			report(fset.Position(s.Pos()), "log then return fmt.Errorf wrapping err")
-		}
-		return logSeen
-	case *ast.IfStmt:
-		return walkIfStmtLogReturn(s, logSeen, fset, report)
-	case *ast.ForStmt:
-		return walkStmtListLogReturn(s.Body.List, logSeen, fset, report)
-	case *ast.RangeStmt:
-		return walkStmtListLogReturn(s.Body.List, logSeen, fset, report)
-	case *ast.SwitchStmt:
-		return walkCaseClausesLogReturn(s.Body, logSeen, fset, report)
-	case *ast.TypeSwitchStmt:
-		return walkCaseClausesLogReturn(s.Body, logSeen, fset, report)
-	case *ast.SelectStmt:
-		return walkCommClausesLogReturn(s.Body, logSeen, fset, report)
-	case *ast.BlockStmt:
-		return walkStmtListLogReturn(s.List, logSeen, fset, report)
-	case *ast.LabeledStmt:
-		return walkStmtListLogReturn([]ast.Stmt{s.Stmt}, logSeen, fset, report)
-	default:
-		return logSeen
-	}
-}
-
-func walkCaseClausesLogReturn(body *ast.BlockStmt, logSeen bool, fset *token.FileSet, report logReportFn) bool {
-	for _, c := range body.List {
-		cc, ok := c.(*ast.CaseClause)
-		if !ok {
-			continue
-		}
-		logSeen = walkStmtListLogReturn(cc.Body, logSeen, fset, report)
-	}
-	return logSeen
-}
-
-func walkCommClausesLogReturn(body *ast.BlockStmt, logSeen bool, fset *token.FileSet, report logReportFn) bool {
-	for _, c := range body.List {
-		cc, ok := c.(*ast.CommClause)
-		if !ok {
-			continue
-		}
-		logSeen = walkStmtListLogReturn(cc.Body, logSeen, fset, report)
-	}
-	return logSeen
-}
-
-func scanBlockWrapLogReturn(list []ast.Stmt, fset *token.FileSet, report logReportFn) {
-	for i := 0; i+2 < len(list); i++ {
-		if !isAssignErrFmtWrap(list[i]) || !isStructuredLogStmt(list[i+1]) {
-			continue
-		}
-		ret, ok := list[i+2].(*ast.ReturnStmt)
-		if !ok || !returnLastIsBareErr(ret) {
-			continue
-		}
-		report(fset.Position(ret.Pos()), "fmt.Errorf wrap then log then return err")
-	}
-}
-
-func scanBlockWrapBridgeLogReturn(list []ast.Stmt, fset *token.FileSet, report logReportFn) {
-	for i := 0; i+3 < len(list); i++ {
-		ret, ok := wrapBridgeLogReturnQuadAt(list, i)
-		if !ok {
-			continue
-		}
-		report(fset.Position(ret.Pos()), "fmt.Errorf wrap then bridge then log then return same value")
-	}
-}
 
 func wrapBridgeLogReturnQuadAt(list []ast.Stmt, i int) (*ast.ReturnStmt, bool) {
 	if i+3 >= len(list) || !isAssignErrFmtWrap(list[i]) {
@@ -279,36 +130,6 @@ func bareSentinelReturnPositions(files []*ast.File, paths []string, fset *token.
 		})
 	}
 	return bare
-}
-
-func collectErrorsNewSentinels(files []*ast.File, paths []string) map[string]bool {
-	out := make(map[string]bool)
-	for i, f := range files {
-		if strings.HasSuffix(paths[i], "_test.go") {
-			continue
-		}
-		for _, decl := range f.Decls {
-			gd, ok := decl.(*ast.GenDecl)
-			if !ok || gd.Tok != token.VAR {
-				continue
-			}
-			for _, spec := range gd.Specs {
-				vs, ok := spec.(*ast.ValueSpec)
-				if !ok || vs.Names == nil || len(vs.Values) == 0 {
-					continue
-				}
-				for j := range vs.Names {
-					if vs.Names[j].Name == "_" || j >= len(vs.Values) {
-						continue
-					}
-					if isErrorsNewCall(vs.Values[j]) {
-						out[vs.Names[j].Name] = true
-					}
-				}
-			}
-		}
-	}
-	return out
 }
 
 func isErrNotNil(e ast.Expr) bool {
@@ -392,18 +213,6 @@ func isStructuredLogStmt(s ast.Stmt) bool {
 	}
 	call, ok := es.X.(*ast.CallExpr)
 	return ok && isStructuredLogWithErr(call)
-}
-
-func containsIdentErr(e ast.Expr) bool {
-	found := false
-	ast.Inspect(e, func(n ast.Node) bool {
-		if id, ok := n.(*ast.Ident); ok && id.Name == "err" {
-			found = true
-			return false
-		}
-		return true
-	})
-	return found
 }
 
 func exprContainsNamedIdent(e ast.Expr, name string) bool {

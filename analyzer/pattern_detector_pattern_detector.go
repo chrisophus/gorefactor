@@ -1,0 +1,340 @@
+package analyzer
+
+import (
+	"fmt"
+	"go/ast"
+	"go/token"
+	"sort"
+	"strings"
+)
+
+// DetectPatterns finds all architectural patterns and smells
+func (pd *PatternDetector) DetectPatterns() []ArchitecturalPattern {
+	var patterns []ArchitecturalPattern
+	patterns = append(patterns, pd.detectGodObjects()...)
+	patterns = append(patterns, pd.detectExcessiveParameters()...)
+	patterns = append(patterns, pd.detectTooManyReturnValues()...)
+	patterns = append(patterns, pd.detectInterfaceSegregation()...)
+	patterns = append(patterns, pd.detectLargeClass()...)
+	patterns = append(patterns, pd.detectDataClumps()...)
+	patterns = append(patterns, pd.detectSwitchStatements()...)
+	return patterns
+}
+
+// detectGodObjects finds large structs that do too much: many fields *and*
+// non-trivial method count. A Go struct with many fields and zero methods is
+// a record/DTO (idiomatic in Go — cf. http.Request, tls.Config), not a god
+// object.
+func (pd *PatternDetector) detectGodObjects() []ArchitecturalPattern {
+	var patterns []ArchitecturalPattern
+	classMethods := make(map[string]int)
+	for _, decl := range pd.file.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv != nil && len(fn.Recv.List) > 0 {
+			classMethods[getReceiverTypeName(fn.Recv.List[0])]++
+		}
+	}
+
+	for _, decl := range pd.file.Decls {
+		if gd, ok := decl.(*ast.GenDecl); ok && gd.Tok == token.TYPE {
+			for _, spec := range gd.Specs {
+				if ts, ok := spec.(*ast.TypeSpec); ok {
+					if st, ok := ts.Type.(*ast.StructType); ok {
+						fieldCount := len(st.Fields.List)
+						methodCount := classMethods[ts.Name.Name]
+						if fieldCount > 25 && methodCount > 0 {
+							pattern := ArchitecturalPattern{
+								Name:        "God Object",
+								Type:        "smell",
+								Severity:    "medium",
+								Description: fmt.Sprintf("Struct %s has %d fields (>25) and %d methods; consider breaking into smaller types", ts.Name.Name, fieldCount, methodCount),
+								Affected:    []string{ts.Name.Name},
+								Suggestion:  "Extract fields into logical sub-types or group by responsibility",
+							}
+							patterns = append(patterns, pattern)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return patterns
+}
+
+// detectExcessiveParameters finds functions with too many parameters
+func (pd *PatternDetector) detectExcessiveParameters() []ArchitecturalPattern {
+	return pd.detectCountSmell(func(fn *ast.FuncDecl) (int, string, string) {
+		count := 0
+		if fn.Type.Params != nil {
+			count = len(fn.Type.Params.List)
+		}
+		if count > 7 {
+			return count, "Excessive Parameters", "Create a parameter struct to group related arguments"
+		}
+		return 0, "", ""
+	})
+}
+
+// detectTooManyReturnValues finds functions returning too many values
+func (pd *PatternDetector) detectTooManyReturnValues() []ArchitecturalPattern {
+	return pd.detectCountSmell(func(fn *ast.FuncDecl) (int, string, string) {
+		count := 0
+		if fn.Type.Results != nil {
+			count = len(fn.Type.Results.List)
+		}
+		if count > 3 {
+			return count, "Excessive Return Values", "Create a result struct to group return values"
+		}
+		return 0, "", ""
+	})
+}
+
+// detectCountSmell is a helper for detecting count-based smells
+func (pd *PatternDetector) detectCountSmell(checker func(*ast.FuncDecl) (int, string, string)) []ArchitecturalPattern {
+	var patterns []ArchitecturalPattern
+	for _, decl := range pd.file.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok {
+			count, name, suggestion := checker(fn)
+			if count > 0 {
+				pattern := ArchitecturalPattern{
+					Name:        name,
+					Type:        "smell",
+					Severity:    "low",
+					Description: fmt.Sprintf("Function %s has %d items (threshold exceeded); %s", fn.Name.Name, count, suggestion),
+					Affected:    []string{fn.Name.Name},
+					Suggestion:  suggestion,
+				}
+				patterns = append(patterns, pattern)
+			}
+		}
+	}
+	return patterns
+}
+
+// detectInterfaceSegregation finds large interfaces that might need splitting
+func (pd *PatternDetector) detectInterfaceSegregation() []ArchitecturalPattern {
+	var patterns []ArchitecturalPattern
+
+	for _, decl := range pd.file.Decls {
+		if gd, ok := decl.(*ast.GenDecl); ok && gd.Tok == token.TYPE {
+			for _, spec := range gd.Specs {
+				if ts, ok := spec.(*ast.TypeSpec); ok {
+					if it, ok := ts.Type.(*ast.InterfaceType); ok {
+						methodCount := 0
+						if it.Methods != nil {
+							methodCount = len(it.Methods.List)
+						}
+
+						if methodCount > 5 {
+							pattern := ArchitecturalPattern{
+								Name:        "Fat Interface",
+								Type:        "smell",
+								Severity:    "medium",
+								Description: fmt.Sprintf("Interface %s has %d methods (>5); idiomatic Go declares interfaces at the consumer side — move to the package that uses %s and narrow to just the methods that package needs", ts.Name.Name, methodCount, ts.Name.Name),
+								Affected:    []string{ts.Name.Name},
+								Suggestion:  "Relocate to consumer side and narrow, rather than splitting at the declaration site",
+							}
+							patterns = append(patterns, pattern)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return patterns
+}
+
+// detectLargeClass finds structs with substantial behavior — many methods, or
+// many total members AND at least one method. Pure-data structs (no methods)
+// are records and shouldn't trip this rule, regardless of field count.
+func (pd *PatternDetector) detectLargeClass() []ArchitecturalPattern {
+	var patterns []ArchitecturalPattern
+	classMethods := make(map[string]int)
+
+	// Count methods per receiver type
+	for _, decl := range pd.file.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv != nil {
+			if len(fn.Recv.List) > 0 {
+				recvType := getReceiverTypeName(fn.Recv.List[0])
+				classMethods[recvType]++
+			}
+		}
+	}
+
+	// Check structs: field count + method count
+	for _, decl := range pd.file.Decls {
+		if gd, ok := decl.(*ast.GenDecl); ok && gd.Tok == token.TYPE {
+			for _, spec := range gd.Specs {
+				if ts, ok := spec.(*ast.TypeSpec); ok {
+					if st, ok := ts.Type.(*ast.StructType); ok {
+						fieldCount := 0
+						if st.Fields != nil {
+							fieldCount = len(st.Fields.List)
+						}
+						methodCount := classMethods[ts.Name.Name]
+						totalMembers := fieldCount + methodCount
+
+						if methodCount > 20 || (totalMembers > 30 && methodCount > 0) {
+							pattern := ArchitecturalPattern{
+								Name:        "Large Class",
+								Type:        "smell",
+								Severity:    "medium",
+								Description: fmt.Sprintf("Type %s has %d fields + %d methods = %d total members; consider extraction", ts.Name.Name, fieldCount, methodCount, totalMembers),
+								Affected:    []string{ts.Name.Name},
+								Suggestion:  "Extract cohesive methods into a new type or extract related fields into a sub-type",
+							}
+							patterns = append(patterns, pattern)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return patterns
+}
+
+// detectDataClumps finds typed parameter groups (>=3 params) that recur
+// across >=2 functions in the file -- a Fowler "data clump" that likely
+// wants to become its own struct. The signature is keyed on (name,type)
+// pairs so int/string params are never conflated, order-normalized so a
+// reordered group still matches, and emitted in deterministic order so
+// the output does not depend on map iteration.
+func (pd *PatternDetector) detectDataClumps() []ArchitecturalPattern {
+	type clump struct {
+		display string   // human-readable "name type, name type"
+		params  []string // affected param names (first occurrence order)
+		count   int
+	}
+	clumps := make(map[string]*clump)
+
+	for _, decl := range pd.file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Type.Params == nil {
+			continue
+		}
+		var pairs, names []string
+		for _, field := range fn.Type.Params.List {
+			t := paramTypeString(field.Type)
+			for _, name := range field.Names {
+				pairs = append(pairs, name.Name+" "+t)
+				names = append(names, name.Name)
+			}
+		}
+		if len(pairs) < 3 {
+			continue
+		}
+		key := append([]string(nil), pairs...)
+		sort.Strings(key)
+		sig := strings.Join(key, ", ")
+		c := clumps[sig]
+		if c == nil {
+			c = &clump{display: strings.Join(pairs, ", "), params: names}
+			clumps[sig] = c
+		}
+		c.count++
+	}
+
+	var sigs []string
+	for sig, c := range clumps {
+		if c.count >= 2 {
+			sigs = append(sigs, sig)
+		}
+	}
+	sort.Strings(sigs)
+
+	var patterns []ArchitecturalPattern
+	for _, sig := range sigs {
+		c := clumps[sig]
+		patterns = append(patterns, ArchitecturalPattern{
+			Name:        "Data Clumps",
+			Type:        "smell",
+			Severity:    "low",
+			Description: fmt.Sprintf("Parameter group [%s] appears in %d functions; consider creating a struct", c.display, c.count),
+			Affected:    c.params,
+			Suggestion:  "Create a struct grouping these related fields, use it in function signatures",
+		})
+	}
+	return patterns
+}
+
+// detectSwitchStatements finds type-switch dispatch repeated across many
+// functions in the same file. Type switches over heterogeneous AST/visitor
+// types are idiomatic Go, so thresholds are kept high — only flag when a
+// single function does >1 type switch *and* at least 3 functions in the file
+// do type dispatch.
+func (pd *PatternDetector) detectSwitchStatements() []ArchitecturalPattern {
+	var patterns []ArchitecturalPattern
+	switchCount := make(map[string]int)
+
+	for _, decl := range pd.file.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok {
+			count := countSwitchStatements(fn.Body)
+			if count > 0 {
+				functionName := fn.Name.Name
+				if fn.Recv != nil && len(fn.Recv.List) > 0 {
+					recvType := getReceiverTypeName(fn.Recv.List[0])
+					functionName = recvType + ":" + functionName
+				}
+				switchCount[functionName] = count
+			}
+		}
+	}
+
+	if len(switchCount) < 3 {
+		return patterns
+	}
+	for funcName, count := range switchCount {
+		if count <= 1 {
+			continue
+		}
+		severity := "low"
+		if count > 2 {
+			severity = "medium"
+		}
+		pattern := ArchitecturalPattern{
+			Name:        "Type Switches",
+			Type:        "smell",
+			Severity:    severity,
+			Description: fmt.Sprintf("Function %s contains %d type switches; %d functions in this file do type dispatch", funcName, count, len(switchCount)),
+			Affected:    []string{funcName},
+			Suggestion:  "If types are user-owned (not go/ast etc), consider polymorphism. For closed AST-like type sets, type switches are idiomatic.",
+		}
+		patterns = append(patterns, pattern)
+	}
+
+	return patterns
+}
+
+// DetectCircularDependencies checks for potential circular imports within package
+func (pd *PatternDetector) DetectCircularDependencies() []ArchitecturalPattern {
+	// This would need cross-file analysis, placeholder for now
+	return []ArchitecturalPattern{}
+}
+
+// SuggestRefactorings converts detected patterns to refactoring suggestions
+func (pd *PatternDetector) SuggestRefactorings() []SuggestedPlan {
+	patterns := pd.DetectPatterns()
+	var suggestions []SuggestedPlan
+
+	for _, pattern := range patterns {
+		suggestion := SuggestedPlan{
+			Name:        fmt.Sprintf("Fix: %s", pattern.Name),
+			Description: pattern.Description,
+			Rationale:   pattern.Suggestion,
+			Complexity:  "medium",
+			SafetyRisk:  "medium",
+			Operations: []SuggestedOp{
+				{
+					Type:        "refactor_architecture",
+					Description: pattern.Suggestion,
+					Priority:    priorityFromSeverity(pattern.Severity),
+				},
+			},
+		}
+		suggestions = append(suggestions, suggestion)
+	}
+
+	return suggestions
+}

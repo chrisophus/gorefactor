@@ -23,9 +23,25 @@ Mapping of common edits to commands (run `./gorefactor` for the full list):
 | Move a function/method to a new file | `gorefactor move <src> <Func> <dest>` |
 | Replace a complete statement | `gorefactor replace <file> <Func> <old> <new>` |
 | Replace partial text inside a function | `gorefactor replace-text <file> <Func> <old> <new>` |
+| Replace a whole function body | `gorefactor replace-body <file> <Func> -` |
 | Delete a function/method | `gorefactor delete <file> <Func> --safe` (checks callers first) |
+| Inline a trivial function into its callers | `gorefactor inline <file> <Func>` |
 | Rename an unexported symbol | `gorefactor rename <file> <old> <new>` |
+| Add a field to a struct | `gorefactor add-field <file> <Struct> "<Name> <Type>" [--update-literals]` |
+| Add/remove/rename a parameter (+ call sites) | `gorefactor change-signature <file> <Func> --add-param "n T"` |
+| Flip a method receiver value↔pointer | `gorefactor change-receiver <file> <Type:Method> --pointer` |
+| Set/replace a doc comment | `gorefactor set-doc <file> <decl> -` |
+| Scaffold a table-driven test | `gorefactor add-test <file> <Func>` |
+| Generate an interface from a type | `gorefactor extract-interface <file> <Type> <Iface>` |
+| Stub out unimplemented interface methods | `gorefactor implement-interface <file> <Type> <Iface>` |
 | Split a file that grew too large | `gorefactor split <file>` |
+| Batch edits all-or-nothing | `gorefactor txn` (single undo unit) |
+| Structural search by AST pattern | `gorefactor search-ast '<pattern>'` (`$_` wildcard) |
+| Token-cheap file shape (bodies elided) | `gorefactor skeleton <file>` |
+| LLM context pack for a symbol | `gorefactor context <Symbol>` |
+| Call tree (callees/callers) | `gorefactor callgraph <Func> [--callers]` |
+| Diff exported API vs a git ref | `gorefactor api-diff [ref]` |
+| Tests affected by current changes | `gorefactor test-affected [--run]` |
 | Check what calls a function (before refactor) | `gorefactor find-callers <Func>` |
 | Check where a symbol is used | `gorefactor find-uses <Symbol>` |
 | Find interface implementations | `gorefactor find-implementations <Iface>` |
@@ -47,7 +63,7 @@ Mapping of common edits to commands (run `./gorefactor` for the full list):
 gorefactor itself is structured as a harness in the sense of [Fowler's harness-engineering article](https://martinfowler.com/articles/harness-engineering.html):
 
 - **Guides** (feedforward): the direct-op commands (`create`/`insert`/`replace`/etc.) refuse to produce malformed Go because they parse before they write. The LLM cannot accidentally introduce a syntax error via these paths.
-- **Sensors** (feedback): `lint` aggregates `file-size` / `duplicate-block` / `extract-candidate` / `untested-package` checks and (where safe) autofixes via `--fix`. Run it as a final gate after a refactor batch — anything not under control surfaces here.
+- **Sensors** (feedback): `lint` aggregates 25 structural rules (size, duplication, design smells, error handling, coverage, dead-code, arch) and (where safe) autofixes `file-size` / `dead-code` / `error-not-wrapped` via `--fix`. Run it as a final gate after a refactor batch — anything not under control surfaces here.
 
 When adding new capabilities to gorefactor, add a corresponding lint rule (sensor) so the agent self-detects when the new rule has been violated, and an autofix path (guide → sensor → autofix) when there's a single safe transformation.
 
@@ -102,21 +118,49 @@ Main commands in `cmd/gorefactor/main.go` (registered in `getCommands()`):
 - `find-implementations <Interface> [--in path] [--json]`: Types that satisfy an interface
 - `find-package-deps [dir] [--json]`: Package dependency graph and circular-import detection
 - `suggest-plan <file.go> [--output plan.json] [--json] [--patterns]`: Suggested refactoring plan for a file
+- `callgraph <Func|Receiver:Method> [--callers] [--depth N] [--json]`: Transitive call tree (callees by default, callers with `--callers`)
+- `context <Symbol|Receiver:Method> [--budget N] [--json]`: One-shot LLM context pack — definition, callers, signature types, tests
+- `skeleton <file.go> [--json]`: File with function bodies elided — token-cheap file shape
+- `search-ast <pattern> [--in path] [--json]`: Structural search; match a Go statement/expression pattern (`$_` is a wildcard)
+- `api-diff [ref] [--json]`: Diff the exported API surface of the working tree against a git ref (default HEAD)
+- `review [ref] [--json]`: Structural quality review of changed functions vs a git ref
+- `test-affected [base] [--run] [--json]`: Map changed files (vs git base, default HEAD) to affected packages and their tests
+- `architect [dir] [--suggest] [--output path]`: Generate a starter `go-arch-lint.yml` from the import graph
+- `history [--json]`: List the journal of mutation operations (most recent last)
 
 **Mutation (direct CLI — no orchestrator JSON needed)**
 - `create <path> [content|-]`: Create a new .go file (auto-runs goimports). `-` reads stdin.
 - `insert <file> <at-end|at-beginning|before:Func|after:Func|inside:Func> [content|-]`: Insert code.
 - `replace <file> <Func|Receiver:Method> <old-stmt> <new-stmt>`: AST-aware replacement (pattern must be a complete statement).
 - `replace-text <file> <Func|Receiver:Method> <old-text> <new-text>`: Literal text replace inside a function body (use this when the pattern isn't a full statement).
-- `delete <file> <Func|Receiver:Method>`: Delete a declaration.
+- `replace-body <file> <Func|Receiver:Method> [content|-]`: Replace a function/method body wholesale with new statements.
+- `delete <file> <Func|Receiver:Method> [--safe]`: Delete a declaration; `--safe` checks callers first.
 - `rename <file> <old> <new>`: Rename unexported symbol across the package (use gopls for exported).
 - `move <source-file> <Func|Receiver:Method> <dest-file>`: Move a declaration between files.
+- `inline <file> <Func>`: Inline a simple function into its call sites and delete it (refuses anything complex).
+- `add-field <file> <Struct> "<Name> <Type> [tag]" [--after F] [--update-literals]`: Add a struct field; optionally rewrite positional literals to keyed form.
+- `change-signature <file> <Func|Receiver:Method> (--add-param "n T" [--position N] [--call-value EXPR] | --remove-param <name|index> | --rename-param <old> <new>)`: Change a signature and update all call sites.
+- `change-receiver <file> <Type:Method> --pointer|--value`: Switch a method's receiver between value and pointer form.
+- `set-doc <file> <decl> [content|-]`: Set or replace the doc comment on a top-level declaration.
+- `add-test <file> <Func|Receiver:Method>`: Generate a table-driven test scaffold for an exported function/method.
+- `extract-interface <file> <Type> <IfaceName>`: Generate an interface declaration from a type's exported method set.
+- `implement-interface <file> <Type> <Iface>`: Generate compiling method stubs for every unimplemented interface method.
 
 **Automation**
-- `lint [path] [--fix] [--json] [--max N]`: Structural linter. Rules: `file-size`, `duplicate-block`, `extract-candidate`, `untested-package`. `--fix` autofixes `file-size` via `split`.
+- `lint [path] [--fix] [--json] [--max N] [--fail-only]`: Structural linter, 25 default rules (canonical list in `cmd/gorefactor/lint_registry_test.go`):
+  - *size/structure*: `file-size`, `long-function`, `deep-nesting`, `complexity`, `extract-candidate`
+  - *duplication*: `duplicate-block`, `duplicate-bare-sentinel`
+  - *design smells*: `god-object`, `large-class`, `fat-interface`, `excessive-params`, `excessive-returns`, `data-clumps`, `type-switch`, `premature-abstraction`, `high-coupling`
+  - *error handling*: `error-not-wrapped`, `if-err-log-return`, `wrap-log-return`, `wrap-bridge-log-return`
+  - *coverage*: `untested-function`, `untested-package`
+  - *dead code*: `dead-code`
+  - *external*: `golangci-lint`, `arch-violation`
+  - `--fix` autofixes the three rules with a single safe transform: `file-size` (via `split`), `dead-code` (delete unreferenced decls), `error-not-wrapped` (wrap with `fmt.Errorf(... %w)`). `--fail-only` prints only error-severity (blocking) issues.
 - `doctor [dir] [--json]`: Aggregate gate — structural lint + `go build ./...` + `go test ./...`; non-zero on failure
 - `split <file> [--max N] [--dry-run]`: Auto-split an oversized file by grouping methods on same receiver / functions sharing a CamelCase prefix.
 - `format [path ...]`: In-process gofmt+goimports. Replaces external `goimports` dependency.
+- `txn`: Apply a batch of mutation commands transactionally (all-or-nothing, single undo unit).
+- `init-agent-rules [--target claude.md|cursor|agents.md|all]`: Write the gorefactor agent-rules snippet into CLAUDE.md / `.cursorrules` / AGENTS.md.
 
 **Plans**
 - `orchestrate <plan.json>`: Execute a refactoring plan

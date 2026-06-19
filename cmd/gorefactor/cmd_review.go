@@ -1,9 +1,7 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -22,34 +20,6 @@ func init() {
 		Flags:       map[string]bool{"--json": false},
 		Run:         reviewCommand,
 	})
-}
-
-// reviewCommand compares per-function metrics between the working tree and a
-// git ref (default HEAD) and reports quality regressions. It is a sensor:
-// always exits 0, findings live in the output.
-func reviewCommand(args []string) error {
-	jsonOut := false
-	ref := "HEAD"
-	for _, a := range args {
-		switch {
-		case a == "--json":
-			jsonOut = true
-		case !strings.HasPrefix(a, "--"):
-			ref = a
-		}
-	}
-
-	res, err := computeReview(ref)
-	if err != nil {
-		return err
-	}
-	if jsonOut {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(res)
-	}
-	printReview(res)
-	return nil
 }
 
 // reviewFinding is one per-function quality observation.

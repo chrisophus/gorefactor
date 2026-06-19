@@ -46,15 +46,6 @@ type mutation struct {
 	quiet   bool // suppress the human success line (command prints its own)
 }
 
-// mutFlagSpec is the flag set shared by all mutation commands.
-func mutFlagSpec(extra map[string]bool) map[string]bool {
-	spec := map[string]bool{"--json": false, "--dry-run": false, "--gate": false}
-	for k, v := range extra {
-		spec[k] = v
-	}
-	return spec
-}
-
 func (m *mutation) setCommonFlags(flags map[string]string) {
 	m.jsonOut = flags["--json"] != ""
 	m.dryRun = flags["--dry-run"] != ""

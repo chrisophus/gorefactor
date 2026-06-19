@@ -94,13 +94,6 @@ func isFlagToken(a string) bool {
 	return len(a) > 1 && a[0] == '-'
 }
 
-func (cmd Command) usageLine() string {
-	if cmd.Usage != "" {
-		return cmd.Usage
-	}
-	return cmd.Name
-}
-
 // parseFlags splits args into positional arguments and a flag map using the
 // same rules as checkCommandArgs. spec maps flag name -> takes value.
 // Boolean flags are recorded with value "true".

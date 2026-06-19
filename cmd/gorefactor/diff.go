@@ -57,7 +57,7 @@ func unifiedDiff(path, before, after string) string {
 		}
 		fmt.Fprintf(&out, "@@ -%d,%d +%d,%d @@\n", aStart, aCount, bStart, bCount)
 		for _, op := range ops[start:stop] {
-			out.WriteByte(byte(op.kind))
+			out.WriteByte(op.kind)
 			out.WriteString(op.text)
 			out.WriteByte('\n')
 		}
@@ -81,7 +81,7 @@ func diffLineCount(before, after string) int {
 }
 
 type diffOp struct {
-	kind rune // ' ', '-', '+'
+	kind byte // ' ', '-', '+'
 	text string
 	aIdx int
 	bIdx int

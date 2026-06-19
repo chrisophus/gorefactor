@@ -87,7 +87,7 @@ func (m *mutation) run(apply func() (string, error)) error {
 		return m.fail(err)
 	}
 
-	var changed, created []string
+	var changed []string
 	linesChanged := 0
 	var diffBuf strings.Builder
 	needDiff := m.dryRun || m.jsonOut
@@ -105,7 +105,6 @@ func (m *mutation) run(apply func() (string, error)) error {
 			}
 		case !existed:
 			changed = append(changed, f)
-			created = append(created, f)
 			if needDiff {
 				linesChanged += diffLineCount("", string(after))
 				diffBuf.WriteString(unifiedDiff(f, "", string(after)))

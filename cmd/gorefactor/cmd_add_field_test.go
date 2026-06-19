@@ -32,7 +32,7 @@ func TestAddFieldAfterPosition(t *testing.T) {
 	}
 	got := readFile(t, path)
 	ni, ei, ai := strings.Index(got, "Name"), strings.Index(got, "Email"), strings.Index(got, "Age")
-	if !(ni < ei && ei < ai) {
+	if ni >= ei || ei >= ai {
 		t.Fatalf("Email should sit between Name and Age:\n%s", got)
 	}
 }

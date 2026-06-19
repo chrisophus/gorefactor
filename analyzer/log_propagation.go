@@ -17,39 +17,6 @@ type LogPropagationIssue struct {
 	Message string
 }
 
-// FileIfErrLogReturnIssues flags if err != nil { log(..., err); return err } patterns.
-func FileIfErrLogReturnIssues(file string) ([]LogPropagationIssue, error) {
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, file, nil, 0)
-	if err != nil {
-		return nil, err
-	}
-	var out []LogPropagationIssue
-	report := func(pos token.Position, msg string) {
-		out = append(out, LogPropagationIssue{
-			File: pos.Filename, Line: pos.Line, Column: pos.Column,
-			Rule: "if-err-log-return", Message: msg,
-		})
-	}
-	ast.Inspect(f, func(n ast.Node) bool {
-		if stmt, ok := n.(*ast.IfStmt); ok && isErrNotNil(stmt.Cond) {
-			walkIfStmtLogReturn(stmt, false, fset, report)
-		}
-		return true
-	})
-	return out, nil
-}
-
-// FileWrapLogReturnIssues flags err := fmt.Errorf("%w"); log; return err sequences.
-func FileWrapLogReturnIssues(file string) ([]LogPropagationIssue, error) {
-	return fileBlockLogReturnIssues(file, "wrap-log-return", scanBlockWrapLogReturn)
-}
-
-// FileWrapBridgeLogReturnIssues flags wrap→bridge→log→return quads.
-func FileWrapBridgeLogReturnIssues(file string) ([]LogPropagationIssue, error) {
-	return fileBlockLogReturnIssues(file, "wrap-bridge-log-return", scanBlockWrapBridgeLogReturn)
-}
-
 // fileBlockLogReturnIssues parses file and runs a per-block scanner, tagging
 // every reported issue with rule. It backs the wrap-log-return and
 // wrap-bridge-log-return rules, which differ only in their scanner and rule tag.
@@ -290,4 +257,38 @@ func isErrorsNewCall(e ast.Expr) bool {
 	}
 	pkg, ok := sel.X.(*ast.Ident)
 	return ok && pkg.Name == "errors"
+}
+func scanBlockWrapLogReturn(list []ast.Stmt, fset *token.FileSet, report logReportFn) {
+	for i := 0; i+2 < len(list); i++ {
+		if !isAssignErrFmtWrap(list[i]) || !isStructuredLogStmt(list[i+1]) {
+			continue
+		}
+		ret, ok := list[i+2].(*ast.ReturnStmt)
+		if !ok || !returnLastIsBareErr(ret) {
+			continue
+		}
+		report(fset.Position(ret.Pos()), "fmt.Errorf wrap then log then return err")
+	}
+}
+
+func scanBlockWrapBridgeLogReturn(list []ast.Stmt, fset *token.FileSet, report logReportFn) {
+	for i := 0; i+3 < len(list); i++ {
+		ret, ok := wrapBridgeLogReturnQuadAt(list, i)
+		if !ok {
+			continue
+		}
+		report(fset.Position(ret.Pos()), "fmt.Errorf wrap then bridge then log then return same value")
+	}
+}
+
+func containsIdentErr(e ast.Expr) bool {
+	found := false
+	ast.Inspect(e, func(n ast.Node) bool {
+		if id, ok := n.(*ast.Ident); ok && id.Name == "err" {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
 }

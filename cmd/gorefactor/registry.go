@@ -153,3 +153,9 @@ func printUsage() {
 	fmt.Println("  --num-leading-stmts N  Number of leading statements to include (default: 1, 0 for none)")
 	fmt.Println("  --function NAME        Analyze only the specified function")
 }
+func (cmd Command) usageLine() string {
+	if cmd.Usage != "" {
+		return cmd.Usage
+	}
+	return cmd.Name
+}

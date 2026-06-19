@@ -269,3 +269,11 @@ func runPlanOps(name string, ops []*orchestrator.RefactoringOperation) error {
 	}
 	return nil
 }
+
+func mutFlagSpec(extra map[string]bool) map[string]bool {
+	spec := map[string]bool{"--json": false, "--dry-run": false, "--gate": false}
+	for k, v := range extra {
+		spec[k] = v
+	}
+	return spec
+}

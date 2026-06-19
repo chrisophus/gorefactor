@@ -230,3 +230,7 @@ func countSiteFiles(sites []sigCallSite) int {
 	}
 	return len(files)
 }
+func (s sigCallSite) location() string {
+	p := s.pkg.Fset.Position(s.call.Pos())
+	return fmt.Sprintf("%s:%d", p.Filename, p.Line)
+}

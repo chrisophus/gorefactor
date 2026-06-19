@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"strings"
@@ -154,4 +155,35 @@ func (ctx *REPLContext) printHistory() {
 	for i, cmd := range ctx.history {
 		fmt.Printf("%d: %s\n", i+1, cmd)
 	}
+}
+func replCommand(args []string) error {
+	ctx := NewREPLContext()
+
+	fmt.Println("=== GoRefactor Interactive REPL ===")
+	fmt.Println("Type 'help' for available commands, 'quit' to exit")
+	fmt.Println()
+
+	reader := bufio.NewReader(os.Stdin)
+
+	for {
+		fmt.Print("gorefactor> ")
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if err.Error() == "EOF" {
+				break
+			}
+			return err
+		}
+
+		input := strings.TrimSpace(line)
+		if input == "" {
+			continue
+		}
+
+		if err := ctx.handleCommand(input); err != nil {
+			fmt.Printf("Error: %v\n", err)
+		}
+	}
+
+	return nil
 }

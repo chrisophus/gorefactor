@@ -262,3 +262,38 @@ func parseTargetSpec(s string) *orchestrator.TargetSpecification {
 	}
 	return &orchestrator.TargetSpecification{FunctionName: s}
 }
+func replaceCommand(args []string) error {
+	pos, flags := parseFlags(args, replaceFlags)
+	if len(pos) < 4 {
+		return usageErrorf("usage: replace <file> <funcname-or-Receiver:Method> <pattern> <replacement>")
+	}
+	file := pos[0]
+	m := &mutation{op: "replace", file: file}
+	m.setCommonFlags(flags)
+	loc, err := parseFuncLocator(pos[1])
+	if err != nil {
+		return m.fail(err)
+	}
+	pattern := pos[2]
+	replacement := pos[3]
+	if err := validateFuncTarget(file, loc); err != nil {
+		return m.fail(err)
+	}
+	if err := validateGoSnippet(replacement); err != nil {
+		return m.fail(err)
+	}
+	return m.run(func() (string, error) {
+		ci := orchestrator.NewCodeInserter()
+		ins, err := ci.ReplaceCodeBlock(file, loc, pattern, replacement)
+		if err != nil {
+			if strings.Contains(err.Error(), "no statement matching") {
+				return "", notFoundErrorf("%v\nhint: the pattern must be a complete statement; use replace-text for partial text", err)
+			}
+			return "", err
+		}
+		if err := orchestrator.FormatImports(file); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", file, err)
+		}
+		return fmt.Sprintf("Replaced in %s at lines %d-%d", file, ins.StartLine, ins.EndLine), nil
+	})
+}

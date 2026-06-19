@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -202,4 +204,29 @@ func reviewFile(ref, prefix, relFile string) ([]reviewFinding, error) {
 		}
 	}
 	return out, nil
+}
+
+func reviewCommand(args []string) error {
+	jsonOut := false
+	ref := "HEAD"
+	for _, a := range args {
+		switch {
+		case a == "--json":
+			jsonOut = true
+		case !strings.HasPrefix(a, "--"):
+			ref = a
+		}
+	}
+
+	res, err := computeReview(ref)
+	if err != nil {
+		return err
+	}
+	if jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(res)
+	}
+	printReview(res)
+	return nil
 }

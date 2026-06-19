@@ -12,15 +12,13 @@ import (
 
 // DeadCodeDetector finds unused functions and fields
 type DeadCodeDetector struct {
-	files    []string
-	analyzer *CallAnalyzer
+	files []string
 }
 
 // NewDeadCodeDetector creates a detector for a set of files
 func NewDeadCodeDetector(files []string) *DeadCodeDetector {
 	return &DeadCodeDetector{
-		files:    files,
-		analyzer: NewCallAnalyzer(files),
+		files: files,
 	}
 }
 
@@ -50,7 +48,10 @@ func (dcd *DeadCodeDetector) DetectDeadFunctions() []DeadCodeIssue {
 		}
 	}
 
-	// Check each function for callers
+	// Count every identifier occurrence across the package once up front.
+	identFreq := dcd.identFrequency()
+
+	// Check each function for references
 	for _, fn := range funcMap {
 		// Skip main(), init(), and test functions
 		if fn.IsMain() || fn.IsInit() || fn.IsTest() {
@@ -62,29 +63,34 @@ func (dcd *DeadCodeDetector) DetectDeadFunctions() []DeadCodeIssue {
 			continue
 		}
 
-		// Check for callers
-		res, err := dcd.analyzer.FindCallers(fn.Name, fn.Receiver)
-		if err != nil {
+		// A symbol is dead only if its name appears nowhere in the package
+		// outside its own declaration. Counting every identifier occurrence
+		// (not just call expressions) is what catches functions referenced as
+		// values — stored in a command table, passed as an argument, or taken
+		// as a method value — which FindCallers and FindAllUses both miss
+		// because they only see call sites. (That blind spot is exactly what
+		// let the dead-code autofix delete live command handlers.) For a
+		// destructive autofix, keeping anything possibly-referenced is the
+		// safe default; we would rather under-report than delete live code.
+		if identFreq[fn.Name] > 1 {
 			continue
 		}
 
-		// If no callers (and not a special function), it's dead code
-		if res.TotalCallCount == 0 {
-			issue := DeadCodeIssue{
-				Type:        "function",
-				Name:        fn.Name,
-				Receiver:    fn.Receiver,
-				File:        fn.File,
-				Line:        fn.Line,
-				CallerCount: 0,
-				IsExported:  fn.IsExported,
-				Reason:      "Never called",
-			}
-			if fn.Receiver != "" {
-				issue.Type = "method"
-			}
-			issues = append(issues, issue)
+		// No reference anywhere but the declaration itself — dead code.
+		issue := DeadCodeIssue{
+			Type:        "function",
+			Name:        fn.Name,
+			Receiver:    fn.Receiver,
+			File:        fn.File,
+			Line:        fn.Line,
+			CallerCount: 0,
+			IsExported:  fn.IsExported,
+			Reason:      "Never called",
 		}
+		if fn.Receiver != "" {
+			issue.Type = "method"
+		}
+		issues = append(issues, issue)
 	}
 
 	return issues
@@ -206,20 +212,20 @@ func (dcd *DeadCodeDetector) DetectDeadFields() []DeadCodeIssue {
 								for _, name := range field.Names {
 									// Check if field is used
 									uses, _ := NewUseAnalyzer(dcd.files).FindAllUses(SymbolQuery{
-										Name: name.Name,
+										Name:     name.Name,
 										Receiver: ts.Name.Name,
 									})
 
 									if len(uses) == 0 && !name.IsExported() {
 										issue := DeadCodeIssue{
-											Type:       "field",
-											Name:       name.Name,
-											Receiver:   ts.Name.Name,
-											File:       f,
-											Line:       fset.Position(name.Pos()).Line,
+											Type:        "field",
+											Name:        name.Name,
+											Receiver:    ts.Name.Name,
+											File:        f,
+											Line:        fset.Position(name.Pos()).Line,
 											CallerCount: 0,
-											IsExported: name.IsExported(),
-											Reason:     "Never read",
+											IsExported:  name.IsExported(),
+											Reason:      "Never read",
 										}
 										issues = append(issues, issue)
 									}
@@ -241,4 +247,26 @@ func (d DeadCodeIssue) Summary() string {
 		return fmt.Sprintf("[%s] Dead Code: %s%s (%s) at %s:%d", d.Type, d.Receiver, d.Name, d.Reason, filepath.Base(d.File), d.Line)
 	}
 	return fmt.Sprintf("[%s] Dead Code: %s (%s) at %s:%d", d.Type, d.Name, d.Reason, filepath.Base(d.File), d.Line)
+}
+
+func (dcd *DeadCodeDetector) identFrequency() map[string]int {
+	freq := make(map[string]int)
+	for _, file := range dcd.files {
+		content, err := readFileContent(file)
+		if err != nil {
+			continue
+		}
+		fset := token.NewFileSet()
+		astFile, err := parseGoFile(fset, file, content)
+		if err != nil {
+			continue
+		}
+		ast.Inspect(astFile, func(n ast.Node) bool {
+			if id, ok := n.(*ast.Ident); ok {
+				freq[id.Name]++
+			}
+			return true
+		})
+	}
+	return freq
 }

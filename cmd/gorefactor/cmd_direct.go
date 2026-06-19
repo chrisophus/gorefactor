@@ -189,42 +189,6 @@ func insertCommand(args []string) error {
 	})
 }
 
-func replaceCommand(args []string) error {
-	pos, flags := parseFlags(args, replaceFlags)
-	if len(pos) < 4 {
-		return usageErrorf("usage: replace <file> <funcname-or-Receiver:Method> <pattern> <replacement>")
-	}
-	file := pos[0]
-	m := &mutation{op: "replace", file: file}
-	m.setCommonFlags(flags)
-	loc, err := parseFuncLocator(pos[1])
-	if err != nil {
-		return m.fail(err)
-	}
-	pattern := pos[2]
-	replacement := pos[3]
-	if err := validateFuncTarget(file, loc); err != nil {
-		return m.fail(err)
-	}
-	if err := validateGoSnippet(replacement); err != nil {
-		return m.fail(err)
-	}
-	return m.run(func() (string, error) {
-		ci := orchestrator.NewCodeInserter()
-		ins, err := ci.ReplaceCodeBlock(file, loc, pattern, replacement)
-		if err != nil {
-			if strings.Contains(err.Error(), "no statement matching") {
-				return "", notFoundErrorf("%v\nhint: the pattern must be a complete statement; use replace-text for partial text", err)
-			}
-			return "", err
-		}
-		if err := orchestrator.FormatImports(file); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", file, err)
-		}
-		return fmt.Sprintf("Replaced in %s at lines %d-%d", file, ins.StartLine, ins.EndLine), nil
-	})
-}
-
 func parseFuncLocator(s string) (*orchestrator.InsertionLocation, error) {
 	if i := strings.Index(s, ":"); i >= 0 {
 		return &orchestrator.InsertionLocation{
@@ -286,68 +250,6 @@ func deleteCommand(args []string) error {
 			return "", err
 		}
 		return fmt.Sprintf("Deleted %s from %s", name, file), nil
-	})
-}
-
-func renameCommand(args []string) error {
-	pos, flags := parseFlags(args, renameFlags)
-	if len(pos) < 3 {
-		return usageErrorf("usage: rename <file> <oldname> <newname> [--strict]")
-	}
-	file := pos[0]
-	oldName := pos[1]
-	newName := pos[2]
-	strict := flags["--strict"] != ""
-	m := &mutation{op: "rename", file: file, files: packageGoFiles(file)}
-	m.setCommonFlags(flags)
-
-	// Validate rename if --strict flag is set
-	if strict {
-		pkgDir := filepath.Dir(file)
-		validator, err := analyzer.NewExportedRenameValidator(pkgDir)
-		if err != nil {
-			return m.fail(fmt.Errorf("failed to initialize validator: %w", err))
-		}
-
-		validation, err := validator.ValidateRename(oldName, newName)
-		if err != nil {
-			return m.fail(fmt.Errorf("validation failed: %w", err))
-		}
-
-		// Print validation report
-		fmt.Println(validation.SafetyReport(oldName, newName))
-
-		if !validation.SafeToRename {
-			return m.fail(fmt.Errorf("rename is not safe; review warnings above"))
-		}
-
-		if validation.IsExported && len(validation.Warnings) > 0 {
-			fmt.Println("WARNING: Symbol is exported; this rename may break external packages")
-		}
-	}
-
-	return m.run(func() (string, error) {
-		err := runPlanOps("rename", []*orchestrator.RefactoringOperation{{
-			Type:   "rename_declaration",
-			File:   file,
-			Target: &orchestrator.TargetSpecification{FunctionName: oldName},
-			Parameters: map[string]interface{}{
-				"newName": newName,
-			},
-		}})
-		if err != nil {
-			if strings.Contains(err.Error(), "not found") {
-				_, all, derr := fileDecls(file)
-				if derr != nil {
-					all = nil
-				}
-				return "", notFoundError(
-					fmt.Sprintf("symbol %q not found in package of %s", oldName, file),
-					oldName, all)
-			}
-			return "", err
-		}
-		return fmt.Sprintf("Renamed %s -> %s in %s and dependent files", oldName, newName, file), nil
 	})
 }
 

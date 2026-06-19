@@ -70,20 +70,22 @@ gorefactor orchestrate consolidate-error-handling.json
 ### 5. **Built-in linting with autofix**
 ```bash
 gorefactor lint .                  # Detect structural issues
-gorefactor lint . --fix            # Auto-fix what's safe (split oversized files, remove dead code)
+gorefactor lint . --fix            # Auto-fix what's safe (split files, remove dead code, wrap errors)
+gorefactor lint . --fail-only      # Show only blocking (error-severity) issues
 gorefactor doctor                  # Lint + build + test (final gate)
 ```
 
-Linting rules include:
-- **file-size**: Files >300 lines, with splitting suggestions by receiver/prefix
-- **duplicate-block**: >100-line duplicates with consolidation hints
-- **extract-candidate**: High-complexity blocks worth extracting
-- **complexity**: Functions exceeding cyclomatic complexity threshold
-- **coupling**: Packages with high cross-dependencies
-- **error-wrapping**: Missing error context (errors.Is compatibility)
-- **dead-code**: Unused functions/types across the module
-- **untested-function**: Functions without test coverage
-- **arch-violation**: Violations of your go-arch-lint rules (Phase 4)
+The default rule set has 25 rules, grouped by concern:
+
+- **Size & structure**: `file-size` (>300 lines, split hints by receiver/prefix), `long-function`, `deep-nesting`, `complexity` (cyclomatic), `extract-candidate`
+- **Duplication**: `duplicate-block` (>100-line clones with consolidation hints), `duplicate-bare-sentinel`
+- **Design smells**: `god-object`, `large-class`, `fat-interface`, `excessive-params`, `excessive-returns`, `data-clumps`, `type-switch`, `premature-abstraction`, `high-coupling`
+- **Error handling**: `error-not-wrapped` (bare `return err`), `if-err-log-return`, `wrap-log-return`, `wrap-bridge-log-return`
+- **Coverage**: `untested-function`, `untested-package`
+- **Dead code**: `dead-code` (unused funcs/types across the module)
+- **External**: `golangci-lint` (wraps golangci-lint output), `arch-violation` (your `go-arch-lint.yml` rules)
+
+`--fix` autofixes the three rules with a single safe transformation: `file-size` (via `split`), `dead-code` (delete unreferenced decls), and `error-not-wrapped` (wrap with `fmt.Errorf(... %w)`).
 
 **vs. alternatives:**
 - **gopls**: Great for interactive refactoring in an IDE, slow for CLI (60× slower cold-start)
@@ -158,10 +160,19 @@ Run `./gorefactor` with no subcommand arguments to print the full command list.
 | `find-callers` | Who calls a function or `Receiver:Method` |
 | `find-uses` | References to a symbol |
 | `find-implementations` | Types implementing an interface |
-| `find-package-deps` | Package dependency graph |
+| `find-package-deps` | Package dependency graph + circular-import detection |
 | `analyze-diff` | Refactoring plan from a patch file |
 | `analyze-file-sizes` | Oversized files and split hints |
 | `suggest-plan` | Suggested refactoring plan for a file |
+| `callgraph` | Transitive call tree (callees, or `--callers`) for a function/method |
+| `context` | One-shot LLM context pack for a symbol: def, callers, signature types, tests (`--budget N`) |
+| `skeleton` | File with function bodies elided — token-cheap file shape |
+| `search-ast` | Structural search; match a statement/expression pattern (`$_` wildcard) |
+| `api-diff` | Diff the exported API surface vs a git ref (default HEAD) |
+| `review` | Structural quality review of changed functions vs a git ref |
+| `test-affected` | Map changed files to transitively affected packages and their tests (`--run`) |
+| `architect` | Generate a starter `go-arch-lint.yml` from the import graph |
+| `history` | List the journal of mutation operations |
 
 ### Direct edits (preferred over editing `.go` by hand)
 
@@ -173,10 +184,19 @@ Methods use `Receiver:Method` (no `*` on the receiver). Many commands accept `-`
 | `insert` | Code at `at-end`, `after:Func`, `inside:Func`, etc. |
 | `replace` | AST statement replace inside a function |
 | `replace-text` | Literal text replace inside a function |
-| `delete` | Remove a declaration |
+| `replace-body` | Replace a function/method body wholesale |
+| `delete` | Remove a declaration (`--safe` checks callers first) |
 | `rename` | Unexported symbol, package-wide |
 | `move` | Move declaration to another file |
 | `extract` | Extract line range to new function |
+| `inline` | Inline a simple function into call sites and delete it |
+| `add-field` | Add a struct field; optionally rewrite positional literals to keyed |
+| `change-signature` | Add/remove/rename a parameter and update all call sites |
+| `change-receiver` | Switch a method receiver between value and pointer form |
+| `set-doc` | Set/replace the doc comment on a declaration |
+| `add-test` | Generate a table-driven test scaffold for a function/method |
+| `extract-interface` | Generate an interface from a type's exported method set |
+| `implement-interface` | Generate compiling method stubs for unimplemented interface methods |
 | `split` | Auto-split an oversized file |
 | `format` | gofmt + goimports in place |
 
@@ -184,9 +204,11 @@ Methods use `Receiver:Method` (no `*` on the receiver). Many commands accept `-`
 
 | Command | Purpose |
 |---------|---------|
-| `lint` | Rules: `file-size`, `duplicate-block`, `extract-candidate`, `untested-package`, smells, dead-code; skips `vendor`/`.git`/`node_modules` and `*.gen.go`/`_gen.go`; `--fix` splits oversized files |
+| `lint` | 25 structural rules (size, duplication, smells, error handling, coverage, dead-code, arch); skips `vendor`/`.git`/`node_modules` and `*.gen.go`/`_gen.go`. `--fix` autofixes `file-size`, `dead-code`, `error-not-wrapped`; `--fail-only` shows blocking issues only |
 | `doctor` | Lint + `go build` + `go test`; non-zero on failure |
-| `undo` | Roll back last plan (snapshots under `.gorefactor/`) |
+| `txn` | Apply a batch of mutation commands transactionally (all-or-nothing, single undo unit) |
+| `undo` | Undo the most recent journaled mutation (or restore a named plan snapshot) |
+| `init-agent-rules` | Write the agent-rules snippet into `CLAUDE.md` / `.cursorrules` / `AGENTS.md` |
 
 ### JSON plans
 
@@ -198,6 +220,20 @@ Methods use `Receiver:Method` (no `*` on the receiver). Many commands accept `-`
 | `repl` | Interactive step-by-step refactoring |
 
 Details and JSON plan schema: [ORCHESTRATION_SYSTEM.md](ORCHESTRATION_SYSTEM.md), [orchestrator/README.md](orchestrator/README.md).
+
+### Exit codes
+
+Commands use semantic exit codes so agents and CI can branch on the failure mode:
+
+| Code | Meaning |
+|------|---------|
+| `0` | success |
+| `1` | usage / argument error |
+| `2` | target or pattern not found (semantic miss — retry with a different target) |
+| `3` | parse / syntax rejection (snippet or file does not parse) |
+| `4` | gate failure (`go build`/`go test` failed; used by `doctor` and `--gate`) |
+
+Most mutation commands also accept `--dry-run` (preview without writing) and `--gate` (run build+test after the change, fail with code `4` if broken).
 
 ## Comparison to alternatives
 

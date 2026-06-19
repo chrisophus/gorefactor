@@ -6,12 +6,9 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf8"
-
-	"github.com/chrisophus/gorefactor/analyzer"
 )
 
 var contextFlags = map[string]bool{"--json": false, "--in": true, "--budget": true}
@@ -89,71 +86,6 @@ func contextCommand(args []string) error {
 	return nil
 }
 
-// buildContextPack assembles the context sections highest-value-first and
-// trims them to the character budget.
-func buildContextPack(target, root string, budget int) (*contextPack, error) {
-	name, recv := splitNameReceiver(target)
-	files, err := collectGoFiles(root, analyzer.DefaultWalkOptions())
-	if err != nil {
-		return nil, err
-	}
-
-	ua := analyzer.NewUseAnalyzer(files)
-	def, err := ua.FindSymbolDefinition(analyzer.SymbolQuery{Name: name, Receiver: recv})
-	if err != nil {
-		return nil, notFoundErrorf("symbol %q not found under %s", target, root)
-	}
-
-	pack := &contextPack{Symbol: target, File: def.File, Line: def.Line, Budget: budget}
-
-	source, doc, fnType := extractDeclContext(def.File, name, recv)
-	pack.Doc = doc
-	pack.Definition = source
-	if pack.Definition == "" {
-		pack.Definition = def.Snippet
-	}
-
-	// Callers (functions/methods only; types have no call sites).
-	ca := analyzer.NewCallAnalyzer(files)
-	if res, cerr := ca.FindCallers(name, recv); cerr == nil {
-		for _, c := range res.DirectCallers {
-			pack.Callers = append(pack.Callers, contextCaller{
-				Name:      c.CallerName,
-				Signature: callerSignature(c.File, c.CallerName, c.CallerReceiver),
-				File:      c.File,
-				Line:      c.Line,
-				Context:   sourceContext(c.File, c.Line, 2),
-			})
-		}
-		tests := map[string]bool{}
-		for _, c := range res.TestCallers {
-			tests[c.CallerName] = true
-		}
-		for n := range tests {
-			pack.Tests = append(pack.Tests, n)
-		}
-		sort.Strings(pack.Tests)
-	}
-
-	// Definitions of named types used in the symbol's signature.
-	if fnType != nil {
-		for _, tn := range signatureTypeNames(fnType) {
-			tdef, terr := ua.FindSymbolDefinition(analyzer.SymbolQuery{Name: tn})
-			if terr != nil {
-				continue
-			}
-			src, _, _ := extractDeclContext(tdef.File, tn, "")
-			if src == "" {
-				src = tdef.Snippet
-			}
-			pack.Types = append(pack.Types, contextTypeDef{Name: tn, File: tdef.File, Line: tdef.Line, Source: src})
-		}
-	}
-
-	trimContextPack(pack, budget)
-	return pack, nil
-}
-
 func trimContextPack(pack *contextPack, budget int) {
 	over := func() int { return len(renderContextPack(pack)) - budget }
 	if over() <= 0 {
@@ -216,48 +148,6 @@ func renderContextPack(p *contextPack) string {
 		fmt.Fprintf(&b, "\n[%s]\n", strings.Join(p.Notes, "; "))
 	}
 	return b.String()
-}
-
-// extractDeclContext returns the full source (incl. doc comment) of the named
-// declaration in file, its doc text, and the FuncType when it is a function.
-func extractDeclContext(file, name, recv string) (source, doc string, fnType *ast.FuncType) {
-	src, err := os.ReadFile(file)
-	if err != nil {
-		return "", "", nil
-	}
-	fset := token.NewFileSet()
-	astFile, err := parser.ParseFile(fset, file, src, parser.ParseComments)
-	if err != nil {
-		return "", "", nil
-	}
-	slice := func(start, end token.Pos) string {
-		return strings.TrimSpace(string(src[fset.Position(start).Offset:fset.Position(end).Offset]))
-	}
-	for _, decl := range astFile.Decls {
-		switch d := decl.(type) {
-		case *ast.FuncDecl:
-			if d.Name.Name != name || cgReceiver(d) != strings.TrimPrefix(recv, "*") {
-				continue
-			}
-			start := d.Pos()
-			if d.Doc != nil {
-				start = d.Doc.Pos()
-			}
-			return slice(start, d.End()), docText(d.Doc), d.Type
-		case *ast.GenDecl:
-			for _, spec := range d.Specs {
-				if !specHasName(spec, name) {
-					continue
-				}
-				start := d.Pos()
-				if d.Doc != nil {
-					start = d.Doc.Pos()
-				}
-				return slice(start, d.End()), docText(d.Doc), nil
-			}
-		}
-	}
-	return "", "", nil
 }
 
 func specHasName(spec ast.Spec, name string) bool {

@@ -22,26 +22,9 @@ type splitDecl struct {
 	endLine   int
 }
 
-func (d splitDecl) lines() int { return d.endLine - d.startLine + 1 }
-
-func (d splitDecl) targetName() string {
-	if d.isMethod {
-		return d.receiver + ":" + d.name
-	}
-	return d.name
-}
-
 type splitGroup struct {
 	key   string
 	decls []splitDecl
-}
-
-func (g splitGroup) totalLines() int {
-	n := 0
-	for _, d := range g.decls {
-		n += d.lines()
-	}
-	return n
 }
 
 func parseSplitDecls(filePath string) ([]splitDecl, error) {

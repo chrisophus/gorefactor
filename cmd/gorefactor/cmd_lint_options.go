@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/chrisophus/gorefactor/analyzer"
 	"github.com/chrisophus/gorefactor/config"
 )
 
@@ -127,23 +126,6 @@ func (opts *lintOptions) loadConfig() error {
 		opts.maxSize = src
 	}
 	return nil
-}
-
-func (opts lintOptions) lintContext(files []string) LintContext {
-	ctx := LintContext{
-		Root:     opts.root,
-		Files:    files,
-		MaxSize:  opts.maxSize,
-		WalkOpts: analyzer.DefaultWalkOptions(),
-		Config:   opts.cfg,
-		Profile:  opts.profile,
-	}
-	if opts.cfg != nil {
-		ctx.WalkOpts = opts.cfg.WalkOptions()
-		_, test := opts.cfg.FileLengthLimits()
-		ctx.MaxSizeTest = test
-	}
-	return ctx
 }
 
 func filterLintRules(all []LintRule, opts lintOptions) []LintRule {

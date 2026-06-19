@@ -1,0 +1,92 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+)
+
+func lintCommand(args []string) error {
+	opts, err := parseLintOptions(args)
+	if err != nil {
+		return err
+	}
+
+	ctx := opts.lintContext(nil)
+	files, err := collectGoFiles(opts.root, ctx.WalkOpts)
+	if err != nil {
+		return err
+	}
+	ctx.Files = files
+
+	rules := filterLintRules(defaultLintRules(), opts)
+	issues := runLintRules(rules, ctx, opts)
+	issues = applyConfigSeverity(issues, opts)
+	sortLintIssues(issues)
+	shouldFail := lintShouldFail(issues, opts.failOn)
+	outputIssues := issues
+	if opts.failOnly {
+		outputIssues = failingIssues(issues, opts.failOn)
+	}
+
+	if opts.jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(map[string]interface{}{
+			"issues": outputIssues,
+			"summary": map[string]int{
+				"total":   len(outputIssues),
+				"failing": failingIssueCount(issues, opts.failOn),
+			},
+		}); err != nil {
+			return err
+		}
+		if shouldFail {
+			return fmt.Errorf(
+				"lint: %d issue(s) at or above %s severity (%d total issue(s))",
+				failingIssueCount(issues, opts.failOn),
+				opts.failOn,
+				len(issues),
+			)
+		}
+		return nil
+	}
+
+	if len(issues) == 0 {
+		if !opts.quiet {
+			fmt.Println("No issues found.")
+		}
+		return nil
+	}
+
+	if len(outputIssues) > 0 && (!opts.quiet || shouldFail) {
+		byRule := map[string]int{}
+		for _, iss := range outputIssues {
+			byRule[iss.Rule]++
+			fmt.Printf("%s [%s] %s: %s", iss.File, iss.Severity, iss.Rule, iss.Message)
+			if iss.AutoFix != "" {
+				fmt.Printf("  (autofix: %s)", iss.AutoFix)
+			}
+			fmt.Println()
+		}
+		fmt.Println()
+		fmt.Printf("Summary: %d issue(s)\n", len(outputIssues))
+		for rule, n := range byRule {
+			fmt.Printf("  %s: %d\n", rule, n)
+		}
+
+		if opts.fix {
+			applied, failed := applyAutoFixes(issues, ctx, rules)
+			fmt.Printf("\nAuto-fixes: %d applied, %d failed\n", applied, failed)
+		}
+	}
+	if shouldFail {
+		return fmt.Errorf(
+			"lint: %d issue(s) at or above %s severity (%d total issue(s))",
+			failingIssueCount(issues, opts.failOn),
+			opts.failOn,
+			len(issues),
+		)
+	}
+	return nil
+}

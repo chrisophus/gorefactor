@@ -44,7 +44,7 @@ func NewPlanSuggester(filePath string) (*PlanSuggester, error) {
 	}
 
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, filePath, content, parser.AllErrors)
+	file, err := parser.ParseFile(fset, filePath, content, parser.AllErrors|parser.ParseComments)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse file: %w", err)
 	}

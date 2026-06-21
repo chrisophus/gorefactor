@@ -1,0 +1,313 @@
+tools:
+  # ── Extract ──────────────────────────────────────────────────────────────
+
+  - name: extract_method
+    description: |
+      Extract a contiguous line range into a new function.
+      The tool infers parameters and return values automatically from the
+      data-flow of the extracted block.
+
+      REQUIRED workflow:
+        1. Call skeleton(file) to see all declarations and their line ranges.
+        2. Call read_excerpt(file, start, end) to confirm exact lines.
+        3. Call extract_method with those confirmed line numbers.
+
+      Never guess line numbers — they will be wrong.
+    parameters:
+      type: object
+      required: [file, start_line, end_line, new_function_name]
+      properties:
+        file:
+          type: string
+          description: "relative path to the .go file"
+        start_line:
+          type: integer
+          description: "first line of the block to extract (1-based)"
+        end_line:
+          type: integer
+          description: "last line of the block to extract (inclusive)"
+        new_function_name:
+          type: string
+          description: "name for the new extracted function (camelCase)"
+    bash: "./gorefactor extract {file} {start_line} {end_line} {new_function_name} 2>&1"
+
+  # ── Rename ───────────────────────────────────────────────────────────────
+
+  - name: rename_declaration
+    description: |
+      Rename an unexported declaration package-wide (all call sites updated).
+      Supply exactly ONE of: function, method, or type — the symbol's
+      current identifier.
+
+      Do NOT use for exported symbols — they require gopls rename; call
+      punt instead.
+    parameters:
+      type: object
+      required: [file, new_name]
+      properties:
+        file:
+          type: string
+          description: "file where the symbol is declared"
+        function:
+          type: string
+          description: "current function name (top-level, no receiver)"
+        method:
+          type: string
+          description: "current method name (without receiver)"
+        type:
+          type: string
+          description: "current type name"
+        new_name:
+          type: string
+          description: "new identifier"
+    bash: |
+      old=""
+      if [ -n "{function}" ]; then old="{function}"; fi
+      if [ -n "{method}" ];   then old="{method}";   fi
+      if [ -n "{type}" ];     then old="{type}";     fi
+      if [ -z "$old" ]; then
+        echo "ERROR: supply exactly one of: function, method, or type"
+        exit 1
+      fi
+      ./gorefactor rename {file} "$old" {new_name} 2>&1
+
+  # ── Replace ──────────────────────────────────────────────────────────────
+
+  - name: replace_code
+    description: |
+      Replace a complete statement inside a function body.
+      code_pattern must be an exact, complete statement — not a fragment,
+      not a partial line. Whitespace differences are ignored during matching.
+
+      NOTE: Patterns containing double-quote characters must escape them as \".
+      For multi-line patterns, use replace_code only if the pattern is a
+      single top-level statement (for, if, switch, assignment, return).
+    parameters:
+      type: object
+      required: [file, function, code_pattern, replacement_code]
+      properties:
+        file:
+          type: string
+          description: "relative path to the .go file"
+        function:
+          type: string
+          description: "enclosing function name, or Receiver:Method"
+        code_pattern:
+          type: string
+          description: "exact complete statement to replace"
+        replacement_code:
+          type: string
+          description: "replacement statement(s)"
+    bash: './gorefactor replace "{file}" "{function}" "{code_pattern}" "{replacement_code}" 2>&1'
+
+  # ── Insert ───────────────────────────────────────────────────────────────
+
+  - name: insert_code
+    description: |
+      Insert a complete Go declaration (func, type, var, const) into a file.
+      code_snippet must be a valid, complete Go declaration — include any
+      imports the snippet needs (gorefactor runs goimports automatically).
+
+      location_type values:
+        at_end            — after the last declaration in the file
+        at_beginning      — before the first declaration
+        after_function    — immediately after anchor_function
+        before_function   — immediately before anchor_function
+        inside_function   — at the end of anchor_function's body
+
+      anchor_function is required for *_function locations.
+    parameters:
+      type: object
+      required: [file, location_type, code_snippet]
+      properties:
+        file:
+          type: string
+          description: "relative path to the .go file"
+        location_type:
+          type: string
+          description: "at_end | at_beginning | after_function | before_function | inside_function"
+        anchor_function:
+          type: string
+          description: "anchor function/method name (required for *_function locations)"
+        code_snippet:
+          type: string
+          description: "complete Go declaration to insert"
+    bash: |
+      loc="{location_type}"
+      anchor="{anchor_function}"
+      if [ -n "$anchor" ]; then loc="${loc}:${anchor}"; fi
+      printf '%s\n' "{code_snippet}" | ./gorefactor insert {file} "$loc" - 2>&1
+
+  # ── Create ───────────────────────────────────────────────────────────────
+
+  - name: create_file
+    description: |
+      Create a new Go source file. The file must not already exist.
+      code_snippet must be the complete file content, including the package
+      clause and all required imports. gorefactor runs goimports automatically
+      so you may omit import blocks if the symbols are unambiguous.
+    parameters:
+      type: object
+      required: [file, code_snippet]
+      properties:
+        file:
+          type: string
+          description: "relative path for the new file (must not exist)"
+        code_snippet:
+          type: string
+          description: "complete file contents including package clause"
+    bash: 'printf ''%s\n'' "{code_snippet}" | ./gorefactor create {file} - 2>&1'
+
+  # ── Move ─────────────────────────────────────────────────────────────────
+
+  - name: move_method
+    description: |
+      Move a method (a func with a receiver) to another file.
+      The destination must be in the same package. If new_file does not
+      exist it is created automatically with the correct package clause.
+    parameters:
+      type: object
+      required: [file, method, receiver_type, new_file]
+      properties:
+        file:
+          type: string
+          description: "source file path"
+        method:
+          type: string
+          description: "method name (without the receiver, e.g. 'Validate')"
+        receiver_type:
+          type: string
+          description: "receiver type name without * (e.g. 'Parser')"
+        new_file:
+          type: string
+          description: "destination file (created if it does not exist)"
+    bash: "./gorefactor move {file} {receiver_type}:{method} {new_file} 2>&1"
+
+  - name: move_function
+    description: |
+      Move a top-level function (no receiver) to another file.
+      The destination must be in the same package. If new_file does not
+      exist it is created automatically.
+    parameters:
+      type: object
+      required: [file, function, new_file]
+      properties:
+        file:
+          type: string
+          description: "source file path"
+        function:
+          type: string
+          description: "function name"
+        new_file:
+          type: string
+          description: "destination file (created if it does not exist)"
+    bash: "./gorefactor move {file} {function} {new_file} 2>&1"
+
+  # ── Delete ───────────────────────────────────────────────────────────────
+
+  - name: delete_declaration
+    description: |
+      Delete a top-level declaration from a file.
+      Supply exactly ONE of: function, method, or type.
+      Uses --safe which checks for callers first and refuses if any are found.
+      Call find_references before this to verify nothing will break.
+    parameters:
+      type: object
+      required: [file]
+      properties:
+        file:
+          type: string
+          description: "file containing the declaration"
+        function:
+          type: string
+          description: "function name (top-level, no receiver)"
+        method:
+          type: string
+          description: "method name (without receiver)"
+        type:
+          type: string
+          description: "type name"
+    bash: |
+      sym=""
+      if [ -n "{function}" ]; then sym="{function}"; fi
+      if [ -n "{method}" ];   then sym="{method}";   fi
+      if [ -n "{type}" ];     then sym="{type}";     fi
+      if [ -z "$sym" ]; then
+        echo "ERROR: supply exactly one of: function, method, or type"
+        exit 1
+      fi
+      ./gorefactor delete {file} "$sym" --safe 2>&1
+
+  - name: remove_code_block
+    description: |
+      Remove a block of code matching an exact literal pattern inside a
+      specific function. Use when you need to delete a statement or block
+      without extracting it.
+    parameters:
+      type: object
+      required: [file, function, code_pattern]
+      properties:
+        file:
+          type: string
+          description: "relative path to the .go file"
+        function:
+          type: string
+          description: "enclosing function name, or Receiver:Method"
+        code_pattern:
+          type: string
+          description: "exact literal text of the block to remove"
+    bash: './gorefactor replace-text "{file}" "{function}" "{code_pattern}" "" 2>&1'
+
+  # ── Structural ───────────────────────────────────────────────────────────
+
+  - name: split_file
+    description: |
+      Auto-split an oversized file into sibling files by grouping related
+      declarations: methods on the same receiver, functions sharing a
+      CamelCase prefix. Run analyze_file_size or lint_path first to confirm
+      the file is actually oversized before calling this.
+    parameters:
+      type: object
+      required: [file]
+      properties:
+        file:
+          type: string
+          description: "path to the oversized .go file"
+    bash: "./gorefactor split {file} 2>&1"
+
+  - name: wrap_errors
+    description: |
+      Rewrite bare "return err" statements inside "if err != nil" blocks
+      within a specific function to use fmt.Errorf(..., %w) wrapping.
+      This fixes the error-not-wrapped lint rule.
+    parameters:
+      type: object
+      required: [file, function]
+      properties:
+        file:
+          type: string
+          description: "relative path to the .go file"
+        function:
+          type: string
+          description: "enclosing function name, or Receiver:Method"
+    bash: "./gorefactor lint {file} --fix 2>&1"
+
+  - name: set_doc
+    description: |
+      Set or replace the godoc comment on a top-level declaration.
+      Provide plain text — the // prefix is added automatically.
+      Use this to add missing documentation after extraction.
+    parameters:
+      type: object
+      required: [file, declaration, doc]
+      properties:
+        file:
+          type: string
+          description: "relative path to the .go file"
+        declaration:
+          type: string
+          description: "name of the func/type/var/const to document"
+        doc:
+          type: string
+          description: "doc comment text (no // prefix needed)"
+    bash: 'printf ''%s\n'' "{doc}" | ./gorefactor set-doc {file} {declaration} - 2>&1'

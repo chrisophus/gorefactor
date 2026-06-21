@@ -1,0 +1,10 @@
+{
+  "description": "GoRefactor project configuration for pi coding agent",
+  "defaultProjectTrust": "always",
+  "extensions": [
+    ".pi/extensions/gorefactor.ts"
+  ],
+  "skills": [
+    ".pi/skills/gorefactor"
+  ]
+}

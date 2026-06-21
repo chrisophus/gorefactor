@@ -15,17 +15,18 @@ import (
 
 // mutationResult is the shared --json result shape for mutation commands.
 type mutationResult struct {
-	Success      bool     `json:"success"`
-	Operation    string   `json:"operation"`
-	File         string   `json:"file,omitempty"`
-	Detail       string   `json:"detail,omitempty"`
-	FilesChanged []string `json:"filesChanged,omitempty"`
-	LinesChanged int      `json:"linesChanged"`
-	UndoToken    string   `json:"undoToken,omitempty"`
-	DryRun       bool     `json:"dryRun,omitempty"`
-	Diff         string   `json:"diff,omitempty"`
-	Error        string   `json:"error,omitempty"`
-	Candidates   []string `json:"candidates,omitempty"`
+	Success      bool            `json:"success"`
+	Operation    string          `json:"operation"`
+	File         string          `json:"file,omitempty"`
+	Detail       string          `json:"detail,omitempty"`
+	FilesChanged []string        `json:"filesChanged,omitempty"`
+	LinesChanged int             `json:"linesChanged"`
+	UndoToken    string          `json:"undoToken,omitempty"`
+	DryRun       bool            `json:"dryRun,omitempty"`
+	Diff         string          `json:"diff,omitempty"`
+	Error        string          `json:"error,omitempty"`
+	ErrorDetails *DetailedError  `json:"errorDetails,omitempty"`
+	Candidates   []string        `json:"candidates,omitempty"`
 }
 
 func emitJSON(v interface{}) {
@@ -56,13 +57,20 @@ func (m *mutation) setCommonFlags(flags map[string]string) {
 // main can map it to a semantic exit code.
 func (m *mutation) fail(err error) error {
 	if m.jsonOut {
-		emitJSON(mutationResult{
+		result := mutationResult{
 			Success:    false,
 			Operation:  m.op,
 			File:       m.file,
 			Error:      err.Error(),
 			Candidates: errCandidates(err),
-		})
+		}
+		
+		// Extract DetailedError if present
+		if de, ok := err.(*DetailedError); ok {
+			result.ErrorDetails = de
+		}
+		
+		emitJSON(result)
 	}
 	return err
 }

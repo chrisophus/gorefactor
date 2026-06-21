@@ -100,6 +100,20 @@ func containsReturn(stmts []ast.Stmt) bool {
 	return false
 }
 
+// findReturnLines returns line numbers of all return statements in block
+func findReturnLines(fset *token.FileSet, stmts []ast.Stmt) []int {
+	var lines []int
+	for _, stmt := range stmts {
+		ast.Inspect(stmt, func(n ast.Node) bool {
+			if ret, ok := n.(*ast.ReturnStmt); ok {
+				lines = append(lines, fset.Position(ret.Pos()).Line)
+			}
+			return true
+		})
+	}
+	return lines
+}
+
 type paramSpec struct {
 	name   string
 	typeS  string

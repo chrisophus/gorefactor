@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -55,13 +56,43 @@ func extractCommand(args []string) error {
 	if err != nil {
 		return m.fail(notFoundErrorf("%v", err))
 	}
+
+	// Check for return statements with detailed error
 	if containsReturn(blockStmts) {
-		return m.fail(fmt.Errorf("block contains a return statement; v1 extract does not handle this"))
+		returnLines := findReturnLines(fset, blockStmts)
+		err := ExampleReturnStatementError(file, startLine, endLine, returnLines)
+		return m.fail(err)
 	}
 
 	params, returns, err := analyzeBlockTypes(pkg, fileAST, enclosing, blockStmts)
 	if err != nil {
-		return m.fail(err)
+		// Wrap type analysis errors with DetailedError
+		stderr := err.Error()
+		
+		// Check if it's an undefined variable/type error
+		if strings.Contains(stderr, "undefined") || strings.Contains(stderr, "not defined") {
+			detErr := NewDetailedError(ErrVariableOutOfScope, fmt.Sprintf("Cannot extract: %v", err)).
+				WithContext(file, startLine, endLine, "Type analysis failed - undefined variables in extraction range").
+				WithRootCause(stderr).
+				WithSuggestion("expand_range",
+					"Include variable definitions in extraction range (expand start line)",
+					0.85).
+				WithSuggestion("make_global",
+					"Promote undefined variables to package level",
+					0.30).
+				WithDetail("error", stderr)
+			return m.fail(detErr)
+		}
+		
+		// Generic type error
+		detErr := NewDetailedError(ErrTypeConflict, fmt.Sprintf("Cannot extract: %v", err)).
+			WithContext(file, startLine, endLine, "Type analysis failed").
+			WithRootCause(stderr).
+			WithSuggestion("review_types",
+				"Review variable types in extraction range",
+				0.70).
+			WithDetail("error", stderr)
+		return m.fail(detErr)
 	}
 
 	newFunc, callSite, err := buildExtractedFunc(fset, methodName, blockStmts, params, returns)

@@ -174,6 +174,7 @@ func insertCommand(args []string) error {
 		return m.fail(err)
 	}
 	if err := validateGoSnippet(content); err != nil {
+		// Keep the original cliError to preserve exit codes (code 3 for parse errors)
 		return m.fail(err)
 	}
 	return m.run(func() (string, error) {

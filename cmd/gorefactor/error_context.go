@@ -26,6 +26,8 @@ const (
 	ErrTargetNotFound         ErrorCode = "TARGET_NOT_FOUND"
 	ErrCrossPackageMove       ErrorCode = "CROSS_PACKAGE_MOVE"
 	ErrInvalidTarget          ErrorCode = "INVALID_TARGET"
+	ErrInvalidSnippet         ErrorCode = "INVALID_SNIPPET"
+	ErrInvalidLocation        ErrorCode = "INVALID_LOCATION"
 )
 
 // RecoverySuggestion proposes a way to fix the error
@@ -269,6 +271,26 @@ func ExampleTargetNotFoundError(file, targetName string) *DetailedError {
 			0.85).
 		WithDetail("targetName", targetName).
 		WithDetail("file", file)
+
+	return err
+}
+
+// ExampleInvalidSnippetError creates a detailed error for malformed code snippets
+func ExampleInvalidSnippetError(content, errorMsg string) *DetailedError {
+	err := NewDetailedError(ErrInvalidSnippet,
+		fmt.Sprintf("Cannot insert: code snippet is malformed: %s", errorMsg))
+
+	err.WithContext("snippet", 0, 0,
+		"Code snippet failed to parse").
+		WithRootCause(errorMsg).
+		WithSuggestion("check_syntax",
+			"Verify the snippet has correct Go syntax",
+			0.95).
+		WithSuggestion("check_packages",
+			"Ensure snippet doesn't duplicate package declaration",
+			0.80).
+		WithRelatedCode("snippet", content).
+		WithDetail("parseError", errorMsg)
 
 	return err
 }

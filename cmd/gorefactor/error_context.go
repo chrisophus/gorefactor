@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // ErrorCode categorizes errors for programmatic handling
@@ -22,6 +23,9 @@ const (
 	ErrGeneric                ErrorCode = "GENERIC_ERROR"
 	ErrScopeConflict          ErrorCode = "SCOPE_CONFLICT"
 	ErrMultipleDefinitions    ErrorCode = "MULTIPLE_DEFINITIONS"
+	ErrTargetNotFound         ErrorCode = "TARGET_NOT_FOUND"
+	ErrCrossPackageMove       ErrorCode = "CROSS_PACKAGE_MOVE"
+	ErrInvalidTarget          ErrorCode = "INVALID_TARGET"
 )
 
 // RecoverySuggestion proposes a way to fix the error
@@ -240,6 +244,58 @@ func ExampleReturnStatementError(file string, startLine, endLine int, returnLine
 		0.60)
 
 	err.WithDetail("returnLines", returnLines)
+
+	return err
+}
+
+// ExampleTargetNotFoundError creates a detailed error for missing function/method
+func ExampleTargetNotFoundError(file, targetName string) *DetailedError {
+	err := NewDetailedError(ErrFunctionNotFound,
+		fmt.Sprintf("Cannot find target: %s not found in %s", targetName, file))
+
+	err.WithContext(file, 0, 0,
+		fmt.Sprintf("Function or method '%s' does not exist", targetName)).
+		WithRootCause(
+			fmt.Sprintf("%s is not defined in %s or was already deleted", targetName, file)).
+		WithSuggestion("verify_name",
+			"Verify the function/method name is spelled correctly",
+			0.95).
+		WithSuggestion("check_file",
+			"Check that the target is in the correct file",
+			0.90).
+		WithSuggestionCommand("list_functions",
+			"Use 'gorefactor list-functions <file>' to see available targets",
+			fmt.Sprintf("gorefactor list-functions %s", file),
+			0.85).
+		WithDetail("targetName", targetName).
+		WithDetail("file", file)
+
+	return err
+}
+
+// ExampleImportCycleError creates a detailed error for circular imports
+func ExampleImportCycleError(sourceFile, destFile, targetName string, cycle []string) *DetailedError {
+	err := NewDetailedError(ErrImportCycle,
+		fmt.Sprintf("Cannot move: would create circular import between %s and %s", sourceFile, destFile))
+
+	err.WithContext(sourceFile, 0, 0,
+		fmt.Sprintf("Moving %s would create import cycle", targetName)).
+		WithRootCause(
+			fmt.Sprintf("%s imports from another file that %s depends on", destFile, sourceFile)).
+		WithRootCause(
+			fmt.Sprintf("Current cycle: %s", strings.Join(cycle, " → "))).
+		WithSuggestion("move_dependencies_first",
+			"First move the dependency types to a shared location",
+			0.90).
+		WithSuggestion("create_shared_types",
+			"Extract shared types to a separate file both can import",
+			0.85).
+		WithSuggestion("consolidate_files",
+			"Merge the two files if they're closely related",
+			0.60).
+		WithDetail("sourceFile", sourceFile).
+		WithDetail("destFile", destFile).
+		WithDetail("importCycle", cycle)
 
 	return err
 }

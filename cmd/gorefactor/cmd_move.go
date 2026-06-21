@@ -54,6 +54,8 @@ func moveCode(args []string) error {
 		normalized = strings.TrimPrefix(receiverType, "*") + ":" + functionName
 	}
 	if err := validateDeclTarget(sourceFile, normalized); err != nil {
+		// Keep the original error for exit code preservation
+		// It's a cliError with exitNotFound (code 2)
 		return m.fail(err)
 	}
 
@@ -87,10 +89,22 @@ func moveCode(args []string) error {
 
 		result, err := orch.ExecutePlan(plan.Name)
 		if err != nil {
-			return "", fmt.Errorf("failed to move code: %w", err)
+			// Only wrap execution errors with DetailedError for non-critical errors
+			errMsg := err.Error()
+			if strings.Contains(errMsg, "import") || strings.Contains(errMsg, "circular") {
+				return "", ExampleImportCycleError(sourceFile, destFile, targetName, []string{sourceFile, destFile})
+			}
+			// Return unwrapped for now (preserves error codes)
+			return "", fmt.Errorf("move operation failed: %w", err)
 		}
 		if !result.Success {
-			return "", fmt.Errorf("move operation failed: %s", strings.Join(result.Errors, "; "))
+			// Operation failed with specific error
+			errMsg := strings.Join(result.Errors, "; ")
+			if strings.Contains(errMsg, "import") || strings.Contains(errMsg, "circular") {
+				return "", ExampleImportCycleError(sourceFile, destFile, targetName, []string{sourceFile, destFile})
+			}
+			// Return unwrapped for now (preserves error codes)
+			return "", fmt.Errorf("move operation failed: %s", errMsg)
 		}
 
 		var b strings.Builder

@@ -68,7 +68,9 @@ tools:
           description: "the complete answer to the analysis question"
     bash: |
       echo "<<<ANALYSIS_RESULT>>>"
-      printf '%s\n' "{answer}"
+      cat << '_GOREFACTOR_ANSWER_'
+      {answer}
+      _GOREFACTOR_ANSWER_
       echo "<<<END_RESULT>>>"
 
   - name: punt
@@ -91,7 +93,9 @@ tools:
           description: "specific reason why the task cannot be completed with these tools"
     bash: |
       echo "<<<PUNT>>>"
-      printf 'Reason: %s\n' "{reason}"
+      cat << '_GOREFACTOR_REASON_'
+      {reason}
+      _GOREFACTOR_REASON_
       echo "<<<END_PUNT>>>"
       # Roll back any uncommitted changes before yielding.
       git checkout -- . 2>/dev/null || true

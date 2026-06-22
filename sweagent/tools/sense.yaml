@@ -2,9 +2,9 @@ tools:
   - name: skeleton
     description: |
       Show a Go file with function bodies replaced by stub comments.
-      Token-cheap structural overview. Use this first to orient before
-      calling read_excerpt — it shows all declaration names and line numbers
-      without the full body content.
+      Token-cheap structural overview — use this first to orient before
+      calling read_excerpt. Does NOT include original file line numbers;
+      call read_excerpt to pin exact lines before extract_method.
     parameters:
       type: object
       required: [file]
@@ -12,7 +12,7 @@ tools:
         file:
           type: string
           description: "relative path to the .go file"
-    bash: "./gorefactor skeleton {file} 2>&1"
+    bash: "./gorefactor skeleton \"{file}\" 2>&1"
 
   - name: inspect_file
     description: |
@@ -26,7 +26,7 @@ tools:
         file:
           type: string
           description: "relative path to the .go file"
-    bash: "./gorefactor inspect {file} 2>&1"
+    bash: "./gorefactor inspect \"{file}\" 2>&1"
 
   - name: read_excerpt
     description: |
@@ -51,13 +51,13 @@ tools:
       end={end_line}
       # Cap window to 80 lines, matching senseReadExcerpt in the Go agent.
       if [ $((end - start)) -gt 80 ]; then end=$((start + 80)); fi
-      awk -v s="$start" -v e="$end" 'NR>=s && NR<=e {printf "%d: %s\n", NR, $0}' {file}
+      awk -v s="$start" -v e="$end" 'NR>=s && NR<=e {printf "%d: %s\n", NR, $0}' "{file}"
 
   - name: list_symbols
     description: |
       List all functions and methods declared in a Go file.
       Faster than inspect_file when you only need symbol names, not sizes.
-      Returns "func Name" or "method Receiver.Name" per line.
+      Returns exactly "func Name" or "method Receiver.Name" per line.
     parameters:
       type: object
       required: [file]
@@ -66,8 +66,22 @@ tools:
           type: string
           description: "relative path to the .go file"
     bash: |
-      # skeleton gives us the structure with line numbers; parse func/method lines.
-      ./gorefactor skeleton {file} 2>&1 | grep -E '^(func|//.*func )' | head -60
+      # Use gorefactor parse (JSON) for reliable normalized output — the
+      # skeleton grep approach returned raw signatures and comment lines.
+      ./gorefactor parse "{file}" 2>&1 | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception as e:
+    print('ERROR:', e); sys.exit(1)
+for f in d.get('functions', []):
+    name = f.get('name') or f.get('Name', '')
+    if name: print('func', name)
+for m in d.get('methods', []):
+    recv = m.get('receiver') or m.get('Receiver', '')
+    name = m.get('name') or m.get('Name', '')
+    if name: print('method', (recv + '.' if recv else '') + name)
+"
 
   - name: find_references
     description: |
@@ -81,7 +95,7 @@ tools:
         symbol:
           type: string
           description: "identifier to search for (function, type, method, variable name)"
-    bash: "./gorefactor find-uses {symbol} 2>&1 | head -80"
+    bash: "./gorefactor find-uses \"{symbol}\" 2>&1 | head -80"
 
   - name: analyze_file_size
     description: |
@@ -97,9 +111,9 @@ tools:
           description: "relative path to the .go file"
     bash: |
       echo "=== line count ==="
-      wc -l < {file}
+      wc -l < "{file}"
       echo "=== extraction hints ==="
-      ./gorefactor recommend {file} --short 2>/dev/null || echo "(none)"
+      ./gorefactor recommend "{file}" --short 2>/dev/null || echo "(none)"
 
   - name: lint_path
     description: |

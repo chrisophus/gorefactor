@@ -20,9 +20,13 @@
 agent:
   model:
     name: "anthropic/claude-opus-4-7-20250219"
-    # Alternatives:
-    #   "openai/gpt-4o"
-    #   "openai/qwen2.5-coder-32b-instruct"  (local via vLLM, set api_base)
+    # Phase 2 (fine-tuned local model):
+    #   name: "openai/gorefactor-qwen-7b"
+    #   api_base: "http://localhost:8000/v1"
+    #   api_key: "none"
+    # Zero-shot baseline (no fine-tuning):
+    #   name: "openai/qwen2.5-coder-32b-instruct"
+    #   api_base: "http://localhost:8000/v1"
     per_instance_cost_limit: 4.00
     retry_errors: true
 

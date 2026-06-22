@@ -128,7 +128,7 @@ func executeCommand(testDir string, args []string) error {
 
 	// Command failed - return the output as error message
 	if output != "" {
-		return fmt.Errorf(output)
+		return fmt.Errorf("%s", output)
 	}
 
 	return err

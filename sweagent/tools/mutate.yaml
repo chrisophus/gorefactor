@@ -29,7 +29,7 @@ tools:
         new_function_name:
           type: string
           description: "name for the new extracted function (camelCase)"
-    bash: "./gorefactor extract {file} {start_line} {end_line} {new_function_name} 2>&1"
+    bash: "./gorefactor extract \"{file}\" {start_line} {end_line} \"{new_function_name}\" 2>&1"
 
   # ── Rename ───────────────────────────────────────────────────────────────
 
@@ -37,7 +37,7 @@ tools:
     description: |
       Rename an unexported declaration package-wide (all call sites updated).
       Supply exactly ONE of: function, method, or type — the symbol's
-      current identifier.
+      current identifier. Supplying more than one is an error.
 
       Do NOT use for exported symbols — they require gopls rename; call
       punt instead.
@@ -61,15 +61,16 @@ tools:
           type: string
           description: "new identifier"
     bash: |
+      count=0
       old=""
-      if [ -n "{function}" ]; then old="{function}"; fi
-      if [ -n "{method}" ];   then old="{method}";   fi
-      if [ -n "{type}" ];     then old="{type}";     fi
-      if [ -z "$old" ]; then
-        echo "ERROR: supply exactly one of: function, method, or type"
+      [ -n "{function}" ] && { old="{function}"; count=$((count+1)); }
+      [ -n "{method}" ]   && { old="{method}";   count=$((count+1)); }
+      [ -n "{type}" ]     && { old="{type}";     count=$((count+1)); }
+      if [ "$count" -ne 1 ]; then
+        echo "ERROR: supply exactly ONE of: function, method, or type (got $count)"
         exit 1
       fi
-      ./gorefactor rename {file} "$old" {new_name} 2>&1
+      ./gorefactor rename "{file}" "$old" "{new_name}" 2>&1
 
   # ── Replace ──────────────────────────────────────────────────────────────
 
@@ -135,8 +136,10 @@ tools:
     bash: |
       loc="{location_type}"
       anchor="{anchor_function}"
-      if [ -n "$anchor" ]; then loc="${loc}:${anchor}"; fi
-      printf '%s\n' "{code_snippet}" | ./gorefactor insert {file} "$loc" - 2>&1
+      [ -n "$anchor" ] && loc="${loc}:${anchor}"
+      ./gorefactor insert "{file}" "$loc" - << '_GOREFACTOR_SNIPPET_'
+      {code_snippet}
+      _GOREFACTOR_SNIPPET_
 
   # ── Create ───────────────────────────────────────────────────────────────
 
@@ -156,7 +159,10 @@ tools:
         code_snippet:
           type: string
           description: "complete file contents including package clause"
-    bash: 'printf ''%s\n'' "{code_snippet}" | ./gorefactor create {file} - 2>&1'
+    bash: |
+      ./gorefactor create "{file}" - << '_GOREFACTOR_SNIPPET_'
+      {code_snippet}
+      _GOREFACTOR_SNIPPET_
 
   # ── Move ─────────────────────────────────────────────────────────────────
 
@@ -181,7 +187,7 @@ tools:
         new_file:
           type: string
           description: "destination file (created if it does not exist)"
-    bash: "./gorefactor move {file} {receiver_type}:{method} {new_file} 2>&1"
+    bash: "./gorefactor move \"{file}\" \"{receiver_type}:{method}\" \"{new_file}\" 2>&1"
 
   - name: move_function
     description: |
@@ -201,16 +207,16 @@ tools:
         new_file:
           type: string
           description: "destination file (created if it does not exist)"
-    bash: "./gorefactor move {file} {function} {new_file} 2>&1"
+    bash: "./gorefactor move \"{file}\" \"{function}\" \"{new_file}\" 2>&1"
 
   # ── Delete ───────────────────────────────────────────────────────────────
 
   - name: delete_declaration
     description: |
       Delete a top-level declaration from a file.
-      Supply exactly ONE of: function, method, or type.
-      Uses --safe which checks for callers first and refuses if any are found.
-      Call find_references before this to verify nothing will break.
+      Supply exactly ONE of: function, method, or type. Supplying more
+      than one is an error. Uses --safe which checks for callers first
+      and refuses if any are found. Call find_references first.
     parameters:
       type: object
       required: [file]
@@ -228,15 +234,16 @@ tools:
           type: string
           description: "type name"
     bash: |
+      count=0
       sym=""
-      if [ -n "{function}" ]; then sym="{function}"; fi
-      if [ -n "{method}" ];   then sym="{method}";   fi
-      if [ -n "{type}" ];     then sym="{type}";     fi
-      if [ -z "$sym" ]; then
-        echo "ERROR: supply exactly one of: function, method, or type"
+      [ -n "{function}" ] && { sym="{function}"; count=$((count+1)); }
+      [ -n "{method}" ]   && { sym="{method}";   count=$((count+1)); }
+      [ -n "{type}" ]     && { sym="{type}";     count=$((count+1)); }
+      if [ "$count" -ne 1 ]; then
+        echo "ERROR: supply exactly ONE of: function, method, or type (got $count)"
         exit 1
       fi
-      ./gorefactor delete {file} "$sym" --safe 2>&1
+      ./gorefactor delete "{file}" "$sym" --safe 2>&1
 
   - name: remove_code_block
     description: |
@@ -273,13 +280,14 @@ tools:
         file:
           type: string
           description: "path to the oversized .go file"
-    bash: "./gorefactor split {file} 2>&1"
+    bash: "./gorefactor split \"{file}\" 2>&1"
 
   - name: wrap_errors
     description: |
       Rewrite bare "return err" statements inside "if err != nil" blocks
       within a specific function to use fmt.Errorf(..., %w) wrapping.
-      This fixes the error-not-wrapped lint rule.
+      Targets only the named function via gorefactor exec (not a broad
+      lint --fix which would affect the whole file).
     parameters:
       type: object
       required: [file, function]
@@ -290,7 +298,11 @@ tools:
         function:
           type: string
           description: "enclosing function name, or Receiver:Method"
-    bash: "./gorefactor lint {file} --fix 2>&1"
+    bash: |
+      # Use gorefactor exec to target only the specified function.
+      # File paths and Go identifiers are safe to interpolate into JSON.
+      printf '{"type":"wrap_errors","file":"%s","target":{"functionName":"%s"}}\n' \
+        "{file}" "{function}" | ./gorefactor exec 2>&1
 
   - name: set_doc
     description: |
@@ -310,4 +322,7 @@ tools:
         doc:
           type: string
           description: "doc comment text (no // prefix needed)"
-    bash: 'printf ''%s\n'' "{doc}" | ./gorefactor set-doc {file} {declaration} - 2>&1'
+    bash: |
+      ./gorefactor set-doc "{file}" "{declaration}" - << '_GOREFACTOR_DOC_'
+      {doc}
+      _GOREFACTOR_DOC_

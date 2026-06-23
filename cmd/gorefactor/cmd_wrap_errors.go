@@ -184,6 +184,86 @@ func singleBareErrReturn(body *ast.BlockStmt) (*ast.ReturnStmt, bool) {
 	return ret, true
 }
 
+// findBareErrReturn finds the unique bare `return ..., err` in a block that
+// may contain leading sentinel branches (e.g. `if errors.Is(...) { return
+// errNotFound(...), nil }`). A block qualifies when:
+//
+//  1. Every statement except the final one is an *ast.IfStmt whose own body
+//     contains only returns whose last result is NOT the bare `err` ident
+//     (i.e. they are sentinel/early-exit paths).
+//  2. The final statement is a *ast.ReturnStmt whose last result IS the bare
+//     `err` ident.
+//
+// This lets wrap-errors handle the very common pattern:
+//
+//	if err != nil {
+//	    if errors.Is(err, domain.ErrNotFound) {
+//	        return errNotFound("not found"), nil
+//	    }
+//	    return nil, err  // ← this is the one we wrap
+//	}
+func findBareErrReturn(body *ast.BlockStmt) (*ast.ReturnStmt, bool) {
+	n := len(body.List)
+	if n == 0 {
+		return nil, false
+	}
+
+	// Fast path: single-statement body (original behaviour).
+	if n == 1 {
+		return singleBareErrReturn(body)
+	}
+
+	// Verify that every statement before the last is a sentinel if-branch
+	// whose returns all have a non-err last result.
+	for _, stmt := range body.List[:n-1] {
+		ifStmt, ok := stmt.(*ast.IfStmt)
+		if !ok {
+			// Non-if statement before the final return → ambiguous, skip.
+			return nil, false
+		}
+		if !isSentinelBranch(ifStmt) {
+			return nil, false
+		}
+	}
+
+	// The final statement must be `return ..., err`.
+	ret, ok := body.List[n-1].(*ast.ReturnStmt)
+	if !ok || len(ret.Results) == 0 {
+		return nil, false
+	}
+	last := ret.Results[len(ret.Results)-1]
+	ident, ok := last.(*ast.Ident)
+	if !ok || ident.Name != "err" {
+		return nil, false
+	}
+	return ret, true
+}
+
+// isSentinelBranch reports whether an if-statement is a sentinel/early-exit
+// branch: all return statements inside it have a last result that is NOT the
+// bare `err` identifier (i.e. they return a nil or a wrapped/translated
+// error, not the raw err).
+func isSentinelBranch(ifStmt *ast.IfStmt) bool {
+	safe := true
+	ast.Inspect(ifStmt, func(n ast.Node) bool {
+		ret, ok := n.(*ast.ReturnStmt)
+		if !ok {
+			return true
+		}
+		if len(ret.Results) == 0 {
+			return true
+		}
+		last := ret.Results[len(ret.Results)-1]
+		if ident, ok := last.(*ast.Ident); ok && ident.Name == "err" {
+			// This branch propagates the raw err — not a sentinel.
+			safe = false
+			return false
+		}
+		return true
+	})
+	return safe
+}
+
 // wrapContextFromIfInit derives a context string from an init statement
 // like `if err := doThing(); err != nil`.
 func wrapContextFromIfInit(_ *token.FileSet, ifStmt *ast.IfStmt) string {
@@ -257,14 +337,23 @@ func isUpper(b byte) bool { return b >= 'A' && b <= 'Z' }
 
 // buildErrfExpr returns an AST call expression for
 // fmt.Errorf("<context>: %w", err).
-func buildErrfExpr(context string) *ast.CallExpr {
+//
+// errPos is the token position of the original `err` identifier being
+// replaced. Passing it here ensures the printer anchors the new `err`
+// argument at the same source position, which prevents the go/printer from
+// erroneously pulling in comments that appear after the enclosing function's
+// closing brace (e.g. doc comments for the next function declaration).
+func buildErrfExpr(context string, errPos token.Pos) *ast.CallExpr {
 	fmtPkg := &ast.Ident{Name: "fmt"}
 	errorfFn := &ast.SelectorExpr{X: fmtPkg, Sel: &ast.Ident{Name: "Errorf"}}
 	fmtStr := &ast.BasicLit{
 		Kind:  token.STRING,
 		Value: fmt.Sprintf(`"%s: %%w"`, context),
 	}
-	errIdent := &ast.Ident{Name: "err"}
+	// Preserve the original source position so the printer knows this `err`
+	// lives inside the function body and does not misattribute nearby
+	// comments (such as the doc comment of the next function) to it.
+	errIdent := &ast.Ident{Name: "err", NamePos: errPos}
 	return &ast.CallExpr{
 		Fun:  errorfFn,
 		Args: []ast.Expr{fmtStr, errIdent},

@@ -66,7 +66,7 @@ func NewCallAnalyzer(files []string) *CallAnalyzer {
 func (ca *CallAnalyzer) FindCallers(targetName, targetReceiver string) (*CallerAnalysis, error) {
 	// Parse all files and collect definitions
 	if err := ca.symbolAnalyzer.Parse(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse: %w", err)
 	}
 	ca.symbolAnalyzer.collectDefinitions()
 
@@ -115,7 +115,7 @@ func (ca *CallAnalyzer) FindCallers(targetName, targetReceiver string) (*CallerA
 // IsCallableFrom checks if one function can call another
 func (ca *CallAnalyzer) IsCallableFrom(callerName, callerReceiver, targetName, targetReceiver string) (bool, error) {
 	if err := ca.symbolAnalyzer.Parse(); err != nil {
-		return false, err
+		return false, fmt.Errorf("parse: %w", err)
 	}
 	ca.symbolAnalyzer.collectDefinitions()
 	ca.buildCallGraph(targetName, targetReceiver)

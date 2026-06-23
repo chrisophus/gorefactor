@@ -17,12 +17,12 @@ func RunCampaign(ctx context.Context, tc toolChatter, cfg Config) error {
 	}
 	if !cfg.AllowDirty {
 		if err := requireCleanWorktree(cfg.Dir); err != nil {
-			return err
+			return fmt.Errorf("require clean worktree: %w", err)
 		}
 	}
 	prev, err := os.Getwd()
 	if err != nil {
-		return err
+		return fmt.Errorf("getwd: %w", err)
 	}
 	if err := os.Chdir(cfg.Dir); err != nil {
 		return fmt.Errorf("chdir %s: %w", cfg.Dir, err)

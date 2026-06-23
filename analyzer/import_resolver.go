@@ -37,10 +37,12 @@ func (ir *ImportResolver) ResolveImportsForMove(
 	// Parse source file and find function
 	srcPkg, targetFunc, err := ir.findFunctionInFile(srcFile, funcName)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(
+
+			// Get imports used in the function
+			"find function in file: %w", err)
 	}
 
-	// Get imports used in the function
 	usedImports := ir.findImportsUsedInFunc(srcPkg, targetFunc)
 
 	// Get existing imports in destination
@@ -152,15 +154,17 @@ func (ir *ImportResolver) findImportsUsedInFunc(pkg *ast.File, fn *ast.FuncDecl)
 func (ir *ImportResolver) NeedToRemoveImport(filePath, impPath string) (bool, error) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("read file: %w", err)
 	}
 
 	pkg, err := parser.ParseFile(ir.fset, filePath, content, parser.AllErrors)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf(
+
+			// Extract package name from import path
+			"parse file: %w", err)
 	}
 
-	// Extract package name from import path
 	pkgName := filepath.Base(impPath)
 	for _, imp := range pkg.Imports {
 		if strings.Trim(imp.Path.Value, "\"") == impPath {

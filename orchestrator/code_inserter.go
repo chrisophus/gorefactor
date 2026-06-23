@@ -113,7 +113,7 @@ func (ci *CodeInserter) InsertCode(filePath string, location *InsertionLocation,
 	fset := token.NewFileSet()
 	node, immediate, err := ci.loadOrParseNode(filePath, location, codeSnippet, fset)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load or parse node: %w", err)
 	}
 	if immediate != nil {
 		return immediate, nil
@@ -136,10 +136,10 @@ func (ci *CodeInserter) InsertCode(filePath string, location *InsertionLocation,
 		return nil, fmt.Errorf("unknown insertion location type: %s", location.Type)
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("insert code: %w", err)
 	}
 	if err := ci.writeFormattedFile(filePath, node, fset); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("write formatted file: %w", err)
 	}
 	return result, nil
 }
@@ -182,7 +182,7 @@ func (ci *CodeInserter) RemoveCodeBlock(filePath string, location *InsertionLoca
 	}
 	targetFunc, err := ci.resolveTargetFunc(node, location)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolve target func: %w", err)
 	}
 	removedIdx := findStmtByPattern(src, targetFunc.Body.List, fset, stripWhitespace(codePattern))
 	if removedIdx < 0 {
@@ -192,7 +192,7 @@ func (ci *CodeInserter) RemoveCodeBlock(filePath string, location *InsertionLoca
 	endLine := fset.Position(targetFunc.Body.List[removedIdx].End()).Line
 	targetFunc.Body.List = append(targetFunc.Body.List[:removedIdx], targetFunc.Body.List[removedIdx+1:]...)
 	if err := ci.writeFormattedFile(filePath, node, fset); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("write formatted file: %w", err)
 	}
 	return &InsertionResult{
 		File:        filePath,
@@ -214,7 +214,7 @@ func (ci *CodeInserter) ReplaceCodeBlock(filePath string, location *InsertionLoc
 	}
 	targetFunc, err := ci.resolveTargetFunc(node, location)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolve target func: %w", err)
 	}
 	foundIdx := findStmtByPattern(src, targetFunc.Body.List, fset, stripWhitespace(codePattern))
 	if foundIdx < 0 {
@@ -231,7 +231,7 @@ func (ci *CodeInserter) ReplaceCodeBlock(filePath string, location *InsertionLoc
 		append(replacementStmts, targetFunc.Body.List[foundIdx+1:]...)...,
 	)
 	if err := ci.writeFormattedFile(filePath, node, fset); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("write formatted file: %w", err)
 	}
 	return &InsertionResult{
 		File:         filePath,

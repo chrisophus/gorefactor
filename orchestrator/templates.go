@@ -170,10 +170,12 @@ func (tg *TemplateGenerator) GenerateAllTemplates(outputDir string) error {
 	// Generate basic plan template
 	basicPlan := tg.GenerateBasicTemplate("my_refactoring_plan", "Description of your refactoring plan")
 	if err := tg.SaveTemplate(basicPlan, filepath.Join(outputDir, "basic_plan_template.json")); err != nil {
-		return err
+		return fmt.Errorf(
+
+			// Generate operation templates
+			"save template: %w", err)
 	}
 
-	// Generate operation templates
 	operations := map[string]*RefactoringOperation{
 		"extract_method":  tg.GenerateExtractionTemplate(),
 		"inline_method":   tg.GenerateInlineTemplate(),
@@ -188,7 +190,7 @@ func (tg *TemplateGenerator) GenerateAllTemplates(outputDir string) error {
 
 		filename := fmt.Sprintf("%s_template.json", opType)
 		if err := tg.SaveTemplate(plan, filepath.Join(outputDir, filename)); err != nil {
-			return err
+			return fmt.Errorf("save template: %w", err)
 		}
 	}
 
@@ -211,7 +213,7 @@ func (tg *TemplateGenerator) GenerateAllTemplates(outputDir string) error {
 	}
 
 	if err := tg.SaveTemplate(comprehensivePlan, filepath.Join(outputDir, "comprehensive_example.json")); err != nil {
-		return err
+		return fmt.Errorf("save template: %w", err)
 	}
 
 	return nil

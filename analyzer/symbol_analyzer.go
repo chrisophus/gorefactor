@@ -132,10 +132,12 @@ func (ua *UseAnalyzer) Parse() error {
 // FindAllUses finds all uses of a symbol matching the query
 func (ua *UseAnalyzer) FindAllUses(query SymbolQuery) ([]SymbolUse, error) {
 	if err := ua.Parse(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf(
+
+			// First pass: collect all definitions
+			"parse: %w", err)
 	}
 
-	// First pass: collect all definitions
 	ua.collectDefinitions()
 
 	// Second pass: collect all uses
@@ -147,7 +149,7 @@ func (ua *UseAnalyzer) FindAllUses(query SymbolQuery) ([]SymbolUse, error) {
 // FindSymbolDefinition finds where a symbol is defined
 func (ua *UseAnalyzer) FindSymbolDefinition(query SymbolQuery) (*SymbolDefinition, error) {
 	if err := ua.Parse(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse: %w", err)
 	}
 
 	ua.collectDefinitions()
@@ -179,7 +181,7 @@ func (ua *UseAnalyzer) FindSymbolDefinition(query SymbolQuery) (*SymbolDefinitio
 // GetSymbolType returns the type of a symbol
 func (ua *UseAnalyzer) GetSymbolType(name string) (SymbolType, error) {
 	if err := ua.Parse(); err != nil {
-		return "", err
+		return "", fmt.Errorf("parse: %w", err)
 	}
 
 	ua.collectDefinitions()

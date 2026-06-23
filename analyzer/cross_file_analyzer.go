@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -189,7 +190,7 @@ func extractBlocksFromFunc(fn *ast.FuncDecl, filePath string, fset *token.FileSe
 func FindDuplicateBlocksInDir(dirPath string, walk WalkOptions) ([]DuplicateBlock, error) {
 	files, err := WalkGoFiles(dirPath, walk)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("walk go files: %w", err)
 	}
 	return FindDuplicateBlocks(files)
 }

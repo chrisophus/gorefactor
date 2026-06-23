@@ -42,7 +42,7 @@ func LoadJournal() ([]JournalEntry, error) {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("read file: %w", err)
 	}
 	var entries []JournalEntry
 	if err := json.Unmarshal(data, &entries); err != nil {
@@ -70,7 +70,7 @@ var journalSeq int
 func RecordOperation(command, detail string, before map[string][]byte, created []string) (*JournalEntry, error) {
 	entries, err := LoadJournal()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load journal: %w", err)
 	}
 	journalSeq++
 	entry := JournalEntry{
@@ -97,7 +97,7 @@ func RecordOperation(command, detail string, before map[string][]byte, created [
 	}
 	entries = append(entries, entry)
 	if err := saveJournal(entries); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("save journal: %w", err)
 	}
 	return &entry, nil
 }
@@ -108,7 +108,7 @@ func RecordOperation(command, detail string, before map[string][]byte, created [
 func UndoLast() (*JournalEntry, int, error) {
 	entries, err := LoadJournal()
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("load journal: %w", err)
 	}
 	if len(entries) == 0 {
 		return nil, 0, fmt.Errorf("undo journal is empty — nothing to undo")
@@ -130,7 +130,7 @@ func UndoLast() (*JournalEntry, int, error) {
 		}
 		if dir := filepath.Dir(f.Path); dir != "." && dir != "" {
 			if err := os.MkdirAll(dir, 0755); err != nil {
-				return nil, count, err
+				return nil, count, fmt.Errorf("mkdir all: %w", err)
 			}
 		}
 		if err := os.WriteFile(f.Path, data, 0644); err != nil {
@@ -140,7 +140,7 @@ func UndoLast() (*JournalEntry, int, error) {
 	}
 	_ = os.RemoveAll(snapDir)
 	if err := saveJournal(entries[:len(entries)-1]); err != nil {
-		return nil, count, err
+		return nil, count, fmt.Errorf("save journal: %w", err)
 	}
 	return &entry, count, nil
 }
@@ -150,7 +150,7 @@ func UndoLast() (*JournalEntry, int, error) {
 func DropJournalEntry(id string) error {
 	entries, err := LoadJournal()
 	if err != nil {
-		return err
+		return fmt.Errorf("load journal: %w", err)
 	}
 	out := entries[:0]
 	for _, e := range entries {

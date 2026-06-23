@@ -202,14 +202,16 @@ func PrintResult(result TestResult) {
 func CreateTestDir() (string, error) {
 	dir, err := os.MkdirTemp("", "gorefactor-test-*")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf(
+
+			// Initialize go.mod
+			"mkdir temp: %w", err)
 	}
 
-	// Initialize go.mod
 	modPath := filepath.Join(dir, "go.mod")
 	content := "module test\n\ngo 1.24\n"
 	if err := os.WriteFile(modPath, []byte(content), 0644); err != nil {
-		return "", err
+		return "", fmt.Errorf("write file: %w", err)
 	}
 
 	return dir, nil
@@ -219,7 +221,7 @@ func CreateTestDir() (string, error) {
 func WriteGoFile(testDir, filename, content string) (string, error) {
 	path := filepath.Join(testDir, filename)
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		return "", err
+		return "", fmt.Errorf("write file: %w", err)
 	}
 	return path, nil
 }

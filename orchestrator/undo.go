@@ -88,7 +88,7 @@ func ListSnapshots() ([]string, error) {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("read dir: %w", err)
 	}
 	var dirs []string
 	for _, e := range entries {

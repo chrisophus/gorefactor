@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -11,7 +12,7 @@ func FileIfErrLogReturnIssues(file string) ([]LogPropagationIssue, error) {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, file, nil, 0)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse file: %w", err)
 	}
 	var out []LogPropagationIssue
 	report := func(pos token.Position, msg string) {

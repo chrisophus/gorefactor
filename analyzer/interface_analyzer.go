@@ -66,7 +66,7 @@ func NewInterfaceAnalyzer(files []string) *InterfaceAnalyzer {
 func (ia *InterfaceAnalyzer) FindImplementations(interfaceName string) (*ImplementationAnalysis, error) {
 	// Parse all files
 	if err := ia.symbolAnalyzer.Parse(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse: %w", err)
 	}
 
 	ia.symbolAnalyzer.collectDefinitions()
@@ -110,7 +110,7 @@ func (ia *InterfaceAnalyzer) FindImplementations(interfaceName string) (*Impleme
 // VerifyInterfaceImpl checks if a specific type implements an interface
 func (ia *InterfaceAnalyzer) VerifyInterfaceImpl(typeName, interfaceName string) (bool, []string, error) {
 	if err := ia.symbolAnalyzer.Parse(); err != nil {
-		return false, nil, err
+		return false, nil, fmt.Errorf("parse: %w", err)
 	}
 
 	ia.symbolAnalyzer.collectDefinitions()
@@ -138,13 +138,13 @@ func (ia *InterfaceAnalyzer) VerifyInterfaceImpl(typeName, interfaceName string)
 // FindInterfaceUsers finds all places where an interface is used
 func (ia *InterfaceAnalyzer) FindInterfaceUsers(interfaceName string) ([]SymbolUse, error) {
 	if err := ia.symbolAnalyzer.Parse(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse: %w", err)
 	}
 
 	query := SymbolQuery{Name: interfaceName, Type: TypeInterface}
 	uses, err := ia.symbolAnalyzer.FindAllUses(query)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("find all uses: %w", err)
 	}
 
 	return uses, nil

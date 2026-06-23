@@ -183,7 +183,7 @@ func (p *openAIProvider) ChatTools(ctx context.Context, messages []chatMessage, 
 	}
 	buf, err := json.Marshal(reqBody)
 	if err != nil {
-		return chatMessage{}, err
+		return chatMessage{}, fmt.Errorf("marshal: %w", err)
 	}
 	endpoint := p.baseURL + "/chat/completions"
 	provDebugf("openai ChatTools -> POST %s model=%s msgs=%d tools=%d reqBytes=%d",

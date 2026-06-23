@@ -1,9 +1,11 @@
 package analyzer
 
+import "fmt"
+
 // BuildCallerHierarchy builds a tree of callers for visualization
 func (ca *CallAnalyzer) BuildCallerHierarchy(name, receiver string, maxDepth int) (*CallerHierarchy, error) {
 	if err := ca.symbolAnalyzer.Parse(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse: %w", err)
 	}
 	ca.symbolAnalyzer.collectDefinitions()
 	ca.buildCallGraph("", "")
@@ -11,7 +13,7 @@ func (ca *CallAnalyzer) BuildCallerHierarchy(name, receiver string, maxDepth int
 	query := SymbolQuery{Name: name, Receiver: receiver}
 	def, err := ca.symbolAnalyzer.FindSymbolDefinition(query)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("find symbol definition: %w", err)
 	}
 
 	visited := make(map[string]bool)

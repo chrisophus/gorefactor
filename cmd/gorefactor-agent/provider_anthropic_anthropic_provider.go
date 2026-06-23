@@ -25,12 +25,12 @@ func (p *anthropicProvider) Complete(ctx context.Context, system, user string) (
 	}
 	buf, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("marshal: %w", err)
 	}
 
 	status, body, err := p.doWithRetry(ctx, p.baseURL+"/v1/messages", buf)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("do with retry: %w", err)
 	}
 	if status != http.StatusOK {
 		return "", fmt.Errorf("anthropic HTTP %d: %s", status, strings.TrimSpace(string(body)))
@@ -147,7 +147,7 @@ func (p *anthropicProvider) ChatTools(ctx context.Context, messages []chatMessag
 
 	buf, err := json.Marshal(reqBody)
 	if err != nil {
-		return chatMessage{}, err
+		return chatMessage{}, fmt.Errorf("marshal: %w", err)
 	}
 	endpoint := p.baseURL + "/v1/messages"
 	provDebugf("anthropic ChatTools -> POST %s model=%s msgs=%d tools=%d reqBytes=%d",

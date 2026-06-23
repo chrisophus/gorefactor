@@ -36,7 +36,7 @@ func FindPrematureAbstractionsInDir(dir string) ([]PrematureAbstractionIssue, er
 	}
 	pkgs, err := packages.Load(cfg, ".")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load: %w", err)
 	}
 	return findPrematureAbstractions(pkgs), nil
 }
@@ -63,7 +63,7 @@ func FindPrematureAbstractionsInDirs(dirs []string) ([]PrematureAbstractionIssue
 	cfg := &packages.Config{Mode: packages.NeedSyntax | packages.NeedFiles}
 	pkgs, err := packages.Load(cfg, patterns...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load: %w", err)
 	}
 	return findPrematureAbstractions(pkgs), nil
 }

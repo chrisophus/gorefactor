@@ -236,7 +236,7 @@ func FileFunctionComplexities(file string) ([]FunctionComplexity, error) {
 	fset := token.NewFileSet()
 	astFile, err := parser.ParseFile(fset, file, nil, 0)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse file: %w", err)
 	}
 	var out []FunctionComplexity
 	for _, decl := range astFile.Decls {

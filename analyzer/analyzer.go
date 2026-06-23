@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -97,7 +98,7 @@ func AnalyzeBlock(filePath string, startLine, endLine int, config *ExtractionCon
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse file: %w", err)
 	}
 	info := &BlockInfo{StartLine: startLine, EndLine: endLine}
 	var nodesInRange []ast.Node
@@ -182,7 +183,7 @@ func RecommendExtractions(filePath string, functionName string, config *Extracti
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse file: %w", err)
 	}
 	var recommendations []*BlockInfo
 	ast.Inspect(node, func(n ast.Node) bool {

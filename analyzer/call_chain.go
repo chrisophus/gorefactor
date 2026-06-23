@@ -1,5 +1,7 @@
 package analyzer
 
+import "fmt"
+
 // findChainPaths recursively finds all paths from start to target
 func (ca *CallAnalyzer) findChainPaths(currentName, currentReceiver, targetName, targetReceiver string, depth int, currentPath []CallSite) [][]CallSite {
 	var allChains [][]CallSite
@@ -58,7 +60,7 @@ func (ca *CallAnalyzer) isTargetCall(call CallSite, targetName, targetReceiver s
 // FindCallChain finds all call paths from a starting function to a target
 func (ca *CallAnalyzer) FindCallChain(startName, startReceiver, targetName, targetReceiver string, maxDepth int) (*CallChain, error) {
 	if err := ca.symbolAnalyzer.Parse(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse: %w", err)
 	}
 	ca.symbolAnalyzer.collectDefinitions()
 	ca.buildCallGraph("", "") // Build complete call graph

@@ -236,7 +236,7 @@ func (ps *PlanSuggester) countLines() int {
 func (s *SuggestedPlan) ToJSON() (string, error) {
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("marshal indent: %w", err)
 	}
 	return string(data), nil
 }

@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -41,7 +42,7 @@ func FunctionMetricsForSource(filename string, src []byte) ([]FunctionMetrics, e
 	fset := token.NewFileSet()
 	astFile, err := parser.ParseFile(fset, filename, src, 0)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse file: %w", err)
 	}
 	var out []FunctionMetrics
 	for _, decl := range astFile.Decls {

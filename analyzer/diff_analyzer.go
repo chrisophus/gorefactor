@@ -130,7 +130,7 @@ func (da *DiffAnalyzer) analyzeChanges(files []*DiffFile) []*Change {
 func (da *DiffAnalyzer) AnalyzeDiffReader(reader interface{}) (*DiffAnalysis, error) {
 	scanner, err := createScanner(reader)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create scanner: %w", err)
 	}
 	state := &diffState{}
 	for scanner.Scan() {

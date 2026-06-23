@@ -16,9 +16,9 @@ const (
 
 // Walk holds directory and file skip policy from YAML.
 type Walk struct {
-	SkipGeneratedGo  bool     `yaml:"skip_generated_go"`
-	SkipDirSegments  []string `yaml:"skip_dir_segments"`
-	SkipFiles        []string `yaml:"skip_files"`
+	SkipGeneratedGo bool     `yaml:"skip_generated_go"`
+	SkipDirSegments []string `yaml:"skip_dir_segments"`
+	SkipFiles       []string `yaml:"skip_files"`
 }
 
 // Limits holds file-size thresholds from YAML.
@@ -29,10 +29,10 @@ type Limits struct {
 
 // File is the parsed gorefactor lint configuration file.
 type File struct {
-	Walk     Walk              `yaml:"walk"`
-	Limits   Limits            `yaml:"limits"`
-	Rules    map[string]Tier   `yaml:"rules"`
-	Profiles map[string]Rules  `yaml:"profiles"`
+	Walk     Walk             `yaml:"walk"`
+	Limits   Limits           `yaml:"limits"`
+	Rules    map[string]Tier  `yaml:"rules"`
+	Profiles map[string]Rules `yaml:"profiles"`
 	path     string
 	hasRules bool
 }
@@ -47,7 +47,7 @@ func Load(path, startDir string) (*File, error) {
 		var err error
 		path, err = discover(startDir)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("discover: %w", err)
 		}
 		if path == "" {
 			return nil, nil

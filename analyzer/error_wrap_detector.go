@@ -23,7 +23,7 @@ func FileErrorWrapIssues(file string) ([]ErrorWrapIssue, error) {
 	fset := token.NewFileSet()
 	astFile, err := parser.ParseFile(fset, file, nil, 0)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse file: %w", err)
 	}
 	var out []ErrorWrapIssue
 	for _, decl := range astFile.Decls {
@@ -32,6 +32,12 @@ func FileErrorWrapIssues(file string) ([]ErrorWrapIssue, error) {
 			continue
 		}
 		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			// Do not descend into nested function literals: a `return err`
+			// inside a filepath.Walk callback (or any closure) belongs to
+			// that literal's own error contract, not the outer function's.
+			if _, ok := n.(*ast.FuncLit); ok {
+				return false
+			}
 			ret, ok := n.(*ast.ReturnStmt)
 			if !ok {
 				return true

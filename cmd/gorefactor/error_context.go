@@ -196,32 +196,29 @@ func ExampleVariableOutOfScopeError(file string, startLine, endLine int, undefin
 	err := NewDetailedError(ErrVariableOutOfScope,
 		fmt.Sprintf("Cannot extract: variable(s) not in scope: %v", undefinedVars))
 
-	err.WithContext(file, startLine, endLine,
+	_ = err.WithContext(file, startLine, endLine,
 		fmt.Sprintf("Extraction range %d-%d lacks these definitions: %v", startLine, endLine, undefinedVars))
 
 	for _, varName := range undefinedVars {
 		if defLine, ok := definitions[varName]; ok {
-			err.WithRootCause(
+			_ = err.WithRootCause(
 				fmt.Sprintf("%s is defined at line %d, outside extraction range %d-%d",
 					varName, defLine, startLine, endLine))
 		}
 	}
 
-	err.WithSuggestionCommand("add_parameter",
+	_ = err.WithSuggestionCommand("add_parameter",
 		fmt.Sprintf("Add %v as parameter(s) to extracted function", undefinedVars),
 		fmt.Sprintf("gorefactor change-signature %s <functionName> --add-param \"%s <Type>\"", file, undefinedVars[0]),
-		0.95)
-
-	err.WithSuggestion("expand_range",
-		fmt.Sprintf("Include variable definition(s) in extraction range (start at an earlier line)"),
-		0.80)
-
-	err.WithSuggestion("make_global",
-		"Promote variable(s) to package level if appropriate",
-		0.30)
-
-	err.WithDetail("undefinedVariables", undefinedVars)
-	err.WithDetail("variableDefinitions", definitions)
+		0.95).
+		WithSuggestion("expand_range",
+			"Include variable definition(s) in extraction range (start at an earlier line)",
+			0.80).
+		WithSuggestion("make_global",
+			"Promote variable(s) to package level if appropriate",
+			0.30).
+		WithDetail("undefinedVariables", undefinedVars).
+		WithDetail("variableDefinitions", definitions)
 
 	return err
 }
@@ -231,25 +228,20 @@ func ExampleReturnStatementError(file string, startLine, endLine int, returnLine
 	err := NewDetailedError(ErrReturnStatementInBlock,
 		"Cannot extract: block contains return statement(s)")
 
-	err.WithContext(file, startLine, endLine,
-		fmt.Sprintf("Extraction range includes return at line(s) %v", returnLines))
-
-	err.WithRootCause(
-		"Return statements in extracted code are ambiguous - unclear whether to return from extracted function or caller")
-
-	err.WithSuggestion("refactor_to_value_return",
-		"Refactor to use a value return instead of early return",
-		0.70)
-
-	err.WithSuggestion("extract_narrower",
-		"Extract a smaller block that doesn't include the return statement",
-		0.80)
-
-	err.WithSuggestion("extract_broader",
-		"Extract the complete if/else block containing the return",
-		0.60)
-
-	err.WithDetail("returnLines", returnLines)
+	_ = err.WithContext(file, startLine, endLine,
+		fmt.Sprintf("Extraction range includes return at line(s) %v", returnLines)).
+		WithRootCause(
+			"Return statements in extracted code are ambiguous - unclear whether to return from extracted function or caller").
+		WithSuggestion("refactor_to_value_return",
+			"Refactor to use a value return instead of early return",
+			0.70).
+		WithSuggestion("extract_narrower",
+			"Extract a smaller block that doesn't include the return statement",
+			0.80).
+		WithSuggestion("extract_broader",
+			"Extract the complete if/else block containing the return",
+			0.60).
+		WithDetail("returnLines", returnLines)
 
 	return err
 }
@@ -259,7 +251,7 @@ func ExampleTargetNotFoundError(file, targetName string) *DetailedError {
 	err := NewDetailedError(ErrFunctionNotFound,
 		fmt.Sprintf("Cannot find target: %s not found in %s", targetName, file))
 
-	err.WithContext(file, 0, 0,
+	_ = err.WithContext(file, 0, 0,
 		fmt.Sprintf("Function or method '%s' does not exist", targetName)).
 		WithRootCause(
 			fmt.Sprintf("%s is not defined in %s or was already deleted", targetName, file)).
@@ -284,7 +276,7 @@ func ExampleInvalidSnippetError(content, errorMsg string) *DetailedError {
 	err := NewDetailedError(ErrInvalidSnippet,
 		fmt.Sprintf("Cannot insert: code snippet is malformed: %s", errorMsg))
 
-	err.WithContext("snippet", 0, 0,
+	_ = err.WithContext("snippet", 0, 0,
 		"Code snippet failed to parse").
 		WithRootCause(errorMsg).
 		WithSuggestion("check_syntax",
@@ -304,7 +296,7 @@ func ExampleImportCycleError(sourceFile, destFile, targetName string, cycle []st
 	err := NewDetailedError(ErrImportCycle,
 		fmt.Sprintf("Cannot move: would create circular import between %s and %s", sourceFile, destFile))
 
-	err.WithContext(sourceFile, 0, 0,
+	_ = err.WithContext(sourceFile, 0, 0,
 		fmt.Sprintf("Moving %s would create import cycle", targetName)).
 		WithRootCause(
 			fmt.Sprintf("%s imports from another file that %s depends on", destFile, sourceFile)).
@@ -332,20 +324,20 @@ func ExampleHasCallersError(targetName string, callers []string, fileLines map[s
 	err := NewDetailedError(ErrHasCallers,
 		fmt.Sprintf("Cannot delete %s: has %d caller(s)", targetName, callerCount))
 
-	err.WithContext("", 0, 0,
+	_ = err.WithContext("", 0, 0,
 		fmt.Sprintf("%s is called from %d location(s)", targetName, callerCount)).
 		WithRootCause(
 			fmt.Sprintf("Deleting %s would break the build", targetName))
 
 	for _, caller := range callers {
 		if line, ok := fileLines[caller]; ok {
-			err.WithRootCause(fmt.Sprintf("%s:%d", caller, line))
+			_ = err.WithRootCause(fmt.Sprintf("%s:%d", caller, line))
 		} else {
-			err.WithRootCause(caller)
+			_ = err.WithRootCause(caller)
 		}
 	}
 
-	err.WithSuggestion("find_callers",
+	_ = err.WithSuggestion("find_callers",
 		fmt.Sprintf("Use 'gorefactor find-callers %s' to see all call sites", targetName),
 		0.95).
 		WithSuggestion("update_callers",
@@ -373,17 +365,17 @@ func ExamplePatternNotFoundError(targetName, pattern string, count int) *Detaile
 
 	err := NewDetailedError(ErrPatternNotFound, msg)
 
-	err.WithContext("", 0, 0,
+	_ = err.WithContext("", 0, 0,
 		fmt.Sprintf("Pattern %q not found in %s", pattern, targetName)).
 		WithRootCause(
 			"The text to replace does not exist in the function body")
 
 	if count > 0 {
-		err.WithRootCause(
+		_ = err.WithRootCause(
 			fmt.Sprintf("Pattern exists %d time(s), but requested occurrence not in range", count))
 	}
 
-	err.WithSuggestion("relax_pattern",
+	_ = err.WithSuggestion("relax_pattern",
 		"Try a shorter substring that's more likely to exist",
 		0.85).
 		WithSuggestion("check_whitespace",

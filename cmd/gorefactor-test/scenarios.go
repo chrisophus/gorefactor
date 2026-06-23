@@ -129,7 +129,7 @@ func main() {
 		},
 		Validate: func(testDir string) error {
 			if FileContains(filepath.Join(testDir, "service.go"), "func Helper") {
-				return fmt.Errorf("Helper should be deleted")
+				return fmt.Errorf("helper should be deleted")
 			}
 			if !FileContains(filepath.Join(testDir, "main.go"), "\"help\"") {
 				return fmt.Errorf("main.go should be updated")

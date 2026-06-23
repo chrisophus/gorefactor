@@ -116,7 +116,7 @@ func runScenarios(scenarios []TestScenario, verbose bool) []TestResult {
 			})
 			continue
 		}
-		defer os.RemoveAll(testDir)
+		defer func() { _ = os.RemoveAll(testDir) }()
 
 		// Run scenario
 		result := RunScenario(scenario, testDir)

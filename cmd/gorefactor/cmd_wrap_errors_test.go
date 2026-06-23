@@ -182,6 +182,133 @@ func fetchFromDatabase(id string) (string, error) { return id, nil }
 	}
 }
 
+// TestWrapErrorsSentinelBranchBeforeBareReturn is a regression test for Bug 1:
+// wrap-errors was skipping entire if err != nil blocks whenever the body
+// contained more than one statement, even when the extra statements were
+// safe sentinel branches (errors.Is checks) that returned nil for the error
+// slot. The fix scopes the check to the individual block.
+func TestWrapErrorsSentinelBranchBeforeBareReturn(t *testing.T) {
+	src := `package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+var ErrNotFound = errors.New("not found")
+
+func errNotFound(msg string) error { return fmt.Errorf("%s", msg) }
+
+func DeleteGrant(id string) (string, error) {
+	result, err := doDelete(id)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return errNotFound("not found").Error(), nil
+		}
+		return "", err
+	}
+	return result, nil
+}
+
+func doDelete(id string) (string, error) { return id, nil }
+`
+	writeModule(t, map[string]string{"main.go": src})
+	out := captureStdout(t, func() {
+		if err := wrapErrorsCommand([]string{"main.go"}); err != nil {
+			t.Fatalf("wrap-errors: %v", err)
+		}
+	})
+	got := readFile(t, "main.go")
+	// The bare `return "", err` should have been wrapped.
+	if strings.Contains(got, "return \"\", err\n") {
+		t.Fatalf("bare return err after sentinel branch should have been wrapped;\nout=%s\nsrc=%s", out, got)
+	}
+	if !strings.Contains(got, "fmt.Errorf(") {
+		t.Fatalf("expected fmt.Errorf wrapping; got:\n%s", got)
+	}
+}
+
+// TestWrapErrorsLoopBareReturn is a regression test for Bug 1: bare
+// `return nil, err` inside a for-loop's if err != nil block was skipped
+// because the function contained multiple return statements elsewhere.
+func TestWrapErrorsLoopBareReturn(t *testing.T) {
+	src := `package main
+
+func ProcessItems(ids []string) ([]string, error) {
+	var results []string
+	for _, id := range ids {
+		res, err := process(id)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, res)
+	}
+	return results, nil
+}
+
+func process(id string) (string, error) { return id, nil }
+`
+	writeModule(t, map[string]string{"main.go": src})
+	if err := wrapErrorsCommand([]string{"main.go"}); err != nil {
+		t.Fatalf("wrap-errors: %v", err)
+	}
+	got := readFile(t, "main.go")
+	// The bare `return nil, err` inside the loop should have been wrapped.
+	if strings.Contains(got, "return nil, err\n") {
+		t.Fatalf("bare return nil, err inside loop should have been wrapped:\n%s", got)
+	}
+	if !strings.Contains(got, "fmt.Errorf(") {
+		t.Fatalf("expected fmt.Errorf wrapping; got:\n%s", got)
+	}
+}
+
+// TestWrapErrorsDocCommentNotEmbedded is a regression test for Bug 2:
+// when the last statement in a function is `return nil, err` and the very
+// next line after the closing brace is a doc comment for the following
+// function, the rewriter was embedding that doc comment inside the
+// fmt.Errorf(...) call and removing it from its correct position.
+func TestWrapErrorsDocCommentNotEmbedded(t *testing.T) {
+	src := `package main
+
+// FirstFunc does something.
+func FirstFunc() (string, error) {
+	result, err := helper()
+	if err != nil {
+		return "", err
+	}
+	return result, nil
+}
+
+// SecondFunc does something important.
+func SecondFunc() string { return "ok" }
+
+func helper() (string, error) { return "x", nil }
+`
+	writeModule(t, map[string]string{"main.go": src})
+	if err := wrapErrorsCommand([]string{"main.go"}); err != nil {
+		t.Fatalf("wrap-errors: %v", err)
+	}
+	got := readFile(t, "main.go")
+	// The doc comment for SecondFunc must NOT appear inside fmt.Errorf.
+	if strings.Contains(got, "Errorf(") && strings.Contains(got, "SecondFunc does something important") {
+		// Check whether the comment ended up inside the Errorf call.
+		errorfIdx := strings.Index(got, "Errorf(")
+		commentIdx := strings.Index(got, "SecondFunc does something important")
+		closingIdx := strings.Index(got[errorfIdx:], ")")
+		if commentIdx > errorfIdx && commentIdx < errorfIdx+closingIdx {
+			t.Fatalf("doc comment for SecondFunc was embedded inside fmt.Errorf:\n%s", got)
+		}
+	}
+	// The doc comment must still be present before SecondFunc.
+	if !strings.Contains(got, "// SecondFunc does something important.") {
+		t.Fatalf("doc comment for SecondFunc was lost after rewrite:\n%s", got)
+	}
+	// FirstFunc should have been transformed.
+	if strings.Contains(got, "return \"\", err\n") {
+		t.Fatalf("bare return err in FirstFunc should have been wrapped:\n%s", got)
+	}
+}
+
 func TestWrapErrorsContextFallsBackToFuncName(t *testing.T) {
 	// When no preceding assignment precedes the if block, use the function name.
 	src := `package main

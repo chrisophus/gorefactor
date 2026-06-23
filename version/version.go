@@ -4,4 +4,4 @@
 package version
 
 // Version is the current gorefactor release (CLI and agent).
-const Version = "0.4.2"
+const Version = "0.5.0"

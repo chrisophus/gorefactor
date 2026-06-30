@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const mcpTestSrc = `package x
@@ -19,90 +22,57 @@ func Middle() {
 func Leaf() {}
 `
 
-// roundTrip feeds the server one JSON-RPC request line and returns the decoded
-// response. It exercises the real serve() loop over an in-memory pipe.
-func roundTrip(t *testing.T, srv *mcpServer, req map[string]interface{}) jsonrpcResponse {
+// connectTestClient wires an SDK client to the gorefactor server over an
+// in-memory transport and returns the connected client session.
+func connectTestClient(t *testing.T) *mcp.ClientSession {
 	t.Helper()
-	line, err := json.Marshal(req)
+	ctx := context.Background()
+	server := newMCPServer(getCommands())
+	clientT, serverT := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(ctx, serverT, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	cs, err := client.Connect(ctx, clientT, nil)
 	if err != nil {
-		t.Fatalf("marshal request: %v", err)
+		t.Fatalf("client connect: %v", err)
 	}
-	var out strings.Builder
-	if err := srv.serve(strings.NewReader(string(line)+"\n"), &out); err != nil {
-		t.Fatalf("serve: %v", err)
-	}
-	var resp jsonrpcResponse
-	trimmed := strings.TrimSpace(out.String())
-	if trimmed == "" {
-		t.Fatalf("no response for request %v", req)
-	}
-	if err := json.Unmarshal([]byte(trimmed), &resp); err != nil {
-		t.Fatalf("unmarshal response %q: %v", trimmed, err)
-	}
-	return resp
+	t.Cleanup(func() { _ = cs.Close() })
+	return cs
 }
 
-func newTestServer() *mcpServer {
-	return newMCPServer(getCommands())
-}
-
-func TestMCPInitialize(t *testing.T) {
-	srv := newTestServer()
-	resp := roundTrip(t, srv, map[string]interface{}{
-		"jsonrpc": "2.0",
-		"id":      1,
-		"method":  "initialize",
-		"params":  map[string]interface{}{"protocolVersion": "2025-06-18"},
-	})
-	if resp.Error != nil {
-		t.Fatalf("initialize error: %+v", resp.Error)
+func TestMCPInitializeServerInfo(t *testing.T) {
+	cs := connectTestClient(t)
+	got := cs.InitializeResult()
+	if got == nil || got.ServerInfo == nil {
+		t.Fatalf("missing initialize result/serverInfo")
 	}
-	result, _ := resp.Result.(map[string]interface{})
-	if result["protocolVersion"] != "2025-06-18" {
-		t.Errorf("protocolVersion = %v, want echoed 2025-06-18", result["protocolVersion"])
-	}
-	info, _ := result["serverInfo"].(map[string]interface{})
-	if info["name"] != "gorefactor" {
-		t.Errorf("serverInfo.name = %v, want gorefactor", info["name"])
-	}
-}
-
-func TestMCPNotificationNoResponse(t *testing.T) {
-	srv := newTestServer()
-	var out strings.Builder
-	// A notification (no id) must produce no response line.
-	if err := srv.serve(strings.NewReader(`{"jsonrpc":"2.0","method":"notifications/initialized"}`+"\n"), &out); err != nil {
-		t.Fatalf("serve: %v", err)
-	}
-	if strings.TrimSpace(out.String()) != "" {
-		t.Errorf("notification produced a response: %q", out.String())
+	if got.ServerInfo.Name != "gorefactor" {
+		t.Errorf("serverInfo.name = %q, want gorefactor", got.ServerInfo.Name)
 	}
 }
 
 func TestMCPToolsListSchema(t *testing.T) {
-	srv := newTestServer()
-	resp := roundTrip(t, srv, map[string]interface{}{
-		"jsonrpc": "2.0", "id": 2, "method": "tools/list",
-	})
-	if resp.Error != nil {
-		t.Fatalf("tools/list error: %+v", resp.Error)
-	}
-	result, _ := resp.Result.(map[string]interface{})
-	rawTools, _ := result["tools"].([]interface{})
-	if len(rawTools) != len(srv.names) {
-		t.Fatalf("tools/list returned %d tools, want %d", len(rawTools), len(srv.names))
+	cs := connectTestClient(t)
+	res, err := cs.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
 	}
 
-	byName := map[string]map[string]interface{}{}
-	for _, rt := range rawTools {
-		tool := rt.(map[string]interface{})
-		byName[tool["name"].(string)] = tool
+	byName := map[string]*mcp.Tool{}
+	for _, tool := range res.Tools {
+		byName[tool.Name] = tool
 	}
 
-	// Every allowlisted command must appear and never expose a mutator.
+	// Every allowlisted command must appear, and no mutator may leak.
 	for _, name := range mcpReadOnlyTools {
-		if _, ok := byName[name]; !ok {
+		tool, ok := byName[name]
+		if !ok {
 			t.Errorf("tool %q missing from tools/list", name)
+			continue
+		}
+		if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint {
+			t.Errorf("tool %q should carry ReadOnlyHint", name)
 		}
 	}
 	for _, mutator := range []string{"create", "insert", "replace", "move", "delete", "rename"} {
@@ -113,11 +83,9 @@ func TestMCPToolsListSchema(t *testing.T) {
 
 	// The generated inputSchema must match each backing command's flags
 	// (skipping forced/internal flags) plus the positional args array.
-	for _, name := range srv.names {
-		cmd := srv.tools[name]
-		tool := byName[name]
-		schema, _ := tool["inputSchema"].(map[string]interface{})
-		props, _ := schema["properties"].(map[string]interface{})
+	for name, tool := range byName {
+		cmd := getCommands()[name]
+		props := schemaProperties(t, tool.InputSchema)
 
 		want := map[string]bool{}
 		if cmd.MaxArgs != 0 {
@@ -129,9 +97,7 @@ func TestMCPToolsListSchema(t *testing.T) {
 			}
 			key := flagParamName(flag)
 			want[key] = true
-			// Value flags are strings; boolean flags are booleans.
-			p, _ := props[key].(map[string]interface{})
-			gotType := p["type"]
+			gotType := props[key]["type"]
 			if takesValue && gotType != "string" {
 				t.Errorf("%s: flag %s type = %v, want string", name, flag, gotType)
 			}
@@ -142,14 +108,33 @@ func TestMCPToolsListSchema(t *testing.T) {
 		if len(props) != len(want) {
 			t.Errorf("%s: schema has %d properties %v, want %d %v", name, len(props), keysOf(props), len(want), want)
 		}
-		// --json is forced, never a parameter.
 		if _, leaked := props["json"]; leaked {
 			t.Errorf("%s: --json must not be a tool parameter", name)
 		}
 	}
 }
 
-func keysOf(m map[string]interface{}) []string {
+// schemaProperties decodes a tool's inputSchema (delivered to the client as a
+// map[string]any) into a properties map keyed by property name.
+func schemaProperties(t *testing.T, schema any) map[string]map[string]interface{} {
+	t.Helper()
+	b, err := json.Marshal(schema)
+	if err != nil {
+		t.Fatalf("marshal schema: %v", err)
+	}
+	var decoded struct {
+		Properties map[string]map[string]interface{} `json:"properties"`
+	}
+	if err := json.Unmarshal(b, &decoded); err != nil {
+		t.Fatalf("unmarshal schema: %v", err)
+	}
+	if decoded.Properties == nil {
+		return map[string]map[string]interface{}{}
+	}
+	return decoded.Properties
+}
+
+func keysOf(m map[string]map[string]interface{}) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)
@@ -157,30 +142,26 @@ func keysOf(m map[string]interface{}) []string {
 	return out
 }
 
-func TestMCPToolsCallCallgraph(t *testing.T) {
+func TestMCPCallToolCallgraph(t *testing.T) {
 	t.Chdir(t.TempDir())
 	writeTempGo(t, ".", "x.go", mcpTestSrc)
 
-	srv := newTestServer()
-	resp := roundTrip(t, srv, map[string]interface{}{
-		"jsonrpc": "2.0", "id": 3, "method": "tools/call",
-		"params": map[string]interface{}{
-			"name": "callgraph",
-			"arguments": map[string]interface{}{
-				"args":  []string{"Top"},
-				"depth": "3",
-			},
+	cs := connectTestClient(t)
+	res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
+		Name: "callgraph",
+		Arguments: map[string]interface{}{
+			"args":  []string{"Top"},
+			"depth": "3",
 		},
 	})
-	if resp.Error != nil {
-		t.Fatalf("tools/call error: %+v", resp.Error)
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
 	}
-	result, _ := resp.Result.(map[string]interface{})
-	if result["isError"] == true {
-		t.Fatalf("tool reported error: %+v", result)
+	if res.IsError {
+		t.Fatalf("tool reported error: %s", toolText(t, res))
 	}
-	text := toolText(t, result)
-	// --json is forced, so the result must be valid JSON mentioning the callees.
+	text := toolText(t, res)
+	// --json is forced, so the result must be valid JSON naming the callees.
 	if !json.Valid([]byte(text)) {
 		t.Errorf("callgraph output is not JSON (forced --json failed):\n%s", text)
 	}
@@ -191,58 +172,43 @@ func TestMCPToolsCallCallgraph(t *testing.T) {
 	}
 }
 
-func TestMCPToolsCallErrorIsToolError(t *testing.T) {
+func TestMCPCallToolErrorIsToolError(t *testing.T) {
 	t.Chdir(t.TempDir())
 	writeTempGo(t, ".", "x.go", mcpTestSrc)
 
-	srv := newTestServer()
-	resp := roundTrip(t, srv, map[string]interface{}{
-		"jsonrpc": "2.0", "id": 4, "method": "tools/call",
-		"params": map[string]interface{}{
-			"name":      "callgraph",
-			"arguments": map[string]interface{}{"args": []string{"DoesNotExist"}},
-		},
+	cs := connectTestClient(t)
+	res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "callgraph",
+		Arguments: map[string]interface{}{"args": []string{"DoesNotExist"}},
 	})
-	// A command failure is surfaced as a tool error, not a JSON-RPC error.
-	if resp.Error != nil {
-		t.Fatalf("expected tool-level error, got JSON-RPC error: %+v", resp.Error)
+	// A command failure is surfaced as a tool error, not a protocol error.
+	if err != nil {
+		t.Fatalf("expected tool-level error, got protocol error: %v", err)
 	}
-	result, _ := resp.Result.(map[string]interface{})
-	if result["isError"] != true {
-		t.Errorf("expected isError=true for missing target, got %+v", result)
+	if !res.IsError {
+		t.Errorf("expected IsError=true for missing target, got: %s", toolText(t, res))
 	}
 }
 
-func TestMCPUnknownTool(t *testing.T) {
-	srv := newTestServer()
-	resp := roundTrip(t, srv, map[string]interface{}{
-		"jsonrpc": "2.0", "id": 5, "method": "tools/call",
-		"params": map[string]interface{}{"name": "nope", "arguments": map[string]interface{}{}},
+func TestMCPCallUnknownTool(t *testing.T) {
+	cs := connectTestClient(t)
+	_, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "nope",
+		Arguments: map[string]interface{}{},
 	})
-	if resp.Error == nil {
-		t.Fatalf("expected JSON-RPC error for unknown tool")
-	}
-	if resp.Error.Code != rpcInvalidParams {
-		t.Errorf("error code = %d, want %d", resp.Error.Code, rpcInvalidParams)
+	if err == nil {
+		t.Fatalf("expected protocol error for unknown tool")
 	}
 }
 
-func TestMCPUnknownMethod(t *testing.T) {
-	srv := newTestServer()
-	resp := roundTrip(t, srv, map[string]interface{}{
-		"jsonrpc": "2.0", "id": 6, "method": "bogus/method",
-	})
-	if resp.Error == nil || resp.Error.Code != rpcMethodNotFound {
-		t.Fatalf("expected method-not-found error, got %+v", resp.Error)
-	}
-}
-
-func toolText(t *testing.T, result map[string]interface{}) string {
+func toolText(t *testing.T, res *mcp.CallToolResult) string {
 	t.Helper()
-	content, _ := result["content"].([]interface{})
-	if len(content) == 0 {
-		t.Fatalf("tool result has no content: %+v", result)
+	if len(res.Content) == 0 {
+		t.Fatalf("tool result has no content")
 	}
-	first, _ := content[0].(map[string]interface{})
-	return first["text"].(string)
+	tc, ok := res.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("first content is %T, want *mcp.TextContent", res.Content[0])
+	}
+	return tc.Text
 }

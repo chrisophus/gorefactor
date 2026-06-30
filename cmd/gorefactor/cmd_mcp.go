@@ -1,30 +1,30 @@
 package main
 
 import (
-	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"os"
 	"sort"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/chrisophus/gorefactor/version"
 )
 
-// gorefactor mcp — a minimal stdio Model Context Protocol (MCP) server that
-// exposes gorefactor's read-only analysis commands as native MCP tools. Any
-// MCP client (Claude Code, Cursor, Copilot) can then call gorefactor's exact,
-// AST/type-based Go intelligence — call graph, find-callers/uses, blast-radius,
-// lint — through one endpoint.
+// gorefactor mcp — a stdio Model Context Protocol (MCP) server that exposes
+// gorefactor's read-only analysis commands as native MCP tools. Any MCP client
+// (Claude Code, Cursor, Copilot) can then call gorefactor's exact,
+// AST/type-based Go intelligence — call graph, find-callers/uses,
+// blast-radius, lint — through one endpoint.
 //
-// This is the Phase 0–1 slice of docs/mcp-server-plan.md: an in-house
-// newline-delimited JSON-RPC 2.0 server (no new dependencies) serving
-// initialize / tools/list / tools/call over an allowlist of read-only
-// commands. Each tool wraps an existing Command: the server reconstructs an
-// argv from the JSON tool-call arguments, runs Command.Run with stdout
-// captured, and returns the captured text as the tool result. Mutation tools
-// (Phase 3) and the long-lived index cache (Phase 2) are intentionally not
-// part of this slice.
+// This is the Phase 0–1 slice of docs/mcp-server-plan.md. Per the plan's
+// option to "adopt a Go MCP SDK", the transport is the official
+// github.com/modelcontextprotocol/go-sdk, which gives us a spec-complete
+// server (and a clean path to resources/prompts in Phase 4). Each tool wraps
+// an existing Command: the server reconstructs an argv from the JSON
+// tool-call arguments, runs Command.Run with stdout captured, and returns the
+// captured text as the tool result. Mutation tools (Phase 3) and the
+// long-lived index cache (Phase 2) are intentionally not part of this slice.
 
 func init() {
 	registerCommand(Command{
@@ -78,156 +78,62 @@ var mcpSkipFlags = map[string]bool{
 }
 
 func mcpCommand(args []string) error {
-	srv := newMCPServer(getCommands())
-	return srv.serve(os.Stdin, os.Stdout)
+	server := newMCPServer(getCommands())
+	return server.Run(context.Background(), &mcp.StdioTransport{})
 }
 
-// mcpServer holds the resolved set of exposed tools.
-type mcpServer struct {
-	tools map[string]Command // tool name -> backing command
-	names []string           // sorted exposed tool names
-}
+// newMCPServer builds an SDK server with one tool per allowlisted, read-only
+// command. The tools are registered via the low-level Server.AddTool so we can
+// supply our own dynamically-generated input schema (one per command, derived
+// from its flags) rather than a reflection-inferred Go struct schema.
+func newMCPServer(cmds map[string]Command) *mcp.Server {
+	server := mcp.NewServer(&mcp.Implementation{
+		Name:    "gorefactor",
+		Version: version.Version,
+	}, nil)
 
-func newMCPServer(cmds map[string]Command) *mcpServer {
-	s := &mcpServer{tools: map[string]Command{}}
-	for _, name := range mcpReadOnlyTools {
-		if cmd, ok := cmds[name]; ok {
-			s.tools[name] = cmd
-			s.names = append(s.names, name)
-		}
-	}
-	sort.Strings(s.names)
-	return s
-}
-
-// --- JSON-RPC 2.0 envelope types -------------------------------------------
-
-type jsonrpcRequest struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      json.RawMessage `json:"id,omitempty"`
-	Method  string          `json:"method"`
-	Params  json.RawMessage `json:"params,omitempty"`
-}
-
-type jsonrpcResponse struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      json.RawMessage `json:"id,omitempty"`
-	Result  interface{}     `json:"result,omitempty"`
-	Error   *jsonrpcError   `json:"error,omitempty"`
-}
-
-type jsonrpcError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-}
-
-const (
-	rpcMethodNotFound = -32601
-	rpcInvalidParams  = -32602
-)
-
-// serve runs the stdio message loop. MCP's stdio transport frames each
-// JSON-RPC message as a single newline-delimited line, so we scan line by
-// line. Requests (with an id) get a response; notifications (no id) do not.
-func (s *mcpServer) serve(in io.Reader, out io.Writer) error {
-	scanner := bufio.NewScanner(in)
-	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
+	names := append([]string(nil), mcpReadOnlyTools...)
+	sort.Strings(names)
+	for _, name := range names {
+		cmd, ok := cmds[name]
+		if !ok {
 			continue
 		}
-		var req jsonrpcRequest
-		if err := json.Unmarshal(line, &req); err != nil {
-			// We cannot recover an id from an unparseable line; skip it.
-			continue
-		}
-		resp, respond := s.dispatch(&req)
-		if !respond {
-			continue
-		}
-		if err := writeJSONLine(out, resp); err != nil {
-			return err
-		}
-	}
-	return scanner.Err()
-}
-
-// dispatch routes one request. The second return reports whether a response
-// should be written (notifications return false).
-func (s *mcpServer) dispatch(req *jsonrpcRequest) (jsonrpcResponse, bool) {
-	isNotification := len(req.ID) == 0
-	resp := jsonrpcResponse{JSONRPC: "2.0", ID: req.ID}
-
-	switch req.Method {
-	case "initialize":
-		resp.Result = s.handleInitialize(req.Params)
-	case "notifications/initialized", "notifications/cancelled", "ping":
-		if req.Method == "ping" {
-			resp.Result = map[string]interface{}{}
-			return resp, !isNotification
-		}
-		// Acknowledged notifications carry no id and need no reply.
-		return resp, false
-	case "tools/list":
-		resp.Result = map[string]interface{}{"tools": s.toolDefinitions()}
-	case "tools/call":
-		result, rpcErr := s.handleToolsCall(req.Params)
-		if rpcErr != nil {
-			resp.Error = rpcErr
-		} else {
-			resp.Result = result
-		}
-	default:
-		resp.Error = &jsonrpcError{Code: rpcMethodNotFound, Message: "method not found: " + req.Method}
-	}
-
-	if isNotification {
-		return resp, false
-	}
-	return resp, true
-}
-
-func (s *mcpServer) handleInitialize(params json.RawMessage) map[string]interface{} {
-	protocolVersion := "2024-11-05"
-	if len(params) > 0 {
-		var p struct {
-			ProtocolVersion string `json:"protocolVersion"`
-		}
-		if err := json.Unmarshal(params, &p); err == nil && p.ProtocolVersion != "" {
-			protocolVersion = p.ProtocolVersion
-		}
-	}
-	return map[string]interface{}{
-		"protocolVersion": protocolVersion,
-		"capabilities": map[string]interface{}{
-			"tools": map[string]interface{}{},
-		},
-		"serverInfo": map[string]interface{}{
-			"name":    "gorefactor",
-			"version": version.Version,
-		},
-	}
-}
-
-// mcpTool is the MCP tool descriptor returned by tools/list.
-type mcpTool struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	InputSchema map[string]interface{} `json:"inputSchema"`
-}
-
-func (s *mcpServer) toolDefinitions() []mcpTool {
-	tools := make([]mcpTool, 0, len(s.names))
-	for _, name := range s.names {
-		cmd := s.tools[name]
-		tools = append(tools, mcpTool{
+		tool := &mcp.Tool{
 			Name:        name,
 			Description: toolDescription(cmd),
 			InputSchema: toolInputSchema(cmd),
-		})
+			Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
+		}
+		server.AddTool(tool, toolHandler(cmd))
 	}
-	return tools
+	return server
+}
+
+// toolHandler adapts a Command into an MCP ToolHandler. It reconstructs an
+// argv from the raw JSON arguments and runs the command with stdout captured.
+// A command that returns an error becomes an MCP tool error (IsError) carrying
+// the message, so the model sees the failure and can self-correct, rather than
+// the failure surfacing as a protocol-level error.
+func toolHandler(cmd Command) mcp.ToolHandler {
+	return func(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		argv, err := buildArgv(cmd, req.Params.Arguments)
+		if err != nil {
+			return toolErrorResult(err.Error()), nil
+		}
+		var runErr error
+		output := captureStdoutOf(func() {
+			runErr = cmd.Run(argv)
+		})
+		if runErr != nil {
+			text := runErr.Error()
+			if output != "" {
+				text = output + "\n" + text
+			}
+			return toolErrorResult(text), nil
+		}
+		return toolTextResult(output), nil
+	}
 }
 
 func toolDescription(cmd Command) string {
@@ -241,7 +147,9 @@ func toolDescription(cmd Command) string {
 // toolInputSchema derives a JSON Schema for a command's parameters: an `args`
 // array for positional arguments (bounded by MinArgs/MaxArgs) plus one
 // property per exposed flag (boolean flags -> boolean, value flags -> string).
-func toolInputSchema(cmd Command) map[string]interface{} {
+// It is returned as json.RawMessage so the SDK passes it through verbatim
+// (Server.AddTool does no schema inference or validation of its own).
+func toolInputSchema(cmd Command) json.RawMessage {
 	properties := map[string]interface{}{}
 	var required []string
 
@@ -286,7 +194,13 @@ func toolInputSchema(cmd Command) map[string]interface{} {
 	if len(required) > 0 {
 		schema["required"] = required
 	}
-	return schema
+	raw, err := json.Marshal(schema)
+	if err != nil {
+		// The schema is built from string keys and primitive values, so this
+		// cannot fail in practice; fall back to a permissive object schema.
+		return json.RawMessage(`{"type":"object"}`)
+	}
+	return raw
 }
 
 // flagParamName converts a CLI flag (e.g. "--in") into a JSON property name
@@ -307,42 +221,6 @@ func sortedFlagNames(flags map[string]bool) []string {
 	}
 	sort.Strings(names)
 	return names
-}
-
-// handleToolsCall reconstructs an argv from the JSON arguments and runs the
-// backing command with stdout captured. A command that returns an error
-// becomes an MCP tool error (isError=true) carrying the message, so the model
-// sees the failure rather than the JSON-RPC layer swallowing it.
-func (s *mcpServer) handleToolsCall(params json.RawMessage) (map[string]interface{}, *jsonrpcError) {
-	var call struct {
-		Name      string          `json:"name"`
-		Arguments json.RawMessage `json:"arguments"`
-	}
-	if err := json.Unmarshal(params, &call); err != nil {
-		return nil, &jsonrpcError{Code: rpcInvalidParams, Message: "invalid params: " + err.Error()}
-	}
-	cmd, ok := s.tools[call.Name]
-	if !ok {
-		return nil, &jsonrpcError{Code: rpcInvalidParams, Message: "unknown tool: " + call.Name}
-	}
-
-	argv, err := buildArgv(cmd, call.Arguments)
-	if err != nil {
-		return nil, &jsonrpcError{Code: rpcInvalidParams, Message: err.Error()}
-	}
-
-	var runErr error
-	output := captureStdoutOf(func() {
-		runErr = cmd.Run(argv)
-	})
-	if runErr != nil {
-		text := runErr.Error()
-		if output != "" {
-			text = output + "\n" + text
-		}
-		return toolTextResult(text, true), nil
-	}
-	return toolTextResult(output, false), nil
 }
 
 // buildArgv turns the tool arguments object into the positional + flag argv
@@ -401,21 +279,15 @@ func buildArgv(cmd Command, raw json.RawMessage) ([]string, error) {
 	return argv, nil
 }
 
-func toolTextResult(text string, isError bool) map[string]interface{} {
-	return map[string]interface{}{
-		"content": []map[string]interface{}{
-			{"type": "text", "text": text},
-		},
-		"isError": isError,
+func toolTextResult(text string) *mcp.CallToolResult {
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: text}},
 	}
 }
 
-func writeJSONLine(out io.Writer, v interface{}) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
+func toolErrorResult(text string) *mcp.CallToolResult {
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: text}},
+		IsError: true,
 	}
-	b = append(b, '\n')
-	_, err = out.Write(b)
-	return err
 }

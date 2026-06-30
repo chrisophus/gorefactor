@@ -121,11 +121,11 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "init-agent-rules",
-		Description: "Write the gorefactor agent-rules snippet into CLAUDE.md / .cursorrules / AGENTS.md [--target claude.md|cursor|agents.md|all]",
-		Usage:       "init-agent-rules [--target claude.md|cursor|agents.md|all]",
+		Description: "Write the gorefactor agent-rules snippet into CLAUDE.md / .cursorrules / AGENTS.md [--target ...]; with --mcp also emit a .mcp.json pointing a client at `gorefactor mcp`",
+		Usage:       "init-agent-rules [--target claude.md|cursor|agents.md|all] [--mcp] [--mcp-only]",
 		MinArgs:     0,
 		MaxArgs:     0,
-		Flags:       map[string]bool{"--target": true},
+		Flags:       map[string]bool{"--target": true, "--mcp": false, "--mcp-only": false},
 		Run:         initAgentRulesCommand,
 	})
 	registerCommand(Command{

@@ -1,0 +1,112 @@
+package main
+
+import (
+	"fmt"
+	"os/exec"
+	"sort"
+	"strings"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+// Phase 3 of docs/mcp-server-plan.md: opt-in mutation tools. When the server
+// is started with --allow-write, the safe-edit *guides*
+// (create/insert/replace/move/rename/delete/...) are exposed as MCP tools in
+// addition to the read-only analysis tools. They are the differentiator over a
+// read-only indexer: an agent gets precise Go analysis *and* deterministic,
+// AST-validated edits through one endpoint, and because each guide parses
+// before it writes, the failure mode is "tool rejects the change" rather than
+// "malformed Go on disk".
+//
+// Safety model (mirrors the gorefactor-agent loop):
+//   - --allow-write is OFF by default; a default server is read-only.
+//   - Unless --allow-dirty is passed, the worktree must be clean at startup so
+//     every edit is reversible with `git reset --hard` back to that baseline.
+//   - `undo` (the .gorefactor/ snapshot rollback) is surfaced as a tool.
+//   - Each tool is annotated destructive so clients prompt for approval.
+
+// mcpWriteTools is the allowlist of registered mutation commands exposed as MCP
+// tools when --allow-write is set. Like mcpReadOnlyTools it is explicit rather
+// than "everything not read-only", so a new command is never auto-exposed for
+// writing without a deliberate addition here.
+var mcpWriteTools = []string{
+	"create",
+	"insert",
+	"replace",
+	"replace-text",
+	"replace-body",
+	"move",
+	"rename",
+	"delete",
+	"inline",
+	"add-field",
+	"change-signature",
+	"change-receiver",
+	"set-doc",
+	"extract",
+	"txn",
+	"undo",
+}
+
+// mcpIdempotentWriteTools lists the write tools that have no additional effect
+// when called again with the same arguments, so we can set IdempotentHint
+// accurately (it informs client retry behaviour). `undo` is included because a
+// second undo of the same snapshot is a no-op; the rest of the guides change
+// the tree on each successful application.
+var mcpIdempotentWriteTools = map[string]bool{
+	"undo": true,
+}
+
+// registerMCPWriteTools adds the mutation guides to the server. It reuses the
+// same argv-reconstruction handler as the read-only tools; only the tool
+// annotations differ (destructive, not read-only).
+func registerMCPWriteTools(server *mcp.Server, cmds map[string]Command) {
+	names := append([]string(nil), mcpWriteTools...)
+	sort.Strings(names)
+	destructive := true
+	for _, name := range names {
+		cmd, ok := cmds[name]
+		if !ok {
+			continue
+		}
+		idempotent := mcpIdempotentWriteTools[name]
+		tool := &mcp.Tool{
+			Name:        name,
+			Description: writeToolDescription(cmd),
+			InputSchema: toolInputSchema(cmd),
+			Annotations: &mcp.ToolAnnotations{
+				ReadOnlyHint:    false,
+				DestructiveHint: &destructive,
+				IdempotentHint:  idempotent,
+			},
+		}
+		server.AddTool(tool, toolHandler(cmd))
+	}
+}
+
+// writeToolDescription prefixes the command's own description with a clear
+// "modifies files" note so a client (and the human approving the call) sees
+// the mutation up front, independent of whether it renders tool annotations.
+func writeToolDescription(cmd Command) string {
+	return "Modifies Go source on disk. " + toolDescription(cmd)
+}
+
+// mcpRequireCleanWorktree enforces the same precondition as the agent loop's
+// requireCleanWorktree: the target must be a git work tree with no
+// uncommitted changes, so the server's edits are fully reversible. It is a
+// standalone copy because the agent's version lives in a different package
+// (cmd/gorefactor-agent) and the MCP server must not depend on it.
+func mcpRequireCleanWorktree(dir string) error {
+	if out, err := exec.Command("git", "-C", dir, "rev-parse", "--is-inside-work-tree").CombinedOutput(); err != nil {
+		return fmt.Errorf("mcp --allow-write requires a git work tree for safe rollback: %s",
+			strings.TrimSpace(string(out)))
+	}
+	out, err := exec.Command("git", "-C", dir, "status", "--porcelain").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git status: %w", err)
+	}
+	if strings.TrimSpace(string(out)) != "" {
+		return fmt.Errorf("working tree is dirty; commit or stash first so edits are reversible, or pass --allow-dirty")
+	}
+	return nil
+}

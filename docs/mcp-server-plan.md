@@ -9,7 +9,12 @@ exposes its 32 tools over MCP.
 tools ship by default; the mutation guides are exposed behind `--allow-write`
 (Phase 3), and `skeleton`/`inspect`/`context` are served as MCP resources with
 an `init-agent-rules --mcp` installer (Phase 4). Phase 2 (the long-lived index
-cache) remains the one open item.
+cache) is now implemented in `cmd_callgraph_build.go` + `index_cache.go` /
+`index_cache_callgraph.go`: a process-global parse cache (shared by the call
+graph and the `find-*` analyzers) plus a per-file call-index cache, both keyed
+by file mtime+size. Benchmarks in `index_cache_test.go` show ~2.8× faster
+call-index rebuilds and ~4× faster `find-callers` on a warm cache, with
+16–18× fewer allocations. Prompts (part of Phase 4) remain the one open item.
 
 ## Why gorefactor is well-positioned
 
@@ -72,15 +77,28 @@ New command `gorefactor mcp` (stdio server). Auto-generate one tool per
 - Maintain an explicit allowlist of read-only command names (don't expose
   mutators yet).
 
-### Phase 2 — long-lived index cache (the "index once" win)
+### Phase 2 — long-lived index cache (the "index once" win) ✅ implemented
 codeindexer's speed comes from indexing once into a graph DB. gorefactor
 rebuilds the call index (`buildCallIndex`) per invocation — fine for one-shot
-CLI, wasteful for a long-lived server. Add an in-process cache:
+CLI, wasteful for a long-lived server. Implemented as two process-global,
+mtime+size-keyed caches:
 
-- Parse the package set / call index once; key entries by file mtime.
-- Invalidate only changed files on each tool call (or watch with fsnotify).
-- This is where `callgraph`/`blast-radius`/`find-*` get their biggest speedup in
-  server mode.
+- **`parseCache`** (`index_cache.go`): path → parsed `*ast.File` over a shared
+  `FileSet`. Shared by the call-graph builder *and* the `find-*` analyzers via
+  `UseAnalyzer.SeedASTs`, so a `find-callers` call reuses ASTs a prior
+  `callgraph` call already parsed.
+- **`callIndexCache`** (`index_cache_callgraph.go`): path → per-file defs + raw
+  call edges, so `buildCallIndex` skips the AST walk for unchanged files and
+  only re-resolves the (cheap) cross-file edges.
+- The file *set* is intentionally not cached: callers re-walk the tree each call
+  (`collectGoFiles`), so added/removed files are always seen; only the expensive
+  per-file parse/extract step is memoized. Invalidation is by file mtime+size
+  (the build-cache/gopls signal), no fsnotify dependency.
+- `callgraph`/`blast-radius`/the `high-blast-radius` lint rule go through
+  `buildCallIndex` and benefit transparently; `find-callers`/`find-uses`/
+  `find-implementations` seed their analyzer from the shared parse cache.
+- Validated by benchmarks in `index_cache_test.go` (warm vs cold): ~2.8× faster
+  call-index rebuilds, ~4× faster `find-callers`, 16–18× fewer allocations.
 
 ### Phase 3 — opt-in mutation tools (the differentiator) ✅ implemented
 Behind a `--allow-write` flag (default **off**), expose the guides:

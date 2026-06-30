@@ -32,6 +32,7 @@ func findCallersCommand(args []string) error {
 		return err
 	}
 	ca := analyzer.NewCallAnalyzer(files)
+	ca.SeedASTs(globalParseCache.load(files))
 	res, err := ca.FindCallers(name, recv)
 	if err != nil {
 		return err
@@ -89,6 +90,7 @@ func findUsesCommand(args []string) error {
 		return err
 	}
 	ua := analyzer.NewUseAnalyzer(files)
+	ua.SeedASTs(globalParseCache.load(files))
 	uses, err := ua.FindAllUses(analyzer.SymbolQuery{Name: name, Receiver: recv})
 	if err != nil {
 		return err
@@ -128,6 +130,7 @@ func findImplementationsCommand(args []string) error {
 		return err
 	}
 	ia := analyzer.NewInterfaceAnalyzer(files)
+	ia.SeedASTs(globalParseCache.load(files))
 	res, err := ia.FindImplementations(target)
 	if err != nil {
 		return err

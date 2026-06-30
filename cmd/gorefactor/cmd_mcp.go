@@ -25,7 +25,9 @@ import (
 // guides behind --allow-write (Phase 3, cmd_mcp_write.go), and
 // skeleton/inspect/context resources (Phase 4, cmd_mcp_resources.go). The
 // argv/schema helpers live in cmd_mcp_schema.go. The long-lived index cache
-// (Phase 2) is the remaining open item.
+// (Phase 2) is implemented in index_cache.go / index_cache_callgraph.go: a
+// process-global parse + call-index cache (mtime/size-keyed) that the call
+// graph and find-* analyzers share, so the server parses each file once.
 
 func init() {
 	registerCommand(Command{

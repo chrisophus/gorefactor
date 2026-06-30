@@ -129,6 +129,18 @@ func (ua *UseAnalyzer) Parse() error {
 	return nil
 }
 
+// SeedASTs injects a pre-parsed FileSet and per-file ASTs, marking the analyzer
+// as already parsed so a subsequent Parse() is a no-op. It lets a long-lived
+// caller (e.g. the MCP server) parse each file once into a shared cache and
+// reuse the ASTs across many queries instead of re-reading and re-parsing every
+// file on every call. The FileSet must be the one the ASTs were parsed with, so
+// position lookups stay valid. asts maps file path -> parsed file.
+func (ua *UseAnalyzer) SeedASTs(fset *token.FileSet, asts map[string]*ast.File) {
+	ua.fset = fset
+	ua.fileASTs = asts
+	ua.parsed = true
+}
+
 // FindAllUses finds all uses of a symbol matching the query
 func (ua *UseAnalyzer) FindAllUses(query SymbolQuery) ([]SymbolUse, error) {
 	if err := ua.Parse(); err != nil {

@@ -2,6 +2,8 @@ package analyzer
 
 import (
 	"fmt"
+	"go/ast"
+	"go/token"
 )
 
 // Implementation represents a type that implements an interface
@@ -60,6 +62,13 @@ func NewInterfaceAnalyzer(files []string) *InterfaceAnalyzer {
 		interfaces:      make(map[string]*InterfaceInfo),
 		implementations: make(map[string][]Implementation),
 	}
+}
+
+// SeedASTs reuses pre-parsed ASTs for the underlying symbol analyzer, so
+// implementation lookup runs without re-reading or re-parsing files. See
+// UseAnalyzer.SeedASTs.
+func (ia *InterfaceAnalyzer) SeedASTs(fset *token.FileSet, asts map[string]*ast.File) {
+	ia.symbolAnalyzer.SeedASTs(fset, asts)
 }
 
 // FindImplementations finds all types that implement an interface

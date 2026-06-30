@@ -2,6 +2,8 @@ package analyzer
 
 import (
 	"fmt"
+	"go/ast"
+	"go/token"
 	"strings"
 )
 
@@ -60,6 +62,13 @@ func NewCallAnalyzer(files []string) *CallAnalyzer {
 		visitedChains:  make(map[string]bool),
 		snippetLines:   make(map[string][]string),
 	}
+}
+
+// SeedASTs reuses pre-parsed ASTs for the underlying symbol analyzer, so the
+// call graph is built without re-reading or re-parsing files. See
+// UseAnalyzer.SeedASTs.
+func (ca *CallAnalyzer) SeedASTs(fset *token.FileSet, asts map[string]*ast.File) {
+	ca.symbolAnalyzer.SeedASTs(fset, asts)
 }
 
 // FindCallers finds all functions/methods that call a target function

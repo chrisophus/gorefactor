@@ -19,7 +19,9 @@ func newBigRepo(t *testing.T) string {
 	dir := t.TempDir()
 	var big strings.Builder
 	big.WriteString("package big\n\n")
-	for i := 0; i < 360; i++ {
+	// Comfortably over the file-size limit (analyzer.DefaultMaxFileSize) so
+	// enumerateFindings yields a file-size finding.
+	for i := 0; i < 560; i++ {
 		fmt.Fprintf(&big, "func f%d() int { return %d }\n", i, i)
 	}
 	write := func(name, body string) {

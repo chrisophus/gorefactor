@@ -199,6 +199,7 @@ func defaultLintRules() []LintRule {
 		deepNestingRule{},
 		errWrapRule{},
 		couplingRule{},
+		blastRadiusRule{},
 		prematureAbstractionRule{},
 	}
 	rules = append(rules, logPropagationRules()...)

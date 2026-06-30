@@ -15,6 +15,7 @@ func TestDefaultLintRules_ExpectedSet(t *testing.T) {
 		"deep-nesting",
 		"error-not-wrapped",
 		"high-coupling",
+		"high-blast-radius",
 		"premature-abstraction",
 		"if-err-log-return",
 		"wrap-log-return",

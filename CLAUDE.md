@@ -40,6 +40,7 @@ Mapping of common edits to commands (run `./gorefactor` for the full list):
 | Token-cheap file shape (bodies elided) | `gorefactor skeleton <file>` |
 | LLM context pack for a symbol | `gorefactor context <Symbol>` |
 | Call tree (callees/callers) | `gorefactor callgraph <Func> [--callers]` |
+| Score change-impact before a refactor | `gorefactor blast-radius <Func>` |
 | Diff exported API vs a git ref | `gorefactor api-diff [ref]` |
 | Tests affected by current changes | `gorefactor test-affected [--run]` |
 | Check what calls a function (before refactor) | `gorefactor find-callers <Func>` |
@@ -119,6 +120,7 @@ Main commands in `cmd/gorefactor/main.go` (registered in `getCommands()`):
 - `find-package-deps [dir] [--json]`: Package dependency graph and circular-import detection
 - `suggest-plan <file.go> [--output plan.json] [--json] [--patterns]`: Suggested refactoring plan for a file
 - `callgraph <Func|Receiver:Method> [--callers] [--depth N] [--json]`: Transitive call tree (callees by default, callers with `--callers`)
+- `blast-radius <Func|Receiver:Method> [--in path] [--json]`: Change-impact score for a function/method — transitive callers, files/packages affected, and a composite risk score/level. Counts are name-based (over-approximate, like `callgraph`); use as a ranking signal before a refactor
 - `context <Symbol|Receiver:Method> [--budget N] [--json]`: One-shot LLM context pack — definition, callers, signature types, tests
 - `skeleton <file.go> [--json]`: File with function bodies elided — token-cheap file shape
 - `search-ast <pattern> [--in path] [--json]`: Structural search; match a Go statement/expression pattern (`$_` is a wildcard)
@@ -147,10 +149,10 @@ Main commands in `cmd/gorefactor/main.go` (registered in `getCommands()`):
 - `implement-interface <file> <Type> <Iface>`: Generate compiling method stubs for every unimplemented interface method.
 
 **Automation**
-- `lint [path] [--fix] [--json] [--max N] [--fail-only]`: Structural linter, 25 default rules (canonical list in `cmd/gorefactor/lint_registry_test.go`):
+- `lint [path] [--fix] [--json] [--max N] [--fail-only]`: Structural linter, 26 default rules (canonical list in `cmd/gorefactor/lint_registry_test.go`):
   - *size/structure*: `file-size`, `long-function`, `deep-nesting`, `complexity`, `extract-candidate`
   - *duplication*: `duplicate-block`, `duplicate-bare-sentinel`
-  - *design smells*: `god-object`, `large-class`, `fat-interface`, `excessive-params`, `excessive-returns`, `data-clumps`, `type-switch`, `premature-abstraction`, `high-coupling`
+  - *design smells*: `god-object`, `large-class`, `fat-interface`, `excessive-params`, `excessive-returns`, `data-clumps`, `type-switch`, `premature-abstraction`, `high-coupling`, `high-blast-radius`
   - *error handling*: `error-not-wrapped`, `if-err-log-return`, `wrap-log-return`, `wrap-bridge-log-return`
   - *coverage*: `untested-function`, `untested-package`
   - *dead code*: `dead-code`

@@ -33,7 +33,7 @@ func senseFileSize(file string) string {
 	if file == "" {
 		return "ERROR: 'file' required"
 	}
-	iss, err := analyzer.AnalyzeFileSize(file, 300)
+	iss, err := analyzer.AnalyzeFileSize(file, analyzer.DefaultMaxFileSize)
 	if err != nil {
 		return "ERROR analyzing file size: " + err.Error()
 	}

@@ -34,7 +34,7 @@ func analyzeFileSizes(args []string) error {
 	}
 
 	directory := args[0]
-	maxSize := 300
+	maxSize := analyzer.DefaultMaxFileSize
 	format := "text"
 
 	for i := 1; i < len(args); i++ {

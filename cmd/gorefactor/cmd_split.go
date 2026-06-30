@@ -9,9 +9,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/chrisophus/gorefactor/analyzer"
 )
 
-const defaultSplitMaxLines = 300
+// defaultSplitMaxLines mirrors the canonical file-size limit so `split` targets
+// the same threshold the file-size lint rule enforces.
+const defaultSplitMaxLines = analyzer.DefaultMaxFileSize
 const defaultTestFileMaxLines = 1000
 
 type splitDecl struct {

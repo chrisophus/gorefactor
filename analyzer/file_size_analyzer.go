@@ -9,7 +9,7 @@ import (
 	"os"
 )
 
-const DefaultMaxFileSize = 300
+const DefaultMaxFileSize = 500
 
 // FileSizeIssue represents a finding about file size
 type FileSizeIssue struct {

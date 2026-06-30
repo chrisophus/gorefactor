@@ -18,7 +18,7 @@ import (
 // finding, never prior wins. The frontier model is never involved.
 
 const (
-	campaignFileSizeLimit = 300 // gorefactor's default oversize threshold
+	campaignFileSizeLimit = analyzer.DefaultMaxFileSize // gorefactor's default oversize threshold
 	campaignStepBudget    = 20  // per-finding agentic budget
 	campaignMaxPasses     = 5   // re-enumerate until clean / no progress
 	campaignMaxFindings   = 12  // safety ceiling per run

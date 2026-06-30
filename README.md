@@ -77,7 +77,7 @@ gorefactor doctor                  # Lint + build + test (final gate)
 
 The default rule set has 25 rules, grouped by concern:
 
-- **Size & structure**: `file-size` (>300 lines, split hints by receiver/prefix), `long-function`, `deep-nesting`, `complexity` (cyclomatic), `extract-candidate`
+- **Size & structure**: `file-size` (>500 lines, split hints by receiver/prefix), `long-function`, `deep-nesting`, `complexity` (cyclomatic), `extract-candidate`
 - **Duplication**: `duplicate-block` (>100-line clones with consolidation hints), `duplicate-bare-sentinel`
 - **Design smells**: `god-object`, `large-class`, `fat-interface`, `excessive-params`, `excessive-returns`, `data-clumps`, `type-switch`, `premature-abstraction`, `high-coupling`
 - **Error handling**: `error-not-wrapped` (bare `return err`), `if-err-log-return`, `wrap-log-return`, `wrap-bridge-log-return`
@@ -368,9 +368,9 @@ $ gorefactor recommend payment.go
 
 # See which files are oversized
 $ gorefactor analyze-file-sizes .
-Large files (>300 lines):
-  handlers.go (487 lines) — suggest splitting by receiver: Handler, Router, Middleware
-  service.go (412 lines) — suggest splitting by prefix: Payment*, Auth*, Cache*
+Large files (>500 lines):
+  handlers.go (687 lines) — suggest splitting by receiver: Handler, Router, Middleware
+  service.go (612 lines) — suggest splitting by prefix: Payment*, Auth*, Cache*
 
 # Auto-fix
 $ gorefactor lint . --fix

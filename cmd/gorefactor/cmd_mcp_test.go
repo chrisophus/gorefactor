@@ -23,11 +23,12 @@ func Leaf() {}
 `
 
 // connectTestClient wires an SDK client to the gorefactor server over an
-// in-memory transport and returns the connected client session.
-func connectTestClient(t *testing.T) *mcp.ClientSession {
+// in-memory transport and returns the connected client session. allowWrite
+// selects whether the mutation guides are registered (Phase 3).
+func connectTestClient(t *testing.T, allowWrite bool) *mcp.ClientSession {
 	t.Helper()
 	ctx := context.Background()
-	server := newMCPServer(getCommands())
+	server := newMCPServer(getCommands(), allowWrite)
 	clientT, serverT := mcp.NewInMemoryTransports()
 	if _, err := server.Connect(ctx, serverT, nil); err != nil {
 		t.Fatalf("server connect: %v", err)
@@ -42,7 +43,7 @@ func connectTestClient(t *testing.T) *mcp.ClientSession {
 }
 
 func TestMCPInitializeServerInfo(t *testing.T) {
-	cs := connectTestClient(t)
+	cs := connectTestClient(t, false)
 	got := cs.InitializeResult()
 	if got == nil || got.ServerInfo == nil {
 		t.Fatalf("missing initialize result/serverInfo")
@@ -53,7 +54,7 @@ func TestMCPInitializeServerInfo(t *testing.T) {
 }
 
 func TestMCPToolsListSchema(t *testing.T) {
-	cs := connectTestClient(t)
+	cs := connectTestClient(t, false)
 	res, err := cs.ListTools(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("ListTools: %v", err)
@@ -146,7 +147,7 @@ func TestMCPCallToolCallgraph(t *testing.T) {
 	t.Chdir(t.TempDir())
 	writeTempGo(t, ".", "x.go", mcpTestSrc)
 
-	cs := connectTestClient(t)
+	cs := connectTestClient(t, false)
 	res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
 		Name: "callgraph",
 		Arguments: map[string]interface{}{
@@ -176,7 +177,7 @@ func TestMCPCallToolErrorIsToolError(t *testing.T) {
 	t.Chdir(t.TempDir())
 	writeTempGo(t, ".", "x.go", mcpTestSrc)
 
-	cs := connectTestClient(t)
+	cs := connectTestClient(t, false)
 	res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
 		Name:      "callgraph",
 		Arguments: map[string]interface{}{"args": []string{"DoesNotExist"}},
@@ -191,7 +192,7 @@ func TestMCPCallToolErrorIsToolError(t *testing.T) {
 }
 
 func TestMCPCallUnknownTool(t *testing.T) {
-	cs := connectTestClient(t)
+	cs := connectTestClient(t, false)
 	_, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
 		Name:      "nope",
 		Arguments: map[string]interface{}{},

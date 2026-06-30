@@ -208,7 +208,8 @@ Methods use `Receiver:Method` (no `*` on the receiver). Many commands accept `-`
 | `doctor` | Lint + `go build` + `go test`; non-zero on failure |
 | `txn` | Apply a batch of mutation commands transactionally (all-or-nothing, single undo unit) |
 | `undo` | Undo the most recent journaled mutation (or restore a named plan snapshot) |
-| `init-agent-rules` | Write the agent-rules snippet into `CLAUDE.md` / `.cursorrules` / `AGENTS.md` |
+| `init-agent-rules` | Write the agent-rules snippet into `CLAUDE.md` / `.cursorrules` / `AGENTS.md`; `--mcp` also emits a `.mcp.json` pointing a client at `gorefactor mcp` |
+| `mcp` | Run a stdio MCP server exposing gorefactor's tools to any MCP client (see below) |
 
 ### JSON plans
 
@@ -220,6 +221,30 @@ Methods use `Receiver:Method` (no `*` on the receiver). Many commands accept `-`
 | `repl` | Interactive step-by-step refactoring |
 
 Details and JSON plan schema: [ORCHESTRATION_SYSTEM.md](ORCHESTRATION_SYSTEM.md), [orchestrator/README.md](orchestrator/README.md).
+
+### MCP server
+
+`gorefactor mcp` runs a stdio [Model Context Protocol](https://modelcontextprotocol.io)
+server (built on the official Go SDK) so any MCP client — Claude Code, Cursor,
+Copilot — gets gorefactor's exact, AST/type-based Go intelligence as native
+tools. Unlike embedding-based indexers it's exact for Go *and* it can edit.
+
+```bash
+# Point the current project's client config at the server
+gorefactor init-agent-rules --mcp        # writes/merges .mcp.json
+
+# Read-only by default: parse, skeleton, callgraph, blast-radius,
+# find-callers/uses, search-ast, lint, ... plus skeleton/inspect/context
+# served as MCP resources (gorefactor://skeleton/<path>, etc.)
+gorefactor mcp
+
+# Opt in to the safe-edit guides (create/insert/replace/move/rename/delete/txn/undo)
+# as destructive-annotated tools. Requires a clean git worktree so every edit is
+# reversible with `git reset --hard` (pass --allow-dirty to skip that check).
+gorefactor mcp --allow-write
+```
+
+Design and phase status: [docs/mcp-server-plan.md](docs/mcp-server-plan.md).
 
 ### Exit codes
 

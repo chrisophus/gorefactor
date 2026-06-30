@@ -5,7 +5,11 @@ client (Claude Code, Cursor, Copilot) gets gorefactor's analysis *and* its safe
 structural edits as native tools — the way [codeindexer.dev](https://codeindexer.dev/)
 exposes its 32 tools over MCP.
 
-This is a design plan, not an implemented feature.
+**Status:** Phases 0–4 are implemented (`gorefactor mcp`). Read-only analysis
+tools ship by default; the mutation guides are exposed behind `--allow-write`
+(Phase 3), and `skeleton`/`inspect`/`context` are served as MCP resources with
+an `init-agent-rules --mcp` installer (Phase 4). Phase 2 (the long-lived index
+cache) remains the one open item.
 
 ## Why gorefactor is well-positioned
 
@@ -78,7 +82,7 @@ CLI, wasteful for a long-lived server. Add an in-process cache:
 - This is where `callgraph`/`blast-radius`/`find-*` get their biggest speedup in
   server mode.
 
-### Phase 3 — opt-in mutation tools (the differentiator)
+### Phase 3 — opt-in mutation tools (the differentiator) ✅ implemented
 Behind a `--allow-write` flag (default **off**), expose the guides:
 `create`, `insert`, `replace`, `replace-text`, `replace-body`, `move`,
 `rename`, `delete`, `add-field`, `change-signature`, etc., plus `txn` for
@@ -91,12 +95,22 @@ Safety model, reusing what exists:
 - Annotate these tools as destructive in their MCP descriptions so clients
   prompt for approval.
 
-### Phase 4 — resources, prompts, installer
+Implemented in `cmd/gorefactor/cmd_mcp_write.go`: an explicit `mcpWriteTools`
+allowlist (mirroring `mcpReadOnlyTools`), each tool annotated
+`DestructiveHint=true` with a "Modifies Go source on disk." description prefix,
+plus `undo` for snapshot rollback. `mcpRequireCleanWorktree` enforces the clean
+baseline at startup unless `--allow-dirty` is passed.
+
+### Phase 4 — resources, prompts, installer ✅ (resources + installer implemented)
 - **MCP resources**: serve `skeleton`/`context` packs and `inspect` summaries as
   readable resources (token-cheap context the client can pull on demand).
-- **Installer**: extend the existing `init-agent-rules` command to also emit the
-  MCP client config snippet (`.mcp.json` / `claude_desktop_config.json`) with
-  `command: gorefactor, args: ["mcp"]`.
+  Implemented in `cmd_mcp_resources.go` as three URI templates:
+  `gorefactor://skeleton/{+path}`, `gorefactor://inspect/{+path}`,
+  `gorefactor://context/{symbol}`.
+- **Installer**: `init-agent-rules --mcp` (or `--mcp-only`) merges a
+  `gorefactor` entry into `.mcp.json` with `command: gorefactor, args: ["mcp"]`,
+  preserving any existing servers and never clobbering a customised entry.
+- **Prompts**: not yet implemented.
 
 ### Cross-cutting: testing & security
 - **Testing**: table-driven tests over the JSON-RPC envelope (`initialize`,

@@ -162,7 +162,8 @@ Main commands in `cmd/gorefactor/main.go` (registered in `getCommands()`):
 - `split <file> [--max N] [--dry-run]`: Auto-split an oversized file by grouping methods on same receiver / functions sharing a CamelCase prefix.
 - `format [path ...]`: In-process gofmt+goimports. Replaces external `goimports` dependency.
 - `txn`: Apply a batch of mutation commands transactionally (all-or-nothing, single undo unit).
-- `init-agent-rules [--target claude.md|cursor|agents.md|all]`: Write the gorefactor agent-rules snippet into CLAUDE.md / `.cursorrules` / AGENTS.md.
+- `init-agent-rules [--target claude.md|cursor|agents.md|all] [--mcp|--mcp-only]`: Write the gorefactor agent-rules snippet into CLAUDE.md / `.cursorrules` / AGENTS.md; `--mcp` also merges a `.mcp.json` pointing an MCP client at `gorefactor mcp`.
+- `mcp [--allow-write] [--allow-dirty]`: Run a stdio MCP server (official Go SDK) exposing gorefactor's read-only analysis commands as MCP tools plus `skeleton`/`inspect`/`context` as MCP resources. `--allow-write` additionally exposes the mutation guides (create/insert/replace/move/rename/delete/txn/undo) as destructive-annotated tools, gated on a clean git worktree (skip with `--allow-dirty`). See `docs/mcp-server-plan.md`.
 
 **Plans**
 - `orchestrate <plan.json>`: Execute a refactoring plan

@@ -31,7 +31,8 @@ func RunCampaign(ctx context.Context, tc toolChatter, cfg Config) error {
 
 	t0 := time.Now()
 	fixed, punted, handled, passesRun := 0, 0, 0, 0
-	for pass := 1; pass <= campaignMaxPasses; pass++ {
+	budgetHit := false
+	for pass := 1; pass <= campaignMaxPasses && !budgetHit; pass++ {
 		passesRun = pass
 		findings := enumerateFindings(".")
 		if len(findings) == 0 {
@@ -41,6 +42,18 @@ func RunCampaign(ctx context.Context, tc toolChatter, cfg Config) error {
 		fmt.Fprintf(cfg.Out, "\n══ pass %d: %d finding(s) ══\n", pass, len(findings))
 		progressed := false
 		for _, f := range findings {
+			// Phase 2: aggregate token budget across the whole campaign.
+			// Stop cleanly rather than churning every remaining finding
+			// into a budget-exhaustion punt.
+			if cfg.Budget > 0 && tokensUsed(tc) >= cfg.Budget {
+				fmt.Fprintf(cfg.Out, "  (campaign token budget %d reached at %d tokens; stopping)\n",
+					cfg.Budget, tokensUsed(tc))
+				logFailure(".", failureEntry{Kind: failBudgetHit,
+					Reason:  fmt.Sprintf("campaign token budget %d exhausted", cfg.Budget),
+					Context: "campaign"})
+				budgetHit = true
+				break
+			}
 			if handled >= campaignMaxFindings {
 				fmt.Fprintf(cfg.Out, "  (finding ceiling %d reached)\n", campaignMaxFindings)
 				break

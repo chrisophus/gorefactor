@@ -17,9 +17,9 @@ func toolCatalog() []toolDef {
 		tool("skeleton", "Show a file with function bodies replaced by stub comments — fast structural overview.",
 			obj(map[string]any{"file": strProp("path")}, "file")),
 		tool("review_changes", "Per-function quality regression report vs a git ref (line growth, complexity, nesting).",
-			obj(map[string]any{"ref": strProp("git ref to compare against, default HEAD")}, )),
+			obj(map[string]any{"ref": strProp("git ref to compare against, default HEAD")})),
 		tool("lint_path", "Run gorefactor lint on a path and return findings with autofixCmd hints.",
-			obj(map[string]any{"path": strProp("directory or file to lint, default '.'")}, )),
+			obj(map[string]any{"path": strProp("directory or file to lint, default '.'")})),
 
 		// mutation
 		tool("extract_method", "Extract lines into a new function. Get line numbers via list_symbols+read_excerpt first.",
@@ -74,6 +74,13 @@ func toolCatalog() []toolDef {
 				"declaration": strProp("name of the func/type/var/const"),
 				"doc":         strProp("doc comment text (the // prefix is added automatically)"),
 			}, "file", "declaration", "doc")),
+
+		// notes (persistent across sessions)
+		tool("note", "Record a durable fact for future sessions in .gorefactor/notes.md. Use for repo facts, failed strategies, flaky tests, or open punts a later session would otherwise re-discover.",
+			obj(map[string]any{
+				"category": strProp("repo_fact | failed_strategy | flaky_test | open_punt"),
+				"text":     strProp("the fact to record, one concise sentence"),
+			}, "text")),
 
 		// control
 		tool("report", "Return the answer for an analysis-only task and finish WITHOUT the build/test gate. Use for find-callers / find-uses / \"where is X\" questions.",

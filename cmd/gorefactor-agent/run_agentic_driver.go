@@ -32,7 +32,8 @@ func RunAgenticDriver(ctx context.Context, tc toolChatter, cfg Config) (err erro
 	defer os.Chdir(prev)
 
 	lastStep := 0
-	defer func() { emitRunMetrics(cfg.Out, tc, err, lastStep) }()
+	br := specBlastRadius(".", cfg.Spec)
+	defer func() { emitRunMetrics(cfg.Out, tc, err, lastStep, br) }()
 
 	messages := []chatMessage{
 		{Role: "system", Content: agenticSystemPrompt(cfg.Dir)},
@@ -44,8 +45,23 @@ func RunAgenticDriver(ctx context.Context, tc toolChatter, cfg Config) (err erro
 	gateFails, noTool := 0, 0
 	for step := 1; step <= cfg.MaxIter; step++ {
 		lastStep = step
+		// Phase 2: stop-and-summarize before spending past the budget.
+		// The journal/undo system makes this safe; any in-flight txn has
+		// already committed or rolled back between steps.
+		if cfg.Budget > 0 {
+			if used := tokensUsed(tc); used >= cfg.Budget {
+				logFailure(".", failureEntry{Kind: failBudgetHit,
+					Reason:  fmt.Sprintf("token budget %d exhausted (used %d)", cfg.Budget, used),
+					Spec:    trim(cfg.Spec, 200),
+					Context: fmt.Sprintf("step %d", step)})
+				return doPunt(cfg, "autopunt:budget_exhausted",
+					fmt.Sprintf("token budget %d exhausted (used %d over %d step(s)); "+
+						"stopping with a clean summary rather than spending past the accuracy plateau",
+						cfg.Budget, used, step-1), trace, step)
+			}
+		}
 		fmt.Fprintf(cfg.Out, "\n── step %d/%d ──\n", step, cfg.MaxIter)
-		asst, err := tc.ChatTools(ctx, compactMessages(messages, 12), tools)
+		asst, err := tc.ChatTools(ctx, assembleHistory(messages, 12), tools)
 		if err != nil {
 			return fmt.Errorf("provider call failed: %w", err)
 		}
@@ -71,6 +87,7 @@ func RunAgenticDriver(ctx context.Context, tc toolChatter, cfg Config) (err erro
 
 		for _, call := range asst.ToolCalls {
 			content, status := dispatchTool(call, cfg, &gateFails)
+			recordRejectedOp(".", call.Function.Name, call.Function.Arguments, content, cfg.Spec)
 			logToolCall(cfg.Out, cfg.Verbose, call.Function.Name, call.Function.Arguments, content)
 			trace = addTrace(trace, traceEntry{Step: step, Tool: call.Function.Name,
 				Args: trim(call.Function.Arguments, 200), Result: trim(content, 200)})

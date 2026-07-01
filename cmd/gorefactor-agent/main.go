@@ -33,6 +33,7 @@ func main() {
 		singleShot  = flag.Bool("single-shot", false, "use the single-shot constrained-plan path (required for providers without tool-calling support; supports -dry-run preview)")
 		interactive = flag.Bool("interactive", false, "agentic mode only: pause after each step for user feedback and guidance")
 		campaign    = flag.Bool("campaign", false, "sensor-driven autonomous mode: gorefactor findings -> agentic fixes -> commit-or-punt (no -spec needed)")
+		budget      = flag.Int("budget", 0, "token budget (prompt+completion) for the run; on exhaustion the agent stop-and-summarizes via a structured punt instead of wandering (0 = unlimited)")
 	)
 	flag.Parse()
 
@@ -71,6 +72,7 @@ func main() {
 		AllowDirty: *allowDirty,
 		Verbose:    *verbose,
 		NoSchema:   *noSchema,
+		Budget:     *budget,
 		Out:        os.Stdout,
 	}
 

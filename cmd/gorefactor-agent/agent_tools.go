@@ -63,9 +63,12 @@ func compactMessages(msgs []chatMessage, keep int) []chatMessage {
 }
 
 // emitRunMetrics prints one machine-readable record per agentic run:
-// outcome + steps + local token usage. Frontier tokens are 0 by
-// construction. The reliability battery aggregates these blocks.
-func emitRunMetrics(out io.Writer, tc toolChatter, err error, steps int) {
+// outcome + steps + local token usage + the primary target's
+// blast-radius score. Frontier tokens are 0 by construction. The
+// reliability battery aggregates these blocks; Phase 3 correlates
+// blast_radius against tokens spent offline. A blastRadius of -1 means
+// no target symbol was resolvable from the spec.
+func emitRunMetrics(out io.Writer, tc toolChatter, err error, steps, blastRadius int) {
 	outcome := "fixed"
 	switch {
 	case isPunt(err):
@@ -84,9 +87,21 @@ func emitRunMetrics(out io.Writer, tc toolChatter, err error, steps int) {
 		CompletionTokens int    `json:"completion_tokens"`
 		LocalTokens      int    `json:"local_tokens"`
 		FrontierTokens   int    `json:"frontier_tokens"`
-	}{outcome, steps, pt, ct, pt + ct, 0}
+		BlastRadius      int    `json:"blast_radius"`
+	}{outcome, steps, pt, ct, pt + ct, 0, blastRadius}
 	b, _ := json.Marshal(rec)
 	fmt.Fprintf(out, "<<<RUN_METRICS %s RUN_METRICS>>>\n", string(b))
+}
+
+// tokensUsed returns cumulative prompt+completion tokens from a
+// tool-calling provider, or 0 when it does not expose usage. Used by the
+// Phase 2 budget check.
+func tokensUsed(tc toolChatter) int {
+	if ts, ok := tc.(tokenStater); ok {
+		p, c := ts.Tokens()
+		return p + c
+	}
+	return 0
 }
 
 func addTrace(t []traceEntry, e traceEntry) []traceEntry {
@@ -139,6 +154,16 @@ func doPunt(cfg Config, kind, reason string, trace []traceEntry, steps int) erro
 	fmt.Fprintf(cfg.Out, "  ⮌ PUNT (%s): %s\n", kind, trim(reason, 400))
 	b, _ := json.MarshalIndent(rep, "", "  ")
 	fmt.Fprintf(cfg.Out, "<<<PUNT_REPORT\n%s\nPUNT_REPORT>>>\n", string(b))
+	// Feed the two persistence surfaces: the failure corpus (Phase 6,
+	// for classification) and cross-session notes (Phase 4, so the next
+	// session does not re-attempt a task already known to be infeasible).
+	logFailure(cfg.Dir, failureEntry{
+		Kind:    failPunt,
+		Reason:  trim(reason, 400),
+		Spec:    trim(cfg.Spec, 200),
+		Context: kind,
+	})
+	appendNote(cfg.Dir, "open_punt", fmt.Sprintf("%s: %s", kind, trim(reason, 160)))
 	return &puntError{rep: rep}
 }
 
@@ -212,6 +237,10 @@ func logToolCall(out io.Writer, verbose bool, name, args, result string) {
 
 func agenticSystemPrompt(dir string) string {
 	files := fileList(dir)
+	return prompt(files) + notesPromptSection(dir)
+}
+
+func prompt(files string) string {
 	return `You are a mechanical Go refactoring agent. Change code ONLY via
 the provided tools. Every mutation is a deterministic AST-correct
 gorefactor op; go build+test is the only correctness judge.
@@ -232,6 +261,13 @@ MUTATION TOOLS:
 - split_file: auto-split an oversized file into sibling files
 - wrap_errors <file> <function>: wrap bare 'return err' with fmt.Errorf
 - set_doc <file> <declaration> <doc>: add/replace a godoc comment
+
+NOTES:
+- note <category> <text>: record a durable fact for future sessions.
+  Categories: repo_fact, failed_strategy, flaky_test, open_punt. Use it
+  when you learn something a later session would otherwise re-discover
+  (a flaky package, a targeting strategy that fails here). Trust any
+  PERSISTENT NOTES above before re-investigating.
 
 RULES:
 - Use ONLY paths from the file list above. Never guess paths.

@@ -66,6 +66,10 @@ func newSampleRepo(t *testing.T) string {
 	write("go.mod", "module sample\n\ngo 1.21\n")
 	write("sample.go", sampleGo)
 	write("sample_test.go", sampleTestGo)
+	// Mirror the real repo: .gorefactor/ is gitignored, so the agent's
+	// rollback (git clean -fd, no -x) preserves the persistent notes and
+	// failure corpus across attempts.
+	write(".gitignore", ".gorefactor/\n")
 
 	for _, args := range [][]string{
 		{"init", "-q"},

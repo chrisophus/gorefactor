@@ -59,6 +59,9 @@ func dispatchTool(call toolCall, cfg Config, gateFails *int) (string, toolStatus
 		}
 		return "gate red:\n" + trim(out, 1000), stContinue
 
+	case "note":
+		return appendNote(".", str("category"), str("text")), stContinue
+
 	case "list_symbols":
 		return senseListSymbols(str("file")), stContinue
 

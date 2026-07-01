@@ -22,6 +22,7 @@ type Config struct {
 	AllowDirty bool      // skip the clean-worktree precondition
 	Verbose    bool      // echo the raw model response each iteration
 	NoSchema   bool      // disable decode-time JSON-schema enforcement
+	Budget     int       // token budget (prompt+completion); 0 = unlimited
 	Out        io.Writer // progress sink
 }
 

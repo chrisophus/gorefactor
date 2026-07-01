@@ -122,7 +122,7 @@ func runTriaged(cfg Config, name, op string, args map[string]any) (bool, error) 
 		// senseFindRefs is substring grep — captures defs, comments, and type
 		// uses, not strictly call sites. Label honestly.
 		fmt.Fprintf(cfg.Out, "report: references to %s (substring match; includes defs/comments, not strictly call sites)\n%s\n", sym, out)
-		emitRunMetrics(cfg.Out, nil, nil, 1)
+		emitRunMetrics(cfg.Out, nil, nil, 1, -1)
 		fmt.Fprintln(cfg.Out, "  ✓ triage finished; analysis-only (no gate)")
 		return true, nil
 	}
@@ -162,7 +162,7 @@ func runTriaged(cfg Config, name, op string, args map[string]any) (bool, error) 
 		return false, nil
 	}
 	fmt.Fprintln(cfg.Out, "  ✓ triage finished; gate green")
-	emitRunMetrics(cfg.Out, nil, nil, 1)
+	emitRunMetrics(cfg.Out, nil, nil, 1, -1)
 	return true, nil
 }
 
@@ -186,7 +186,7 @@ func runAutoPunt(cfg Config, args map[string]any) (bool, error) {
 		"(algorithm rewrite / race fix / performance redesign); " +
 		"senior should pick this up. See RELIABILITY-COMPARISON.md."
 	err := doPunt(cfg, "autopunt:judgement", reason, nil, 1)
-	emitRunMetrics(cfg.Out, nil, err, 1)
+	emitRunMetrics(cfg.Out, nil, err, 1, -1)
 	return true, err
 }
 

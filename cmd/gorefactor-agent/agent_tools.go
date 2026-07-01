@@ -62,13 +62,15 @@ func compactMessages(msgs []chatMessage, keep int) []chatMessage {
 	return append(out, msgs[start:]...)
 }
 
-// emitRunMetrics prints one machine-readable record per agentic run:
-// outcome + steps + local token usage + the primary target's
-// blast-radius score. Frontier tokens are 0 by construction. The
-// reliability battery aggregates these blocks; Phase 3 correlates
-// blast_radius against tokens spent offline. A blastRadius of -1 means
-// no target symbol was resolvable from the spec.
-func emitRunMetrics(out io.Writer, tc toolChatter, err error, steps, blastRadius int) {
+// emitRunMetrics prints one machine-readable record per run: outcome +
+// steps + local token usage + the primary target's blast-radius score.
+// Frontier tokens are 0 by construction. The reliability battery
+// aggregates these blocks; Phase 3 correlates blast_radius against
+// tokens spent offline. A blastRadius of -1 means no target symbol was
+// resolvable from the spec. tc is `any` (not toolChatter) so both the
+// agentic drivers' toolChatter and the single-shot driver's Provider
+// can be passed straight through to the tokenStater type-assertion.
+func emitRunMetrics(out io.Writer, tc any, err error, steps, blastRadius int) {
 	outcome := "fixed"
 	switch {
 	case isPunt(err):
@@ -93,13 +95,13 @@ func emitRunMetrics(out io.Writer, tc toolChatter, err error, steps, blastRadius
 	fmt.Fprintf(out, "<<<RUN_METRICS %s RUN_METRICS>>>\n", string(b))
 }
 
-// tokensUsed returns cumulative prompt+completion tokens from a
-// tool-calling provider, or 0 when it does not expose usage. Used by the
-// Phase 2 budget check.
-func tokensUsed(tc toolChatter) int {
-	if ts, ok := tc.(tokenStater); ok {
-		p, c := ts.Tokens()
-		return p + c
+// tokensUsed returns cumulative prompt+completion tokens from any
+// provider (agentic toolChatter or single-shot Provider), or 0 when it
+// does not expose usage. Used by the Phase 2 budget check in every mode.
+func tokensUsed(p any) int {
+	if ts, ok := p.(tokenStater); ok {
+		pt, ct := ts.Tokens()
+		return pt + ct
 	}
 	return 0
 }

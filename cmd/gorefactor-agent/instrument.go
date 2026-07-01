@@ -25,14 +25,51 @@ import (
 // correlation, it never mis-routes a task.
 var reSpecSymbol = regexp.MustCompile(`\b([A-Z][A-Za-z0-9_]*(?::[A-Za-z_][A-Za-z0-9_]*)?)\b`)
 
-// primarySymbol returns the first exported-looking identifier in the
-// spec, or "" if none is found.
-func primarySymbol(spec string) string {
-	m := reSpecSymbol.FindStringSubmatch(spec)
-	if len(m) < 2 {
-		return ""
+var refactorStopwords = map[string]bool{
+	"rename": true, "move": true, "extract": true, "delete": true,
+	"split": true, "inline": true, "add": true, "remove": true,
+	"replace": true, "fix": true, "rewrite": true, "refactor": true,
+	"wrap": true, "implement": true, "generate": true, "change": true,
+	"update": true, "create": true, "insert": true, "use": true,
+	"the": true, "a": true, "to": true, "into": true, "from": true,
+	"in": true, "of": true, "for": true, "with": true, "and": true,
+}
+
+// isConfidentSymbol reports whether s has the shape of a real Go identifier rather than a plain
+// English word that happened to be capitalized: a Receiver:Method reference, or a second uppercase
+// letter past position 0 (CamelCase, e.g. ValidateOrder, OldHelper). Plain title-case English words
+// ("Rename", "Bug") have neither.
+func isConfidentSymbol(s string) bool {
+	if strings.Contains(s, ":") {
+		return true
 	}
-	return m[1]
+	upper := 0
+	for _, r := range s {
+		if r >= 'A' && r <= 'Z' {
+			upper++
+		}
+	}
+	return upper >= 2
+}
+
+// primarySymbol returns the most likely real target identifier in the spec: the first match that
+// looks like an actual Go symbol (confident), skipping known leading verbs; falling back to the
+// first non-stopword match if nothing looks confident. Returns "" if nothing qualifies.
+func primarySymbol(spec string) string {
+	matches := reSpecSymbol.FindAllString(spec, -1)
+	var fallback string
+	for _, m := range matches {
+		if refactorStopwords[strings.ToLower(m)] {
+			continue // leading verb ("Rename", "Move", "Extract", ...), not a target
+		}
+		if isConfidentSymbol(m) {
+			return m // CamelCase or Receiver:Method -- a real Go identifier shape
+		}
+		if fallback == "" {
+			fallback = m // weak candidate: keep as a last resort
+		}
+	}
+	return fallback
 }
 
 // blastRadiusScore runs `gorefactor blast-radius <sym> --json` and

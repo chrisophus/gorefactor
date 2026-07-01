@@ -25,6 +25,20 @@ Never masked (by construction of the recency cutoff): the system prompt, the
 task objective (a user message), and the most-recent error (always inside the
 keep window). `N=3` is the starting value; tune against the Phase 0 baseline.
 
+Composition with `compactMessages`: masking and compaction are order-independent
+— both key off distance from the end of the message list (compaction trims
+only the front; masking counts assistant turns from the back), so masking
+always ends up operating on whatever tail compaction keeps, every round, for
+the life of a long conversation. `assembleHistory` centralizes this
+composition in one place; see `TestAssembleHistoryOrderIndependent` for the
+empirical check that ordering doesn't change the result (verified — an earlier
+draft of this doc claimed masking's benefit was confined to a narrow window
+before compaction kicked in, which was wrong).
+
+Not wired into `RunDriver` (single-shot mode): it keeps no growing message
+history (`feedback` is a single string overwritten each iteration, not an
+accumulating transcript), so there is nothing to mask there.
+
 ### Phase 2 — Runtime token budget with stop-and-summarize
 
 Cost removed: spend past the accuracy plateau. Confirmed present: usage was
@@ -36,7 +50,10 @@ emits a **structured punt** (`autopunt:budget_exhausted`) rather than killing
 mid-edit — the journal/undo system makes this safe. `RunCampaign` enforces the
 same value as an aggregate cap across findings and stops cleanly instead of
 churning every remaining finding into a punt. Budget hits are logged to the
-Phase 6 corpus.
+Phase 6 corpus. Wired into all three drivers, including single-shot
+`RunDriver` — `emitRunMetrics`/`tokensUsed` take `any` rather than
+`toolChatter` specifically so a plain `Provider` (which also implements
+`tokenStater`) works the same way.
 
 Default is unlimited: the plan's computed default (smallest budget `b` where
 `success_rate(b) ≥ 0.95·success_rate(unbudgeted)`) requires the Phase 0
@@ -51,7 +68,15 @@ Cost removed: misrouted tasks. Confirmed present: routing is judgment-based.
 `RUN_METRICS` block next to actual tokens spent and outcome. This is **pure
 instrumentation** — routing is *not* wired, because the plan gates that on a
 measured correlation beating the 0.39 self-prediction bar, which needs the
-Phase 0 dataset. The data needed to compute that correlation is now logged.
+Phase 0 dataset. The data needed to compute that correlation is now logged
+(including from `RunDriver`, so single-shot runs contribute too).
+
+`primarySymbol` skips a stopword list of common leading refactor verbs
+(rename, move, extract, delete, …) and prefers a match that looks like a real
+Go identifier (CamelCase or `Receiver:Method`) over a plain title-case English
+word — a naturally-phrased spec ("Rename Foo to Bar") capitalizes its first
+word as ordinary sentence case, and without this filter the extractor
+resolved to the leading verb instead of the actual target on every such spec.
 
 ### Phase 4 — Persistent cross-session notes (`cmd/gorefactor-agent/notes.go`)
 
@@ -69,6 +94,11 @@ that a crucible purify pass is due.
 The crucible purify compaction itself is **deferred**: it requires the crucible
 `purify` binary, which is not present in this repo.
 
+`RunDriver` (single-shot mode) loads notes into its system prompt too, but
+read-only — single-shot has no tool-calling surface for the model to call
+`note` itself. Its budget-exhaustion punt still goes through `doPunt`, so an
+`open_punt` note is recorded there the same as in the agentic drivers.
+
 ### Phase 6 — Failure corpus (`cmd/gorefactor-agent/corpus.go`)
 
 Cost removed: repeated mistakes. Confirmed present: rejections happened and
@@ -77,9 +107,11 @@ nothing accumulated them.
 Every rejected mutation op (`recordRejectedOp`), every budget hit, and every
 punt is appended to `.gorefactor/failures.jsonl` — a passive sensor that never
 gates a run. `.gorefactor/` is gitignored, so the corpus survives the agent's
-`git clean -fd` rollback across attempts (its whole point). The manual
-classification pass (every 25 entries → lint rule / prompt amendment / new
-capability) and the crucible-purify check on prompt amendments are process
+`git clean -fd` rollback across attempts (its whole point). `RunDriver`
+(single-shot mode) logs its own rejection points too — validator rejection,
+apply failure, and gate failure — under the same `failRejectedOp` kind. The
+manual classification pass (every 25 entries → lint rule / prompt amendment /
+new capability) and the crucible-purify check on prompt amendments are process
 steps, not code.
 
 ## Deferred (require external infrastructure, not code in this repo)

@@ -71,6 +71,16 @@ func maskStaleToolOutputs(msgs []chatMessage, keepRounds int) []chatMessage {
 	return out
 }
 
+// assembleHistory is the single prompt-assembly entry point every driver call site uses: compact,
+// then mask. Note that the two compose the same way regardless of order -- both key off distance
+// from the end of the list (compaction trims only the front; masking counts assistant turns from
+// the back), so masking runs on whatever tail compaction leaves, every round, for the life of a
+// long conversation. This helper exists to keep that composition in one place rather than three
+// call sites.
+func assembleHistory(msgs []chatMessage, keep int) []chatMessage {
+	return maskStaleToolOutputs(compactMessages(msgs, keep), maskAfterRounds)
+}
+
 const maskMarker = "[elided"
 
 // maskStub is the one-line replacement for a stale tool result: the tool

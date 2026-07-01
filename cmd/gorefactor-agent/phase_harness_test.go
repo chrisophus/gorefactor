@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -164,6 +165,14 @@ func TestPrimarySymbol(t *testing.T) {
 		"rename Parser:Parse to Parse2":     "Parser:Parse",
 		"use a range loop":                  "",
 		"move PaymentService to a new file": "PaymentService",
+		// Naturally-capitalized specs: the leading verb is title-case as
+		// a matter of English sentence case, not because it names a Go
+		// symbol. Without the stopword+confidence filter these used to
+		// resolve to the verb itself ("Rename", "Move", ...).
+		"Rename Parser:Parse to Parse2":     "Parser:Parse",
+		"Move PaymentService to a new file": "PaymentService",
+		"Extract the ValidateOrder logic":   "ValidateOrder",
+		"Delete the OldHelper function":     "OldHelper",
 	}
 	for spec, want := range cases {
 		if got := primarySymbol(spec); got != want {
@@ -246,6 +255,184 @@ func TestTokenBudgetUnlimitedByDefault(t *testing.T) {
 	if err := RunAgenticDriver(context.Background(), mock,
 		Config{Spec: "range loop", Dir: dir, MaxIter: 8, Budget: 0, Out: &log}); err != nil {
 		t.Fatalf("budget 0 should be unlimited, got %v\nlog:\n%s", err, log.String())
+	}
+}
+
+// --- Phase 2/4/6 wiring in single-shot RunDriver ---------------------
+//
+// RunDriver originally had none of the token-budget, notes, or
+// failure-corpus wiring the agentic drivers got -- it's a documented
+// gap being closed here, not new behavior invented for its own sake.
+
+// tokenMockSingleShot implements Provider + tokenStater so RunDriver's
+// budget check (which type-asserts the Provider it was given) has
+// something to find.
+type tokenMockSingleShot struct {
+	mockProvider
+	toks int
+}
+
+func (m *tokenMockSingleShot) Tokens() (int, int) { return m.toks, 0 }
+
+func TestRunDriver_BudgetPunts(t *testing.T) {
+	dir := newSampleRepo(t)
+	before, _ := os.ReadFile(filepath.Join(dir, "sample.go"))
+
+	mock := &tokenMockSingleShot{toks: 10_000}
+	mock.responses = []string{goodPlan}
+
+	var log bytes.Buffer
+	err := RunDriver(context.Background(), mock,
+		Config{Spec: "use += in Sum", Dir: dir, MaxIter: 3, Budget: 5_000, Out: &log})
+	if err == nil || !strings.Contains(err.Error(), "PUNT") {
+		t.Fatalf("expected budget punt, got %v\nlog:\n%s", err, log.String())
+	}
+	if mock.calls != 0 {
+		t.Fatalf("budget should trip before any provider call, got %d calls", mock.calls)
+	}
+	rep := extractPuntReport(t, log.String())
+	if rep.Kind != "autopunt:budget_exhausted" || !rep.RepoClean {
+		t.Fatalf("expected clean autopunt:budget_exhausted report, got %+v", rep)
+	}
+	after, _ := os.ReadFile(filepath.Join(dir, "sample.go"))
+	if string(before) != string(after) {
+		t.Fatalf("budget punt should not modify files")
+	}
+	found := false
+	for _, e := range readCorpus(t, dir) {
+		if e.Kind == failBudgetHit {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("budget hit not recorded in the failure corpus for single-shot mode")
+	}
+}
+
+func TestRunDriver_UnlimitedByDefault(t *testing.T) {
+	dir := newSampleRepo(t)
+	mock := &tokenMockSingleShot{toks: 1_000_000}
+	mock.responses = []string{goodPlan}
+	var log bytes.Buffer
+	if err := RunDriver(context.Background(), mock,
+		Config{Spec: "use += in Sum", Dir: dir, MaxIter: 2, Budget: 0, Out: &log}); err != nil {
+		t.Fatalf("budget 0 should be unlimited, got %v\nlog:\n%s", err, log.String())
+	}
+}
+
+// captureSystemPromptProvider records the system prompt it was called
+// with, so tests can assert notes actually reached the model.
+type captureSystemPromptProvider struct {
+	sys, resp string
+}
+
+func (c *captureSystemPromptProvider) Complete(_ context.Context, system, _ string) (string, error) {
+	c.sys = system
+	return c.resp, nil
+}
+
+func TestRunDriver_ReadsPersistedNotes(t *testing.T) {
+	dir := newSampleRepo(t)
+	if msg := appendNote(dir, "flaky_test", "TestSum is flaky under -race here"); strings.HasPrefix(msg, "ERROR") {
+		t.Fatalf("appendNote failed: %s", msg)
+	}
+
+	mock := &captureSystemPromptProvider{resp: goodPlan}
+	var log bytes.Buffer
+	if err := RunDriver(context.Background(), mock,
+		Config{Spec: "use += in Sum", Dir: dir, MaxIter: 1, Out: &log}); err != nil {
+		t.Fatalf("RunDriver: %v\nlog:\n%s", err, log.String())
+	}
+	if !strings.Contains(mock.sys, "PERSISTENT NOTES") || !strings.Contains(mock.sys, "flaky") {
+		t.Fatalf("single-shot system prompt did not include persisted notes: %q", mock.sys)
+	}
+}
+
+func TestRunDriver_LogsRejectedOpToCorpus(t *testing.T) {
+	dir := newSampleRepo(t)
+
+	// Targets a function that does not exist -- ExecutePlan must reject it.
+	const badTargetPlan = `{
+	  "version": "1.0",
+	  "name": "bad-target",
+	  "description": "target a function that does not exist",
+	  "operations": [
+	    {
+	      "type": "replace_code",
+	      "description": "range loop",
+	      "file": "sample.go",
+	      "target": { "functionName": "NoSuchFunc" },
+	      "parameters": {
+	        "location": { "functionName": "NoSuchFunc" },
+	        "codePattern": "x",
+	        "replacementCode": "y"
+	      }
+	    }
+	  ]
+	}`
+
+	var log bytes.Buffer
+	err := RunDriver(context.Background(), &mockProvider{responses: []string{badTargetPlan}},
+		Config{Spec: "target a missing function", Dir: dir, MaxIter: 1, Out: &log})
+	if err == nil {
+		t.Fatalf("expected RunDriver to fail against a nonexistent target")
+	}
+	found := false
+	for _, e := range readCorpus(t, dir) {
+		if e.Kind == failRejectedOp {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("rejected op not recorded in the failure corpus for single-shot mode")
+	}
+}
+
+// --- Phase 1/3: mask+compact composition is order-independent --------
+//
+// Both maskStaleToolOutputs and compactMessages key off distance from
+// the END of the message list (compaction trims only the front; masking
+// counts assistant turns from the back), so composing them in either
+// order produces byte-identical output. assembleHistory exists to keep
+// that composition in one place, not because order changes the result.
+
+func TestAssembleHistoryOrderIndependent(t *testing.T) {
+	msgs := []chatMessage{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: "TASK"},
+	}
+	for i := 1; i <= 15; i++ {
+		id := fmt.Sprintf("id%d", i)
+		asst := chatMessage{Role: "assistant"}
+		asst.ToolCalls = []toolCall{{ID: id}}
+		asst.ToolCalls[0].Function.Name = "lint_path"
+		msgs = append(msgs, asst, chatMessage{Role: "tool", ToolCallID: id,
+			Content: fmt.Sprintf("result-for-round-%d", i)})
+	}
+
+	maskThenCompact := compactMessages(maskStaleToolOutputs(msgs, maskAfterRounds), 12)
+	compactThenMask := assembleHistory(msgs, 12)
+
+	if len(maskThenCompact) != len(compactThenMask) {
+		t.Fatalf("length differs: mask-then-compact=%d assembleHistory=%d",
+			len(maskThenCompact), len(compactThenMask))
+	}
+	for i := range maskThenCompact {
+		if maskThenCompact[i].Content != compactThenMask[i].Content {
+			t.Fatalf("index %d differs: mask-then-compact=%q assembleHistory=%q",
+				i, maskThenCompact[i].Content, compactThenMask[i].Content)
+		}
+	}
+	// And it should still show real masking happened on the tail
+	// compaction kept (not just pass everything through unchanged).
+	maskedSomething := false
+	for _, m := range compactThenMask {
+		if strings.HasPrefix(m.Content, maskMarker) {
+			maskedSomething = true
+		}
+	}
+	if !maskedSomething {
+		t.Fatalf("expected at least one masked tool result in the composed output")
 	}
 }
 

@@ -631,10 +631,10 @@ The `finish` and `run_gate` tools call **`runGate`**: `go build ./...` then `go 
 
 The agent loop implements the token-efficiency and cross-session pieces of the harness (see [docs/harness-token-efficiency.md](docs/harness-token-efficiency.md)):
 
-- **Tool-output masking**: tool results older than the last 3 assistant turns are replaced with a one-line stub at prompt-assembly time (raw transcript untouched), so stale outputs aren't re-sent every round. Input tokens dominate agentic cost.
-- **Token budget** (`-budget N`): before each round the loop stop-and-summarizes via a structured punt once cumulative tokens hit the ceiling, instead of spending past the accuracy plateau.
-- **Persistent notes** (`.gorefactor/notes.md`): loaded into the system prompt at start, appended only via the `note` tool (categories `repo_fact`/`failed_strategy`/`flaky_test`/`open_punt`). Trust them before re-discovering repo facts. Punts auto-record an `open_punt` note.
-- **Failure corpus** (`.gorefactor/failures.jsonl`): every rejected mutation op, budget hit, and punt is appended (passive sensor; never gates). `.gorefactor/` is gitignored so it survives rollback. Feeds the Hashimoto mistake-cannot-recur loop.
+- **Tool-output masking** (agentic modes only — single-shot keeps no growing transcript): tool results older than the last 3 assistant turns are replaced with a one-line stub at prompt-assembly time (raw transcript untouched), so stale outputs aren't re-sent every round. Input tokens dominate agentic cost.
+- **Token budget** (`-budget N`, all modes including single-shot and campaign): before each round the loop stop-and-summarizes via a structured punt once cumulative tokens hit the ceiling, instead of spending past the accuracy plateau.
+- **Persistent notes** (`.gorefactor/notes.md`, all modes): loaded into the system prompt at start, appended only via the `note` tool (categories `repo_fact`/`failed_strategy`/`flaky_test`/`open_punt`) — single-shot mode reads notes but can't write them (no tool-calling surface). Trust them before re-discovering repo facts. Punts auto-record an `open_punt` note.
+- **Failure corpus** (`.gorefactor/failures.jsonl`, all modes): every rejected mutation op, budget hit, and punt is appended (passive sensor; never gates). `.gorefactor/` is gitignored so it survives rollback. Feeds the Hashimoto mistake-cannot-recur loop.
 
 ### Environment Setup
 

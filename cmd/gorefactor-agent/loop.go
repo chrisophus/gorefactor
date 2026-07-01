@@ -31,7 +31,14 @@ type Config struct {
 // toolchain is the gate, and git is the rollback. The model never
 // edits code and never sees line numbers -- it only fills a schema and
 // reads structured failures.
-func RunDriver(ctx context.Context, p Provider, cfg Config) error {
+//
+// Unlike the agentic drivers, RunDriver keeps no growing message
+// history (feedback is a single string overwritten each iteration), so
+// Phase 1 masking does not apply here -- there is nothing to mask.
+// Phase 2 (budget), Phase 4 (notes, read-only: single-shot has no tool
+// call to write one), and Phase 6 (failure corpus) do apply and are
+// wired in below.
+func RunDriver(ctx context.Context, p Provider, cfg Config) (err error) {
 	if cfg.Out == nil {
 		cfg.Out = os.Stdout
 	}
@@ -56,12 +63,30 @@ func RunDriver(ctx context.Context, p Provider, cfg Config) error {
 	}
 	defer os.Chdir(prev)
 
+	notes := notesPromptSection(".")
+	br := specBlastRadius(".", cfg.Spec)
+	lastIter := 0
+	defer func() { emitRunMetrics(cfg.Out, p, err, lastIter, br) }()
+
 	feedback := ""
 	for iter := 1; iter <= cfg.MaxIter; iter++ {
+		lastIter = iter
+		if cfg.Budget > 0 {
+			if used := tokensUsed(p); used >= cfg.Budget {
+				logFailure(".", failureEntry{Kind: failBudgetHit,
+					Reason:  fmt.Sprintf("token budget %d exhausted (used %d)", cfg.Budget, used),
+					Spec:    trim(cfg.Spec, 200),
+					Context: fmt.Sprintf("iteration %d", iter)})
+				return doPunt(cfg, "autopunt:budget_exhausted",
+					fmt.Sprintf("token budget %d exhausted (used %d over %d iteration(s)); "+
+						"stopping with a clean summary rather than spending past the accuracy plateau",
+						cfg.Budget, used, iter-1), nil, iter)
+			}
+		}
 		fmt.Fprintf(cfg.Out, "\n── iteration %d/%d ──\n", iter, cfg.MaxIter)
 
 		var raw string
-		sys, usr := systemPrompt(), buildUserPrompt(cfg.Spec, ".", feedback)
+		sys, usr := systemPrompt()+notes, buildUserPrompt(cfg.Spec, ".", feedback)
 		if sc, ok := p.(schemaCompleter); ok && !cfg.NoSchema {
 			raw, err = sc.CompleteSchema(ctx, sys, usr, planJSONSchema())
 		} else {
@@ -110,6 +135,8 @@ func RunDriver(ctx context.Context, p Provider, cfg Config) error {
 		if err := o.RegisterPlan(&plan); err != nil {
 			feedback = fmt.Sprintf("plan rejected by validator: %v", err)
 			fmt.Fprintf(cfg.Out, "  ✗ %s\n", feedback)
+			logFailure(".", failureEntry{Kind: failRejectedOp, Op: "plan:" + plan.Name,
+				Reason: trim(feedback, 400), Spec: trim(cfg.Spec, 200)})
 			continue
 		}
 		fmt.Fprintf(cfg.Out, "  plan %q: %d operation(s)\n", plan.Name, len(plan.Operations))
@@ -139,6 +166,8 @@ func RunDriver(ctx context.Context, p Provider, cfg Config) error {
 		if err != nil || !res.Success {
 			feedback = "apply failed:\n" + execErrors(res, err)
 			fmt.Fprintf(cfg.Out, "  ✗ %s\n", feedback)
+			logFailure(".", failureEntry{Kind: failRejectedOp, Op: "plan:" + plan.Name,
+				Reason: trim(feedback, 400), Spec: trim(cfg.Spec, 200)})
 			rollback(cfg.Dir, cfg.Out)
 			continue
 		}
@@ -149,6 +178,8 @@ func RunDriver(ctx context.Context, p Provider, cfg Config) error {
 			return nil
 		}
 		fmt.Fprintf(cfg.Out, "  ✗ gate failed; rolling back\n%s\n", indent(out))
+		logFailure(".", failureEntry{Kind: failRejectedOp, Op: "plan:" + plan.Name,
+			Reason: trim("gate failed:\n"+out, 400), Spec: trim(cfg.Spec, 200)})
 		rollback(cfg.Dir, cfg.Out)
 		feedback = "the refactor broke the build/test gate:\n" + out
 	}

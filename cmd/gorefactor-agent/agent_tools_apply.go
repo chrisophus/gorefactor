@@ -149,3 +149,82 @@ func applyReplaceInLiteral(file, oldText, newText string) string {
 	}
 	return trim(out, 400)
 }
+
+func applyAddField(file, structName, fieldSpec string, updateLiterals bool) string {
+	if file == "" || structName == "" || fieldSpec == "" {
+		return "ERROR: 'file', 'struct', and 'field' are required"
+	}
+	args := []string{"add-field", file, structName, fieldSpec}
+	if updateLiterals {
+		args = append(args, "--update-literals")
+	}
+	out, err := runIn(".", gorefactorBin(), args...)
+	if err != nil {
+		return "ERROR add-field: " + trim(out, 400)
+	}
+	return trim(out, 400)
+}
+
+func applyChangeReceiver(file, typeMethod, mode string) string {
+	if file == "" || typeMethod == "" {
+		return "ERROR: 'file' and 'type_method' (Type:Method) are required"
+	}
+	var flag string
+	switch mode {
+	case "pointer":
+		flag = "--pointer"
+	case "value":
+		flag = "--value"
+	default:
+		return "ERROR: 'mode' must be pointer or value"
+	}
+	out, err := runIn(".", gorefactorBin(), "change-receiver", file, typeMethod, flag)
+	if err != nil {
+		return "ERROR change-receiver: " + trim(out, 400)
+	}
+	return trim(out, 400)
+}
+
+func applyExtractInterface(file, typeName, ifaceName string) string {
+	if file == "" || typeName == "" || ifaceName == "" {
+		return "ERROR: 'file', 'type', and 'interface_name' are required"
+	}
+	out, err := runIn(".", gorefactorBin(), "extract-interface", file, typeName, ifaceName)
+	if err != nil {
+		return "ERROR extract-interface: " + trim(out, 400)
+	}
+	return trim(out, 400)
+}
+
+func applyInline(file, function string) string {
+	if file == "" || function == "" {
+		return "ERROR: 'file' and 'function' are required"
+	}
+	out, err := runIn(".", gorefactorBin(), "inline", file, function)
+	if err != nil {
+		return "ERROR inline: " + trim(out, 400)
+	}
+	return trim(out, 400)
+}
+
+func applyReplaceText(file, symbol, oldText, newText string) string {
+	if file == "" || symbol == "" || oldText == "" {
+		return "ERROR: 'file', 'symbol', and 'old' are required"
+	}
+	out, err := runIn(".", gorefactorBin(), "replace-text", "--", file, symbol, oldText, newText)
+	if err != nil {
+		return "ERROR replace-text: " + trim(out, 400)
+	}
+	return trim(out, 400)
+}
+
+func applyAddTest(file, symbol string) string {
+	if file == "" || symbol == "" {
+		return "ERROR: 'file' and 'symbol' are required"
+	}
+	out, err := runIn(".", gorefactorBin(), "add-test", file, symbol)
+	if err != nil {
+		return "ERROR add-test: " + trim(out, 400)
+	}
+	return trim(out, 400)
+}

@@ -329,6 +329,12 @@ MUTATION TOOLS:
   composite literal — a package-level map/slice var, or a func-returned slice.
 - replace_in_literal <file> <old> <new>: edit text inside one string literal
   anywhere in a file (e.g. a package-level prompt/const), AST-scoped.
+- add_field <file> <struct> <field>: add a struct field (optional literal update).
+- change_receiver <file> <type_method> <mode>: flip a receiver value<->pointer.
+- extract_interface <file> <type> <interface_name>: interface from a type's methods.
+- inline <file> <function>: inline a trivial function into callers and delete it.
+- replace_text <file> <symbol> <old> <new>: literal text replace inside a body.
+- add_test <file> <symbol>: scaffold a table-driven test for a function/method.
 - replace_body <file> <symbol> <body>: replace the entire body of a named function or method.
 
 NOTES:

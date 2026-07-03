@@ -93,10 +93,10 @@ func agentTasks() []agentTask {
 			},
 		},
 
-		// ── hard: FRICTION/FAIL — probes agent tools not yet wired ──────────
+		// ── hard: now EFFICIENT after the remaining Slice-3 tools were wired ─
 		{
-			ID: "hard-addfield", Difficulty: "hard", Probes: "add_field (not an agent tool)",
-			Expected: outFriction,
+			ID: "hard-addfield", Difficulty: "hard", Probes: "add_field",
+			Expected: outEfficient,
 			Spec:     "Add a field 'Timeout int' to the Config struct in config.go and update the existing keyed literal in NewConfig to set it to 30.",
 			Fixture: map[string]string{
 				"go.mod": gomod,
@@ -105,8 +105,8 @@ func agentTasks() []agentTask {
 			},
 		},
 		{
-			ID: "hard-recv", Difficulty: "hard", Probes: "change_receiver (not an agent tool)",
-			Expected: outFriction,
+			ID: "hard-recv", Difficulty: "hard", Probes: "change_receiver",
+			Expected: outEfficient,
 			Spec:     "Convert the value receiver on the Counter.Inc method in counter.go to a pointer receiver so it mutates the counter.",
 			Fixture: map[string]string{
 				"go.mod": gomod,
@@ -115,8 +115,8 @@ func agentTasks() []agentTask {
 			},
 		},
 		{
-			ID: "hard-iface", Difficulty: "hard", Probes: "extract_interface (not an agent tool)",
-			Expected: outFriction,
+			ID: "hard-iface", Difficulty: "hard", Probes: "extract_interface",
+			Expected: outEfficient,
 			Spec:     "Extract an interface named Store from the exported methods of the *DB type in db.go.",
 			Fixture: map[string]string{
 				"go.mod": gomod,

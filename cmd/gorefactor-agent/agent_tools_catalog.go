@@ -141,5 +141,41 @@ func toolCatalog() []toolDef {
 				"symbol": strProp("function name, or Receiver:Method for a method"),
 				"body":   strProp("new body statements (without the outer braces)"),
 			}, "file", "symbol", "body")),
+		tool("add_field", "Add a field to a struct, optionally rewriting positional literals to keyed form. Prefer this over hand-editing a struct and its literals.",
+			obj(map[string]any{
+				"file":            strProp("path"),
+				"struct":          strProp("struct type name"),
+				"field":           strProp(`"Name Type [tag]", e.g. "Timeout int"`),
+				"update_literals": map[string]any{"type": "boolean", "description": "also rewrite positional composite literals to keyed form"},
+			}, "file", "struct", "field")),
+		tool("change_receiver", "Switch a method's receiver between value and pointer form (warns about copy-semantics).",
+			obj(map[string]any{
+				"file":        strProp("path"),
+				"type_method": strProp("Type:Method, e.g. Counter:Inc"),
+				"mode":        strProp("pointer | value"),
+			}, "file", "type_method", "mode")),
+		tool("extract_interface", "Generate an interface declaration from a type's exported method set.",
+			obj(map[string]any{
+				"file":           strProp("path"),
+				"type":           strProp("concrete type name"),
+				"interface_name": strProp("name for the generated interface"),
+			}, "file", "type", "interface_name")),
+		tool("inline", "Inline a simple function into its call sites and delete it (refuses anything non-trivial).",
+			obj(map[string]any{
+				"file":     strProp("path"),
+				"function": strProp("top-level function name to inline"),
+			}, "file", "function")),
+		tool("replace_text", "Literal text replace scoped to a function/method body (finer than replace_code; no statement match needed).",
+			obj(map[string]any{
+				"file":   strProp("path"),
+				"symbol": strProp("enclosing function name, or Receiver:Method"),
+				"old":    strProp("literal text to find in the body"),
+				"new":    strProp("replacement text"),
+			}, "file", "symbol", "old", "new")),
+		tool("add_test", "Scaffold a table-driven test for an exported function or method.",
+			obj(map[string]any{
+				"file":   strProp("path"),
+				"symbol": strProp("exported function name, or Receiver:Method"),
+			}, "file", "symbol")),
 	}
 }

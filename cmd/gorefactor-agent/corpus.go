@@ -85,6 +85,12 @@ var mutationTools = map[string]bool{
 	"insert_switch_case": true,
 	"insert_map_entry":   true,
 	"replace_in_literal": true,
+	"add_field":          true,
+	"change_receiver":    true,
+	"extract_interface":  true,
+	"inline":             true,
+	"replace_text":       true,
+	"add_test":           true,
 }
 
 // recordRejectedOp appends a rejected-op entry to the corpus when the

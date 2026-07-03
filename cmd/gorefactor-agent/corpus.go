@@ -48,7 +48,12 @@ func logFailure(dir string, e failureEntry) {
 	if e.TS == "" {
 		e.TS = time.Now().UTC().Format(time.RFC3339)
 	}
-	path := filepath.Join(dir, corpusRelPath)
+	appendJSONL(dir, corpusRelPath, e)
+
+}
+
+func appendJSONL(dir, relPath string, v any) {
+	path := filepath.Join(dir, relPath)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return
 	}
@@ -57,7 +62,7 @@ func logFailure(dir string, e failureEntry) {
 		return
 	}
 	defer f.Close()
-	b, err := json.Marshal(e)
+	b, err := json.Marshal(v)
 	if err != nil {
 		return
 	}

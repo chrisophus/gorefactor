@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -41,20 +39,8 @@ func logFriction(dir string, r FrictionReport) {
 	if r.TS == "" {
 		r.TS = time.Now().UTC().Format(time.RFC3339)
 	}
-	path := filepath.Join(dir, frictionRelPath)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return
-	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	b, err := json.Marshal(r)
-	if err != nil {
-		return
-	}
-	_, _ = f.Write(append(b, '\n'))
+	appendJSONL(dir, frictionRelPath, r)
+
 }
 
 // emitFrictionReport writes the machine-readable block a senior agent greps

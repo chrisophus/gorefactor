@@ -84,3 +84,9 @@ func intArg(a map[string]any, k string) int {
 	}
 	return 0
 }
+
+// boolArg reads a boolean tool argument (false when absent or non-bool).
+func boolArg(a map[string]any, k string) bool {
+	b, _ := a[k].(bool)
+	return b
+}

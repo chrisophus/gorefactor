@@ -137,6 +137,18 @@ func dispatchTool(call toolCall, cfg Config, gateFails *int) (string, toolStatus
 		return senseReadFile(str("file")), stContinue
 	case "replace_body":
 		return applyReplaceBody(str("file"), str("symbol"), str("body")), stContinue
+	case "add_field":
+		return applyAddField(str("file"), str("struct"), str("field"), boolArg(a, "update_literals")), stContinue
+	case "change_receiver":
+		return applyChangeReceiver(str("file"), str("type_method"), str("mode")), stContinue
+	case "extract_interface":
+		return applyExtractInterface(str("file"), str("type"), str("interface_name")), stContinue
+	case "inline":
+		return applyInline(str("file"), str("function")), stContinue
+	case "replace_text":
+		return applyReplaceText(str("file"), str("symbol"), str("old"), str("new")), stContinue
+	case "add_test":
+		return applyAddTest(str("file"), str("symbol")), stContinue
 	default:
 		return "unknown tool: " + call.Function.Name, stContinue
 	}

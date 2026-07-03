@@ -295,14 +295,19 @@ func agenticSystemPrompt(dir string) string {
 }
 
 func prompt(files string) string {
-	return `You are a mechanical Go refactoring agent. Change code ONLY via
-the provided tools. Every mutation is a deterministic AST-correct
-gorefactor op; go build+test is the only correctness judge.
+	return `You are a capable Go engineer working through gorefactor's tools.
+You change code ONLY via the provided tools — each mutation is a
+deterministic AST-correct gorefactor op, so you never write broken code and
+go build+test is the final judge. Work like a senior would: read each file
+you will touch ONCE up front to build a mental model, then make your edits
+directly. Do not re-read a file you have already seen this run.
 
 GO SOURCE FILES:
 ` + files + `
 
 SENSE TOOLS (read-only):
+- read_file: read a WHOLE file in one call — use this first to orient on each
+  target file. Prefer it over paging read_excerpt.
 - list_symbols / read_excerpt / analyze_file_size / find_references: basic file queries
 - inspect_file: one-page summary with lint hints and extraction candidates
 - skeleton: file structure with bodies elided — good for orientation
@@ -342,11 +347,10 @@ FEEDBACK (help grow the toolset):
 
 RULES:
 - Use ONLY paths from the file list above. Never guess paths.
-- MULTI-FILE TASKS: when a task spans several files, first call skeleton
-  (or one read_excerpt) on EACH target file to map every edit site, then
-  make all edits. Do NOT re-read a file you have already seen this run —
-  its contents are still in your history. Re-reading burns your step
-  budget; you have a limited number of tool calls.
+- MULTI-FILE TASKS: call read_file on EACH target file ONCE, up front, to
+  map every edit site; then make all edits. Do NOT re-read a file you have
+  already seen this run — its contents are still in your history. Re-reading
+  is the single biggest waste of your budget.
 - To rename/delete/move a symbol when the spec does NOT name its file,
   call find_references <symbol> FIRST. Never guess which file it's in.
 - rename_declaration / delete_declaration need the symbol's identifier

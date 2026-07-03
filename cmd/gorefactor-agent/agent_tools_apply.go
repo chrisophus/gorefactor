@@ -42,6 +42,20 @@ func applySetDoc(file, decl, doc string) string {
 	return fmt.Sprintf("set doc on %s in %s", decl, file)
 }
 
+// applyReplaceBody runs `gorefactor replace-body <file> <symbol> -` with the new body piped in via
+// stdin.
+func applyReplaceBody(file, symbol, body string) string {
+	if file == "" || symbol == "" || body == "" {
+		return "ERROR: 'file', 'symbol', and 'body' are all required"
+	}
+
+	out, err := runInWithStdin(".", body, gorefactorBin(), "replace-body", file, symbol, "-")
+	if err != nil {
+		return "ERROR replacing body: " + trim(out, 400)
+	}
+	return fmt.Sprintf("replaced body of %s in %s", symbol, file)
+}
+
 // applyExtractMethod runs `gorefactor extract <file> <start> <end> <name>` and
 // returns a compact result string the model can react to.
 func applyExtractMethod(file, start, end, name string) string {

@@ -62,6 +62,21 @@ func dispatchTool(call toolCall, cfg Config, gateFails *int) (string, toolStatus
 	case "note":
 		return appendNote(".", str("category"), str("text")), stContinue
 
+	case "friction":
+		r := FrictionReport{
+			Task:                trim(cfg.Spec, 200),
+			MissingCommand:      str("missing_command"),
+			SuggestedSyntax:     str("suggested_syntax"),
+			WorkaroundSteps:     splitLines(str("workaround_steps")),
+			EstimatedStepsSaved: intArg(a, "estimated_steps_saved"),
+		}
+		if r.MissingCommand == "" {
+			return "ERROR: friction needs missing_command (the gorefactor command that would have made this one step)", stContinue
+		}
+		logFriction(".", r)
+		emitFrictionReport(cfg.Out, r)
+		return "friction recorded; continue and call finish when done", stContinue
+
 	case "list_symbols":
 		return senseListSymbols(str("file")), stContinue
 
@@ -104,6 +119,9 @@ func dispatchTool(call toolCall, cfg Config, gateFails *int) (string, toolStatus
 
 	case "set_doc":
 		return applySetDoc(str("file"), str("declaration"), str("doc")), stContinue
+
+	case "change_signature":
+		return applyChangeSignature(a), stContinue
 
 	case "rename_declaration", "replace_code", "insert_code",
 		"create_file", "move_function", "move_method", "delete_declaration", "remove_code_block":

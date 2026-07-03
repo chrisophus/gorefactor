@@ -74,6 +74,18 @@ func toolCatalog() []toolDef {
 				"declaration": strProp("name of the func/type/var/const"),
 				"doc":         strProp("doc comment text (the // prefix is added automatically)"),
 			}, "file", "declaration", "doc")),
+		tool("change_signature", "Add, remove, or rename a parameter of a function/method AND update every call site — one op. Prefer this over manually rewriting a signature and its callers.",
+			obj(map[string]any{
+				"file":       strProp("path"),
+				"symbol":     strProp("function name, or Receiver:Method for a method"),
+				"mode":       strProp("add_param | remove_param | rename_param"),
+				"param_spec": strProp(`add_param: "name type", e.g. "ctx context.Context"`),
+				"position":   intProp("add_param: 0-based index for the new param (default: append at end)"),
+				"call_value": strProp(`add_param: expression to pass at every call site, e.g. "ctx" or "1"`),
+				"param":      strProp("remove_param: parameter name or 0-based index to remove"),
+				"old_name":   strProp("rename_param: current parameter name"),
+				"new_name":   strProp("rename_param: new parameter name"),
+			}, "file", "symbol", "mode")),
 
 		// notes (persistent across sessions)
 		tool("note", "Record a durable fact for future sessions in .gorefactor/notes.md. Use for repo facts, failed strategies, flaky tests, or open punts a later session would otherwise re-discover.",
@@ -82,12 +94,25 @@ func toolCatalog() []toolDef {
 				"text":     strProp("the fact to record, one concise sentence"),
 			}, "text")),
 
+		// feedback (grow the toolset)
+		tool("friction", "Report that the task SUCCEEDED but a gorefactor command was missing or awkward and you had to chain several tools for what should be one op. Non-terminal — record it, then keep working and call finish. This is the main signal used to grow the toolset.",
+			obj(map[string]any{
+				"missing_command":       strProp("the gorefactor command that would have made this one step, e.g. 'change-signature --add-param'"),
+				"suggested_syntax":      strProp("proposed one-shot invocation"),
+				"workaround_steps":      strProp("the clumsy tool sequence you actually used, one step per line"),
+				"estimated_steps_saved": intProp("how many tool calls the missing command would have saved"),
+			}, "missing_command", "suggested_syntax")),
+
 		// control
 		tool("report", "Return the answer for an analysis-only task and finish WITHOUT the build/test gate. Use for find-callers / find-uses / \"where is X\" questions.",
 			obj(map[string]any{"answer": strProp("the answer")}, "answer")),
 		tool("run_gate", "Run go build+test and report (advisory, non-terminal).", obj(map[string]any{})),
 		tool("finish", "Mark task complete and run the authoritative gate.", obj(map[string]any{})),
-		tool("punt", "Give up; task cannot be done with these tools.",
-			obj(map[string]any{"reason": strProp("why")}, "reason")),
+		tool("punt", "Give up; task cannot be done with these tools. If the blocker is a MISSING gorefactor capability (not a judgement call), also fill missing_command/suggested_syntax so the senior can add the command.",
+			obj(map[string]any{
+				"reason":           strProp("why"),
+				"missing_command":  strProp("optional: the gorefactor command whose absence blocks this task"),
+				"suggested_syntax": strProp("optional: proposed invocation of that command"),
+			}, "reason")),
 	}
 }

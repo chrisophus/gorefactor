@@ -22,17 +22,19 @@ func senseReadExcerpt(file string, a map[string]any) string {
 		return def
 	}
 	start := num("start_line", 1)
-	end := num("end_line", start+60)
+	end := num("end_line", start+120)
 	if start < 1 {
 		start = 1
 	}
 	if end > len(lines) {
 		end = len(lines)
 	}
-	// Tight window: small context budget (~4096 tok). A bigger view
-	// should be taken as successive bounded reads, not one dump.
-	if end-start > 80 {
-		end = start + 80
+	// Bounded window. The original 80-line cap was a small-context
+	// local-model assumption; a frontier junior can hold a larger view,
+	// and paging a file 5 times to re-orient costs more input tokens than
+	// one wider read. Still bounded so a huge file is not dumped whole.
+	if end-start > 160 {
+		end = start + 160
 	}
 	if start > end {
 		return "ERROR: start_line > end_line"
@@ -41,5 +43,5 @@ func senseReadExcerpt(file string, a map[string]any) string {
 	for i := start; i <= end; i++ {
 		fmt.Fprintf(&b, "%d: %s\n", i, lines[i-1])
 	}
-	return trim(b.String(), 2800)
+	return trim(b.String(), 6000)
 }

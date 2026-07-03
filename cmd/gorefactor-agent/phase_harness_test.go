@@ -421,7 +421,10 @@ func TestAssembleHistoryOrderIndependent(t *testing.T) {
 		{Role: "system", Content: "sys"},
 		{Role: "user", Content: "TASK"},
 	}
-	for i := 1; i <= 15; i++ {
+	// Build more rounds than historyKeep so compaction trims the front and
+	// the kept window still contains tool outputs older than maskAfterRounds
+	// (otherwise nothing is old enough to mask and the assertion below is moot).
+	for i := 1; i <= historyKeep+8; i++ {
 		id := fmt.Sprintf("id%d", i)
 		asst := chatMessage{Role: "assistant"}
 		asst.ToolCalls = []toolCall{{ID: id}}
@@ -430,8 +433,8 @@ func TestAssembleHistoryOrderIndependent(t *testing.T) {
 			Content: fmt.Sprintf("result-for-round-%d", i)})
 	}
 
-	maskThenCompact := compactMessages(maskStaleToolOutputs(msgs, maskAfterRounds), 12)
-	compactThenMask := assembleHistory(msgs, 12)
+	maskThenCompact := compactMessages(maskStaleToolOutputs(msgs, maskAfterRounds), historyKeep)
+	compactThenMask := assembleHistory(msgs, historyKeep)
 
 	if len(maskThenCompact) != len(compactThenMask) {
 		t.Fatalf("length differs: mask-then-compact=%d assembleHistory=%d",

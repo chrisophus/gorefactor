@@ -26,9 +26,14 @@ const (
 )
 
 const (
-	maxToolCalls  = 24 // bounded autonomy: hard ceiling on agency
+	maxToolCalls  = 40 // bounded autonomy: hard ceiling on agency (multi-file tasks need headroom)
 	maxGateFails  = 4  // repeated red gate -> autopunt
 	maxNoToolTurn = 3  // model keeps talking instead of acting -> autopunt
+	// historyKeep is how many recent messages assembleHistory keeps in
+	// full. Tuned up from the original 12 (a small-context local-model
+	// assumption) so a frontier junior can hold a multi-file working set
+	// in view and stop re-reading files it already saw.
+	historyKeep = 24
 )
 
 // traceEntry is one step the junior took, kept tight for the report.
@@ -331,6 +336,11 @@ FEEDBACK (help grow the toolset):
 
 RULES:
 - Use ONLY paths from the file list above. Never guess paths.
+- MULTI-FILE TASKS: when a task spans several files, first call skeleton
+  (or one read_excerpt) on EACH target file to map every edit site, then
+  make all edits. Do NOT re-read a file you have already seen this run —
+  its contents are still in your history. Re-reading burns your step
+  budget; you have a limited number of tool calls.
 - To rename/delete/move a symbol when the spec does NOT name its file,
   call find_references <symbol> FIRST. Never guess which file it's in.
 - rename_declaration / delete_declaration need the symbol's identifier

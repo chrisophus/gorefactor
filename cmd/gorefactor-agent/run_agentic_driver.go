@@ -61,7 +61,7 @@ func RunAgenticDriver(ctx context.Context, tc toolChatter, cfg Config) (err erro
 			}
 		}
 		fmt.Fprintf(cfg.Out, "\n── step %d/%d ──\n", step, cfg.MaxIter)
-		asst, err := tc.ChatTools(ctx, assembleHistory(messages, 12), tools)
+		asst, err := tc.ChatTools(ctx, assembleHistory(messages, historyKeep), tools)
 		if err != nil {
 			return fmt.Errorf("provider call failed: %w", err)
 		}

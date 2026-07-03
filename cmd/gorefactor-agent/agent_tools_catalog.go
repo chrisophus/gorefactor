@@ -5,7 +5,7 @@ func toolCatalog() []toolDef {
 		// sense (read-only)
 		tool("list_symbols", "List funcs/methods in a file.",
 			obj(map[string]any{"file": strProp("path")}, "file")),
-		tool("read_excerpt", "Read lines from a file (max 120).",
+		tool("read_excerpt", "Read lines from a file (max 160).",
 			obj(map[string]any{"file": strProp("path"),
 				"start_line": intProp("1-based"), "end_line": intProp("inclusive")}, "file")),
 		tool("analyze_file_size", "File line count and extraction hints.",

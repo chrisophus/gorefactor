@@ -21,7 +21,7 @@ import (
 // the sole trigger. The task objective (a user message) and any
 // most-recent error are never tool-role messages older than the window,
 // so the recency cutoff alone honours the never-mask list.
-const maskAfterRounds = 3
+const maskAfterRounds = 6
 
 // maskStaleToolOutputs stubs tool-role message bodies that fall before
 // the keepRounds-th assistant turn counted from the end. Message count

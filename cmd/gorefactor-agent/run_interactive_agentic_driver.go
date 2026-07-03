@@ -64,7 +64,7 @@ func RunInteractiveAgenticDriver(ctx context.Context, tc toolChatter, cfg Config
 			}
 		}
 		fmt.Fprintf(cfg.Out, "\n── step %d/%d ──\n", step, cfg.MaxIter)
-		asst, err := tc.ChatTools(ctx, assembleHistory(messages, 12), tools)
+		asst, err := tc.ChatTools(ctx, assembleHistory(messages, historyKeep), tools)
 		if err != nil {
 			return fmt.Errorf("provider call failed: %w", err)
 		}
@@ -171,7 +171,7 @@ func chatPause(ctx context.Context, tc toolChatter, cfg Config, messages []chatM
 		default:
 			// Free-form chat: send to model, show response, loop.
 			messages = append(messages, chatMessage{Role: "user", Content: input})
-			resp, err := tc.ChatTools(ctx, assembleHistory(messages, 12), tools)
+			resp, err := tc.ChatTools(ctx, assembleHistory(messages, historyKeep), tools)
 			if err != nil {
 				fmt.Fprintf(cfg.Out, "  (error: %v)\n", err)
 				fmt.Fprint(cfg.Out, pausePrompt)

@@ -116,3 +116,36 @@ func applyChangeSignature(a map[string]any) string {
 	}
 	return trim(out, 400)
 }
+
+func applyInsertSwitchCase(file, symbol, caseExpr, body string) string {
+	if file == "" || symbol == "" || caseExpr == "" {
+		return "ERROR: 'file', 'symbol', and 'case_expr' are required"
+	}
+	out, err := runInWithStdin(".", body, gorefactorBin(), "insert-switch-case", file, symbol, caseExpr, "-")
+	if err != nil {
+		return "ERROR insert-switch-case: " + trim(out, 400)
+	}
+	return trim(out, 400)
+}
+
+func applyInsertMapEntry(file, target, element string) string {
+	if file == "" || target == "" || element == "" {
+		return "ERROR: 'file', 'target', and 'element' are required"
+	}
+	out, err := runInWithStdin(".", element, gorefactorBin(), "insert-map-entry", file, target, "-")
+	if err != nil {
+		return "ERROR insert-map-entry: " + trim(out, 400)
+	}
+	return trim(out, 400)
+}
+
+func applyReplaceInLiteral(file, oldText, newText string) string {
+	if file == "" || oldText == "" {
+		return "ERROR: 'file' and 'old' are required"
+	}
+	out, err := runIn(".", gorefactorBin(), "replace-in-literal", "--", file, oldText, newText)
+	if err != nil {
+		return "ERROR replace-in-literal: " + trim(out, 400)
+	}
+	return trim(out, 400)
+}

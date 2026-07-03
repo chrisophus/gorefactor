@@ -249,6 +249,46 @@ gorefactor mcp --allow-write
 
 Design and phase status: [docs/mcp-server-plan.md](docs/mcp-server-plan.md).
 
+### Deploying to other Go projects
+
+GoRefactor is project-agnostic — install it once, then wire it into any Go
+module. The generated config references `gorefactor` on your `PATH` (no hardcoded
+paths), so the same setup works everywhere.
+
+```bash
+# 1. Install binaries + helper scripts globally (from a clone of this repo)
+make install
+#    → gorefactor, gorefactor-agent, gorefactor-delegate, gorefactor-init-project
+#      installed to $(go env GOPATH)/bin
+
+# 2. In any other Go project, wire in rules + MCP + a commit-time gate
+cd ~/my-other-project
+gorefactor-init-project            # read-only MCP (analysis tools; edits via CLI/rules)
+gorefactor-init-project --write    # also expose the mutation tools over MCP
+```
+
+`gorefactor-init-project` writes:
+
+- **Agent rules** — `CLAUDE.md` / `.cursorrules` / `AGENTS.md`, so Claude Code, Cursor,
+  and AGENTS.md-based agents prefer gorefactor over hand-editing `.go`.
+- **MCP config** — `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor).
+- **Doctor gate** — a `.githooks/pre-commit` running `gorefactor doctor` (lint + build +
+  test) plus `core.hooksPath`. The safety net: broken Go is caught before commit no
+  matter which tool made the edit. Bypass one commit with `git commit --no-verify`.
+
+Installed only the binaries (via `go install …@latest`)? Use the built-ins directly —
+`gorefactor init-agent-rules --target all --mcp` writes the rules + `.mcp.json`, and any
+pre-commit hook that runs `gorefactor doctor` gives you the gate.
+
+**Batch / headless refactors.** For large or autonomous mechanical work, delegate a spec
+to the agent — it runs the cheap model first and escalates only if it hands the task back:
+
+```bash
+gorefactor-delegate "add a ctx context.Context first param to Foo and update callers"
+#   → runs on Haiku; on a punt (exit 3) escalates to Sonnet.
+#     Needs ANTHROPIC_API_KEY and a clean git worktree (rolls back to it on punt).
+```
+
 ### Exit codes
 
 Commands use semantic exit codes so agents and CI can branch on the failure mode:

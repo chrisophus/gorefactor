@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt vet check clean install-tools help
+.PHONY: build test lint fmt vet check clean install-tools help gate refactor refactor-campaign install
 
 # Default target
 .DEFAULT_GOAL := help
@@ -32,6 +32,25 @@ build: test lint fmt vet ## Build binary (runs all checks first)
 	@echo "$(BLUE)Building gorefactor...$(NC)"
 	go build -o gorefactor ./cmd/gorefactor
 	@echo "$(GREEN)✓ Build successful$(NC)"
+
+install: ## Install binaries + helper scripts globally (on PATH), for use in ANY Go project
+	go install ./cmd/gorefactor ./cmd/gorefactor-agent
+	@install -m 0755 scripts/gorefactor-delegate.sh "$(shell go env GOPATH)/bin/gorefactor-delegate"
+	@install -m 0755 scripts/gorefactor-init-project.sh "$(shell go env GOPATH)/bin/gorefactor-init-project"
+	@echo "$(GREEN)✓ installed gorefactor, gorefactor-agent, gorefactor-delegate, gorefactor-init-project → $(shell go env GOPATH)/bin$(NC)"
+	@echo "  per project:  cd <proj> && gorefactor-init-project [--write]"
+
+gate: ## Doctor gate: build gorefactor, then lint + build + test (use as a commit/CI gate)
+	@go build -o gorefactor ./cmd/gorefactor
+	@./gorefactor doctor
+
+refactor: ## Delegate a spec to gorefactor-agent, Haiku->Sonnet escalation. Usage: make refactor SPEC="..."
+	@go build -o gorefactor-agent ./cmd/gorefactor-agent
+	@scripts/gorefactor-delegate.sh "$(SPEC)" .
+
+refactor-campaign: ## Autonomous, sensor-driven lint cleanup via gorefactor-agent campaign mode
+	@go build -o gorefactor-agent ./cmd/gorefactor-agent
+	@./gorefactor-agent -campaign
 
 test: ## Run all tests
 	@echo "$(BLUE)Running tests...$(NC)"

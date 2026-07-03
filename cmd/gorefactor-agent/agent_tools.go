@@ -128,6 +128,36 @@ type puntReport struct {
 	RepoClean bool         `json:"repo_clean"`
 	Dir       string       `json:"dir"`
 	Trace     []traceEntry `json:"trace"`
+	// CapabilityGap is set only when the junior punted because gorefactor
+	// LACKS a needed command (not a judgement call). A pointer with
+	// omitempty keeps a judgement punt's block byte-identical to before.
+	CapabilityGap *CapabilityGap `json:"capability_gap,omitempty"`
+}
+
+// CapabilityGap is the structured "this tool is missing" signal a punt can
+// carry, so the senior can distinguish a tool-gap punt (add the command)
+// from a judgement punt (out of scope, leave it alone).
+type CapabilityGap struct {
+	MissingCommand  string `json:"missing_command"`
+	SuggestedSyntax string `json:"suggested_syntax,omitempty"`
+	WhatItWouldDo   string `json:"what_it_would_do,omitempty"`
+}
+
+// parseGap extracts a CapabilityGap from a punt tool call's arguments,
+// returning nil when no missing_command was supplied (a judgement punt).
+func parseGap(call toolCall) *CapabilityGap {
+	var a struct {
+		MissingCommand  string `json:"missing_command"`
+		SuggestedSyntax string `json:"suggested_syntax"`
+	}
+	_ = json.Unmarshal([]byte(call.Function.Arguments), &a)
+	if strings.TrimSpace(a.MissingCommand) == "" {
+		return nil
+	}
+	return &CapabilityGap{
+		MissingCommand:  strings.TrimSpace(a.MissingCommand),
+		SuggestedSyntax: strings.TrimSpace(a.SuggestedSyntax),
+	}
 }
 
 // puntError carries the report while satisfying error. Error() still
@@ -141,7 +171,7 @@ func (e *puntError) Report() puntReport { return e.rep }
 
 // doPunt rolls back to the clean baseline, verifies it, emits the warm
 // report, and returns a *puntError.
-func doPunt(cfg Config, kind, reason string, trace []traceEntry, steps int) error {
+func doPunt(cfg Config, kind, reason string, trace []traceEntry, steps int, gaps ...*CapabilityGap) error {
 	rollback(cfg.Dir, cfg.Out)
 	rep := puntReport{
 		Status:    "punt",
@@ -152,6 +182,9 @@ func doPunt(cfg Config, kind, reason string, trace []traceEntry, steps int) erro
 		RepoClean: requireCleanWorktree(cfg.Dir) == nil,
 		Dir:       cfg.Dir,
 		Trace:     trace,
+	}
+	if len(gaps) > 0 && gaps[0] != nil {
+		rep.CapabilityGap = gaps[0]
 	}
 	fmt.Fprintf(cfg.Out, "  ⮌ PUNT (%s): %s\n", kind, trim(reason, 400))
 	b, _ := json.MarshalIndent(rep, "", "  ")
@@ -166,6 +199,20 @@ func doPunt(cfg Config, kind, reason string, trace []traceEntry, steps int) erro
 		Context: kind,
 	})
 	appendNote(cfg.Dir, "open_punt", fmt.Sprintf("%s: %s", kind, trim(reason, 160)))
+	// A tool-gap punt additionally files a structured capability_gap row
+	// and a tool_gap note so the senior (and future sessions) see the
+	// missing command as a distinct, dedupable signal.
+	if rep.CapabilityGap != nil {
+		logFailure(cfg.Dir, failureEntry{
+			Kind:    failCapabilityGap,
+			Op:      rep.CapabilityGap.MissingCommand,
+			Reason:  trim(reason, 400),
+			Spec:    trim(cfg.Spec, 200),
+			Context: rep.CapabilityGap.SuggestedSyntax,
+		})
+		appendNote(cfg.Dir, "tool_gap", fmt.Sprintf("missing %s: %s",
+			rep.CapabilityGap.MissingCommand, trim(reason, 120)))
+	}
 	return &puntError{rep: rep}
 }
 
@@ -263,6 +310,9 @@ MUTATION TOOLS:
 - split_file: auto-split an oversized file into sibling files
 - wrap_errors <file> <function>: wrap bare 'return err' with fmt.Errorf
 - set_doc <file> <declaration> <doc>: add/replace a godoc comment
+- change_signature <file> <symbol> <mode>: add/remove/rename a parameter
+  AND update every call site in one op. Use this instead of deleting and
+  re-inserting a function or hand-editing each caller.
 
 NOTES:
 - note <category> <text>: record a durable fact for future sessions.
@@ -270,6 +320,14 @@ NOTES:
   when you learn something a later session would otherwise re-discover
   (a flaky package, a targeting strategy that fails here). Trust any
   PERSISTENT NOTES above before re-investigating.
+
+FEEDBACK (help grow the toolset):
+- friction <missing_command> <suggested_syntax>: if you COMPLETE the task
+  but had to chain several tools for what should be one gorefactor command,
+  call friction to record the gap. It does not block you — call finish
+  after. This is how missing commands get added.
+- When you punt because gorefactor LACKS a needed command (not a judgement
+  call), pass missing_command/suggested_syntax to punt so the gap is logged.
 
 RULES:
 - Use ONLY paths from the file list above. Never guess paths.
@@ -284,6 +342,8 @@ RULES:
   line numbers. Do not guess line numbers.
 - If the spec names the file and function, go straight to mutation.
 - Call finish when done. If the gate fails, fix and call finish again.
+- If you completed the task but used a clumsy multi-step workaround for
+  what should be one command, call friction(...) before finish.
 - If the task needs logic you cannot express as a tool call, punt.`
 }
 

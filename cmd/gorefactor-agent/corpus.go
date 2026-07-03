@@ -22,9 +22,10 @@ const corpusRelPath = ".gorefactor/failures.jsonl"
 
 // Failure-corpus record kinds.
 const (
-	failRejectedOp = "rejected_op" // the deterministic layer refused a proposed op
-	failBudgetHit  = "budget_hit"  // a token budget was exhausted mid-task
-	failPunt       = "punt"        // the agent handed the task back
+	failRejectedOp    = "rejected_op"    // the deterministic layer refused a proposed op
+	failBudgetHit     = "budget_hit"     // a token budget was exhausted mid-task
+	failPunt          = "punt"           // the agent handed the task back
+	failCapabilityGap = "capability_gap" // punt blocked by a MISSING gorefactor command
 )
 
 // failureEntry is one line in the corpus. Fields are deliberately loose
@@ -79,6 +80,7 @@ var mutationTools = map[string]bool{
 	"insert_code": true, "create_file": true, "move_function": true,
 	"move_method": true, "delete_declaration": true, "remove_code_block": true,
 	"split_file": true, "wrap_errors": true, "set_doc": true,
+	"change_signature": true,
 }
 
 // recordRejectedOp appends a rejected-op entry to the corpus when the

@@ -119,7 +119,7 @@ func RunInteractiveAgenticDriver(ctx context.Context, tc toolChatter, cfg Config
 				fmt.Fprintf(cfg.Out, "  ✓ finished; gate green; changes kept\n")
 				return nil
 			case stPunt:
-				return doPunt(cfg, "explicit", content, trace, step)
+				return doPunt(cfg, "explicit", content, trace, step, parseGap(call))
 			}
 
 			if !autoRun {

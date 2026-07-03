@@ -99,7 +99,7 @@ func RunAgenticDriver(ctx context.Context, tc toolChatter, cfg Config) (err erro
 				fmt.Fprintf(cfg.Out, "  ✓ finished; gate green; changes kept\n")
 				return nil
 			case stPunt:
-				return doPunt(cfg, "explicit", content, trace, step)
+				return doPunt(cfg, "explicit", content, trace, step, parseGap(call))
 			}
 		}
 		if gateFails >= maxGateFails {

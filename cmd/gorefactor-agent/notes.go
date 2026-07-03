@@ -39,6 +39,7 @@ var noteCategories = map[string]bool{
 	"failed_strategy": true,
 	"flaky_test":      true,
 	"open_punt":       true,
+	"tool_gap":        true,
 }
 
 // loadNotes returns the notes.md body for dir, or "" if there are none.

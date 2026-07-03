@@ -135,6 +135,8 @@ func dispatchTool(call toolCall, cfg Config, gateFails *int) (string, toolStatus
 		return applyReplaceInLiteral(str("file"), str("old"), str("new")), stContinue
 	case "read_file":
 		return senseReadFile(str("file")), stContinue
+	case "replace_body":
+		return applyReplaceBody(str("file"), str("symbol"), str("body")), stContinue
 	default:
 		return "unknown tool: " + call.Function.Name, stContinue
 	}

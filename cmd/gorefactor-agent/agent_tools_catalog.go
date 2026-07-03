@@ -135,5 +135,11 @@ func toolCatalog() []toolDef {
 				"old":  strProp("substring to find inside one string literal"),
 				"new":  strProp("replacement text"),
 			}, "file", "old", "new")),
+		tool("replace_body", "Replace the entire body of a named function or method.",
+			obj(map[string]any{
+				"file":   strProp("path"),
+				"symbol": strProp("function name, or Receiver:Method for a method"),
+				"body":   strProp("new body statements (without the outer braces)"),
+			}, "file", "symbol", "body")),
 	}
 }

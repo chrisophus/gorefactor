@@ -329,6 +329,7 @@ MUTATION TOOLS:
   composite literal — a package-level map/slice var, or a func-returned slice.
 - replace_in_literal <file> <old> <new>: edit text inside one string literal
   anywhere in a file (e.g. a package-level prompt/const), AST-scoped.
+- replace_body <file> <symbol> <body>: replace the entire body of a named function or method.
 
 NOTES:
 - note <category> <text>: record a durable fact for future sessions.

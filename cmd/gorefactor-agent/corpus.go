@@ -71,6 +71,7 @@ func isOpRejection(result string) bool {
 	r := strings.TrimSpace(result)
 	return strings.HasPrefix(r, "ERROR") || strings.HasPrefix(r, "FAILED")
 }
+func init() { mutationTools["replace_body"] = true }
 
 // mutationTools is the set of tool names whose rejections are worth
 // recording. Sense/control tools are excluded: a "not found" from a

@@ -101,6 +101,26 @@ func TestNotesRoundTrip(t *testing.T) {
 	}
 }
 
+func TestNotesFlagsNonStandardCategory(t *testing.T) {
+	dir := t.TempDir()
+	// A recognized category: no flag.
+	if m := appendNote(dir, "flaky_test", "x is flaky"); strings.Contains(m, "non-standard") {
+		t.Fatalf("recognized category should not be flagged: %s", m)
+	}
+	// An unrecognized category: still written (loose schema), but flagged
+	// so it doesn't silently fail to group with same-category notes.
+	m := appendNote(dir, "misc", "some other fact")
+	if strings.HasPrefix(m, "ERROR") {
+		t.Fatalf("unrecognized category should still be accepted: %s", m)
+	}
+	if !strings.Contains(m, "non-standard") {
+		t.Fatalf("unrecognized category should be flagged: %s", m)
+	}
+	if !strings.Contains(loadNotes(dir), "[misc]") {
+		t.Fatalf("note should still be persisted under its given category")
+	}
+}
+
 func TestNotesCompactionAdvisory(t *testing.T) {
 	dir := t.TempDir()
 	var last string

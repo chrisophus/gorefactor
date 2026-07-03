@@ -31,9 +31,9 @@ const notesRelPath = ".gorefactor/notes.md"
 // threshold is crossed -- it does not shell out to crucible.
 const notesCompactionThreshold = 200
 
-// noteCategories are the recognised note buckets. An unknown category is
-// accepted verbatim so the schema stays loose enough to be cheap to
-// write, but the known set keeps notes groupable for compaction.
+// noteCategories are the recognised note buckets. An unknown category is still accepted (the schema
+// stays loose enough to be cheap to write) but appendNote flags it in its return string, since only
+// the known set groups cleanly for the Phase 4 compaction pass.
 var noteCategories = map[string]bool{
 	"repo_fact":       true,
 	"failed_strategy": true,
@@ -95,6 +95,9 @@ func appendNote(dir, category, text string) string {
 	_ = f.Close()
 
 	msg := fmt.Sprintf("noted [%s]: %s", category, trim(text, 120))
+	if !noteCategories[category] {
+		msg += fmt.Sprintf(" (non-standard category %q; expected one of repo_fact/failed_strategy/flaky_test/open_punt -- kept as-is, but won't group with same-category notes)", category)
+	}
 	if n := countLines(path); n > notesCompactionThreshold {
 		msg += fmt.Sprintf(" (notes.md is %d lines, over the %d-line threshold; "+
 			"run a crucible purify pass to compact and surface contradictions)",

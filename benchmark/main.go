@@ -22,12 +22,27 @@ import (
 func main() {
 	dir := flag.String("dir", "..", "root of the gorefactor module")
 	verbose := flag.Bool("v", false, "print scenario detail")
+	agentCorpus := flag.Bool("agent-corpus", false, "list the agent task corpus (Slice 2), no LLM calls")
+	agentCorpusRun := flag.Bool("agent-corpus-run", false, "execute the agent task corpus against the junior (costs tokens)")
+	only := flag.String("only", "", "corpus: run only the task with this id")
+	difficulty := flag.String("difficulty", "", "corpus: filter by difficulty (easy|medium|hard)")
+	provider := flag.String("provider", "anthropic", "corpus: agent provider")
+	model := flag.String("model", "claude-sonnet-4-6", "corpus: agent model")
+	budget := flag.Int("budget", 500000, "corpus: per-task token budget")
 	flag.Parse()
 
 	root, err := filepath.Abs(*dir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
+	}
+
+	if *agentCorpus || *agentCorpusRun {
+		runAgentCorpus(root, corpusOpts{
+			run: *agentCorpusRun, only: *only, difficulty: *difficulty,
+			provider: *provider, model: *model, budget: *budget, verbose: *verbose,
+		})
+		return
 	}
 
 	bin := filepath.Join(root, "gorefactor")

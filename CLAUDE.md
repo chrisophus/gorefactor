@@ -31,6 +31,9 @@ Mapping of common edits to commands (run `./gorefactor` for the full list):
 | Add/remove/rename a parameter (+ call sites) | `gorefactor change-signature <file> <Func> --add-param "n T"` |
 | Flip a method receiver value↔pointer | `gorefactor change-receiver <file> <Type:Method> --pointer` |
 | Set/replace a doc comment | `gorefactor set-doc <file> <decl> -` |
+| Add a `case` to a switch | `gorefactor insert-switch-case <file> <Func> <case-expr> -` |
+| Add an element to a map/slice literal | `gorefactor insert-map-entry <file> <VarOrFunc> -` |
+| Edit text inside a string literal | `gorefactor replace-in-literal -- <file> <old> <new>` |
 | Scaffold a table-driven test | `gorefactor add-test <file> <Func>` |
 | Generate an interface from a type | `gorefactor extract-interface <file> <Type> <Iface>` |
 | Stub out unimplemented interface methods | `gorefactor implement-interface <file> <Type> <Iface>` |
@@ -58,6 +61,8 @@ Mapping of common edits to commands (run `./gorefactor` for the full list):
 **Receiver-method syntax**: methods are referenced as `Receiver:Method` everywhere (e.g. `CodeInserter:InsertCode`). Pointer receivers work without `*` in the locator.
 
 **Stdin convention**: any command that takes content accepts `-` as the last argument to read from stdin (UNIX convention). This avoids quoting issues with multi-line code.
+
+**End-of-flags (`--`)**: pass a bare `--` to make every following argument positional (POSIX convention). Needed when a value starts with `-` — e.g. `replace-in-literal -- <file> "- old item" "- new item"`. Put any `--json`/`--dry-run`/`--gate` flags *before* the `--`.
 
 ## Harness pattern
 
@@ -144,6 +149,9 @@ Main commands in `cmd/gorefactor/main.go` (registered in `getCommands()`):
 - `change-signature <file> <Func|Receiver:Method> (--add-param "n T" [--position N] [--call-value EXPR] | --remove-param <name|index> | --rename-param <old> <new>)`: Change a signature and update all call sites.
 - `change-receiver <file> <Type:Method> --pointer|--value`: Switch a method's receiver between value and pointer form.
 - `set-doc <file> <decl> [content|-]`: Set or replace the doc comment on a top-level declaration.
+- `insert-switch-case <file> <Func|Receiver:Method> <case-expr> [body|-]`: Add a `case` to the first expression switch inside a function (before `default`, else at end). For non-statement code the statement-exact `replace` can't touch.
+- `insert-map-entry <file> <VarOrFunc> <element|->`: Append an element to a composite literal — a package-level map/slice var, or the literal a func returns (e.g. a catalog builder). A trailing comma in the element is tolerated.
+- `replace-in-literal <file> <old> <new>`: Replace text inside exactly one string literal (interpreted or raw), AST-scoped so surrounding code is never touched; reaches package-level literals (e.g. a prompt const) that `replace-text` (function-body-scoped) cannot. Use `--` before the args when `old`/`new` start with `-`.
 - `add-test <file> <Func|Receiver:Method>`: Generate a table-driven test scaffold for an exported function/method.
 - `extract-interface <file> <Type> <IfaceName>`: Generate an interface declaration from a type's exported method set.
 - `implement-interface <file> <Type> <Iface>`: Generate compiling method stubs for every unimplemented interface method.

@@ -194,6 +194,9 @@ Methods use `Receiver:Method` (no `*` on the receiver). Many commands accept `-`
 | `change-signature` | Add/remove/rename a parameter and update all call sites |
 | `change-receiver` | Switch a method receiver between value and pointer form |
 | `set-doc` | Set/replace the doc comment on a declaration |
+| `insert-switch-case` | Add a `case` to the switch inside a function |
+| `insert-map-entry` | Append an element to a map/slice composite literal |
+| `replace-in-literal` | Replace text inside one string literal (AST-scoped; use `--` for dash-leading args) |
 | `add-test` | Generate a table-driven test scaffold for a function/method |
 | `extract-interface` | Generate an interface from a type's exported method set |
 | `implement-interface` | Generate compiling method stubs for unimplemented interface methods |

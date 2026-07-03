@@ -5,9 +5,11 @@ func toolCatalog() []toolDef {
 		// sense (read-only)
 		tool("list_symbols", "List funcs/methods in a file.",
 			obj(map[string]any{"file": strProp("path")}, "file")),
-		tool("read_excerpt", "Read lines from a file (max 160).",
+		tool("read_excerpt", "Read lines from a file (max 160). Prefer read_file to see a whole file in one call.",
 			obj(map[string]any{"file": strProp("path"),
 				"start_line": intProp("1-based"), "end_line": intProp("inclusive")}, "file")),
+		tool("read_file", "Read an ENTIRE file (line-numbered, up to 600 lines) in one call. Use this to orient on each target file once, up front — do not page or re-read.",
+			obj(map[string]any{"file": strProp("path")}, "file")),
 		tool("analyze_file_size", "File line count and extraction hints.",
 			obj(map[string]any{"file": strProp("path")}, "file")),
 		tool("find_references", "Lines mentioning a symbol across the repo.",

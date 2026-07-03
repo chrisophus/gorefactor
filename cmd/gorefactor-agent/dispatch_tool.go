@@ -133,6 +133,8 @@ func dispatchTool(call toolCall, cfg Config, gateFails *int) (string, toolStatus
 		return applyInsertMapEntry(str("file"), str("target"), str("element")), stContinue
 	case "replace_in_literal":
 		return applyReplaceInLiteral(str("file"), str("old"), str("new")), stContinue
+	case "read_file":
+		return senseReadFile(str("file")), stContinue
 	default:
 		return "unknown tool: " + call.Function.Name, stContinue
 	}

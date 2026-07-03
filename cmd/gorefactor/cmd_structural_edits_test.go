@@ -98,6 +98,22 @@ func catalog() []string {
 	}
 }
 
+// TestInsertMapEntryTrailingComma: an element written with a trailing comma
+// (how a model naturally writes a map entry) must not produce a double comma.
+func TestInsertMapEntryTrailingComma(t *testing.T) {
+	t.Chdir(t.TempDir())
+	path := writeTempGo(t, ".", "tc.go", "package x\n\nvar m = map[string]bool{\n\t\"a\": true,\n}\n")
+	captureStdout(t, func() {
+		if err := insertMapEntryCommand([]string{path, "m", `"b": true,`}); err != nil {
+			t.Fatalf("insert-map-entry with trailing comma: %v", err)
+		}
+	})
+	mustParse(t, path)
+	if strings.Count(readFile(t, path), ",,") != 0 {
+		t.Fatalf("trailing comma produced a double comma:\n%s", readFile(t, path))
+	}
+}
+
 func TestInsertMapEntryNotFound(t *testing.T) {
 	t.Chdir(t.TempDir())
 	path := writeTempGo(t, ".", "e.go", "package x\n\nvar n = 1\n")

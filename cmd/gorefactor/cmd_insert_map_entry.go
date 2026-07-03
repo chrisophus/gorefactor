@@ -47,6 +47,10 @@ func insertMapEntryCommand(args []string) error {
 		return m.fail(err)
 	}
 	element = strings.TrimSpace(element)
+	// Tolerate a trailing comma in the element — a model naturally writes
+	// `"key": true,` and the command supplies its own separator, so keeping
+	// it would produce a double comma and a malformed file.
+	element = strings.TrimSpace(strings.TrimSuffix(element, ","))
 	if element == "" {
 		return m.fail(usageErrorf("element must be non-empty"))
 	}

@@ -352,6 +352,15 @@ RULES:
   map every edit site; then make all edits. Do NOT re-read a file you have
   already seen this run — its contents are still in your history. Re-reading
   is the single biggest waste of your budget.
+- TRUST SUCCESSFUL EDITS: every mutation is AST-verified and gofmt'd before
+  it is written, so a success message means the edit is correct. Do NOT
+  re-read a file just to confirm an edit landed.
+- PREFER symbol/text-targeting tools (insert_switch_case, insert_map_entry,
+  replace_in_literal, set_doc, change_signature) over line- or
+  statement-exact tools (replace_code, remove_code_block): they target by
+  name/text so you never need fresh line numbers after an edit shifts them.
+  When adding a map/slice element, write just the element (a trailing comma
+  is fine); when adding a switch case, give the case expression and body.
 - To rename/delete/move a symbol when the spec does NOT name its file,
   call find_references <symbol> FIRST. Never guess which file it's in.
 - rename_declaration / delete_declaration need the symbol's identifier

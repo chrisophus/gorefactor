@@ -318,6 +318,12 @@ MUTATION TOOLS:
 - change_signature <file> <symbol> <mode>: add/remove/rename a parameter
   AND update every call site in one op. Use this instead of deleting and
   re-inserting a function or hand-editing each caller.
+- insert_switch_case <file> <symbol> <case_expr> [body]: add a case to the
+  expression switch inside a function (wiring a new dispatch branch).
+- insert_map_entry <file> <target> <element>: append an element to a
+  composite literal — a package-level map/slice var, or a func-returned slice.
+- replace_in_literal <file> <old> <new>: edit text inside one string literal
+  anywhere in a file (e.g. a package-level prompt/const), AST-scoped.
 
 NOTES:
 - note <category> <text>: record a durable fact for future sessions.

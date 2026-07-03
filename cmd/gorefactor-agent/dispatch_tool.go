@@ -127,6 +127,12 @@ func dispatchTool(call toolCall, cfg Config, gateFails *int) (string, toolStatus
 		"create_file", "move_function", "move_method", "delete_declaration", "remove_code_block":
 		return applyOp(call.Function.Name, a, cfg), stContinue
 
+	case "insert_switch_case":
+		return applyInsertSwitchCase(str("file"), str("symbol"), str("case_expr"), str("body")), stContinue
+	case "insert_map_entry":
+		return applyInsertMapEntry(str("file"), str("target"), str("element")), stContinue
+	case "replace_in_literal":
+		return applyReplaceInLiteral(str("file"), str("old"), str("new")), stContinue
 	default:
 		return "unknown tool: " + call.Function.Name, stContinue
 	}

@@ -80,7 +80,10 @@ var mutationTools = map[string]bool{
 	"insert_code": true, "create_file": true, "move_function": true,
 	"move_method": true, "delete_declaration": true, "remove_code_block": true,
 	"split_file": true, "wrap_errors": true, "set_doc": true,
-	"change_signature": true,
+	"change_signature":   true,
+	"insert_switch_case": true,
+	"insert_map_entry":   true,
+	"replace_in_literal": true,
 }
 
 // recordRejectedOp appends a rejected-op entry to the corpus when the

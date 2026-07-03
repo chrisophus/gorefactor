@@ -114,5 +114,24 @@ func toolCatalog() []toolDef {
 				"missing_command":  strProp("optional: the gorefactor command whose absence blocks this task"),
 				"suggested_syntax": strProp("optional: proposed invocation of that command"),
 			}, "reason")),
+		tool("insert_switch_case", "Add a case to the expression switch inside a function (inserted before default, else at end). Use to wire a new dispatch branch instead of rewriting the whole switch.",
+			obj(map[string]any{
+				"file":      strProp("path"),
+				"symbol":    strProp("enclosing function name, or Receiver:Method"),
+				"case_expr": strProp(`the case expression, e.g. "replace_body"`),
+				"body":      strProp("the case body statements"),
+			}, "file", "symbol", "case_expr")),
+		tool("insert_map_entry", "Append an element to a composite literal — a package-level map/slice var, or the literal a func returns (e.g. a catalog builder). Use to add a map key or a slice element without rewriting the literal.",
+			obj(map[string]any{
+				"file":    strProp("path"),
+				"target":  strProp("the var name, or the func whose returned literal to extend"),
+				"element": strProp(`the new element text, e.g. "foo": true, or a full expression`),
+			}, "file", "target", "element")),
+		tool("replace_in_literal", "Replace text inside a single string literal anywhere in a file (including a package-level prompt/const), AST-scoped so surrounding code is never touched. Match must be unambiguous.",
+			obj(map[string]any{
+				"file": strProp("path"),
+				"old":  strProp("substring to find inside one string literal"),
+				"new":  strProp("replacement text"),
+			}, "file", "old", "new")),
 	}
 }

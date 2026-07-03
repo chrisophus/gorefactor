@@ -57,6 +57,10 @@ func checkCommandArgs(cmd Command, args []string) error {
 	positional := 0
 	for i := 0; i < len(args); i++ {
 		a := args[i]
+		if a == "--" { // POSIX end-of-flags: everything after is positional
+			positional += len(args) - i - 1
+			break
+		}
 		if isFlagToken(a) {
 			name := a
 			hasInlineValue := false
@@ -101,6 +105,10 @@ func parseFlags(args []string, spec map[string]bool) (positional []string, flags
 	flags = map[string]string{}
 	for i := 0; i < len(args); i++ {
 		a := args[i]
+		if a == "--" { // POSIX end-of-flags: everything after is positional
+			positional = append(positional, args[i+1:]...)
+			break
+		}
 		if !isFlagToken(a) {
 			positional = append(positional, a)
 			continue

@@ -68,7 +68,7 @@ func replaceInLiteralCommand(args []string) error {
 	})
 	switch len(matches) {
 	case 0:
-		return m.fail(notFoundErrorf("no string literal in %s contains %q", file, oldText))
+		return m.fail(notFoundErrorf("no string literal in %s contains %q\nhint: this command only edits inside string literals; for code (non-string) text use replace-text or `edit`", file, oldText))
 	case 1:
 		// unambiguous — proceed
 	default:

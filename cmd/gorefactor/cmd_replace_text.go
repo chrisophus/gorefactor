@@ -87,7 +87,7 @@ func replaceTextCommand(args []string) error {
 	bodySrc := string(src[startOffset:endOffset])
 	count := strings.Count(bodySrc, oldText)
 	if count == 0 {
-		return m.fail(notFoundErrorf("pattern not found inside %s", locator))
+		return m.fail(notFoundErrorf("pattern not found inside %s\nhint: verify the exact text exists in the body; to edit text inside a string literal use replace-in-literal, to swap the whole body use replace-body", locator))
 	}
 	if occurrence > count {
 		return m.fail(notFoundErrorf("pattern occurs %d time(s) inside %s; occurrence %d requested", count, locator, occurrence))

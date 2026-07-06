@@ -288,7 +288,7 @@ func replaceCommand(args []string) error {
 		ins, err := ci.ReplaceCodeBlock(file, loc, pattern, replacement)
 		if err != nil {
 			if strings.Contains(err.Error(), "no statement matching") {
-				return "", notFoundErrorf("%v\nhint: the pattern must be a complete statement; use replace-text for partial text", err)
+				return "", notFoundErrorf("%v\nhint: the pattern must be a complete statement; use replace-text for partial text, or `edit` to auto-fall-back", err)
 			}
 			return "", err
 		}

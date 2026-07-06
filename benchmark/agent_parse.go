@@ -23,9 +23,11 @@ const (
 
 // runMetrics mirrors the JSON in the <<<RUN_METRICS … RUN_METRICS>>> block.
 type runMetrics struct {
-	Outcome     string `json:"outcome"` // fixed | punt | error
-	Steps       int    `json:"steps"`
-	LocalTokens int    `json:"local_tokens"`
+	Outcome          string `json:"outcome"` // fixed | punt | error
+	Steps            int    `json:"steps"`
+	PromptTokens     int    `json:"prompt_tokens"`
+	CompletionTokens int    `json:"completion_tokens"`
+	LocalTokens      int    `json:"local_tokens"`
 }
 
 // blockBody returns the text between "<<<MARKER" and "MARKER>>>", or "" if the

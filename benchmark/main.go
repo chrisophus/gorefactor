@@ -31,6 +31,8 @@ func main() {
 	emitTasks := flag.Bool("emit-tasks", false, "mine-failures: write reviewable task stubs to .gorefactor/mined_tasks.go.txt")
 	provider := flag.String("provider", "anthropic", "corpus: agent provider")
 	model := flag.String("model", "claude-sonnet-4-6", "corpus: agent model")
+	models := flag.String("models", "", "corpus: comma-separated model sweep (provider inferred per model; overrides -model)")
+	modes := flag.String("modes", "", "corpus: comma-separated harness-mode sweep (agentic|single-shot)")
 	budget := flag.Int("budget", 500000, "corpus: per-task token budget")
 	flag.Parse()
 
@@ -51,7 +53,8 @@ func main() {
 	if *agentCorpus || *agentCorpusRun {
 		runAgentCorpus(root, corpusOpts{
 			run: *agentCorpusRun, only: *only, difficulty: *difficulty,
-			provider: *provider, model: *model, budget: *budget, verbose: *verbose,
+			provider: *provider, model: *model, models: *models, modes: *modes,
+			budget: *budget, verbose: *verbose,
 		})
 		return
 	}

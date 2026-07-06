@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // agent_corpus.go: the Slice-2 runner. For each task it materializes the
@@ -19,6 +20,8 @@ type corpusOpts struct {
 	difficulty string
 	provider   string
 	model      string
+	models     string // comma-separated model sweep (overrides model when set)
+	modes      string // comma-separated harness-mode sweep: agentic|single-shot
 	budget     int
 	agentBin   string
 	verbose    bool
@@ -66,11 +69,14 @@ type taskResult struct {
 	actual     expectedOutcome
 	oraclePass bool
 	oracleFail []string
+	metrics    runMetrics // parsed RUN_METRICS (zero if the block was absent)
+	wallMs     int64      // wall-clock of the agent invocation
 }
 
-// runAgentTask executes one task against a fresh fixture and returns its
-// observed outcome plus the intent-oracle verdict.
-func runAgentTask(o corpusOpts, t agentTask) (taskResult, error) {
+// runAgentTask executes one task against a fresh fixture under the given
+// sweep cell (provider/model/mode) and returns its observed outcome, the
+// intent-oracle verdict, and its parsed cost metrics.
+func runAgentTask(o corpusOpts, cell sweepCell, t agentTask) (taskResult, error) {
 	dir, err := os.MkdirTemp("", "corpus-"+t.ID+"-")
 	if err != nil {
 		return taskResult{actual: outError}, err
@@ -83,21 +89,29 @@ func runAgentTask(o corpusOpts, t agentTask) (taskResult, error) {
 		return taskResult{actual: outError}, err
 	}
 
-	args := []string{"-spec", t.Spec, "-provider", o.provider, "-model", o.model, "-dir", dir}
+	args := []string{"-spec", t.Spec, "-provider", cell.provider, "-model", cell.model, "-dir", dir}
+	if cell.mode == "single-shot" {
+		args = append(args, "-single-shot")
+	}
 	if o.budget > 0 {
 		args = append(args, "-budget", fmt.Sprintf("%d", o.budget))
 	}
 	cmd := exec.Command(o.agentBin, args...)
+	start := time.Now()
 	out, _ := cmd.CombinedOutput() // exit code is carried in RUN_METRICS/blocks
+	wallMs := time.Since(start).Milliseconds()
 
 	// Evaluate the intent-oracle against the mutated fixture BEFORE the deferred
 	// cleanup removes it. No asserts declared → vacuously passes.
 	oraclePass, oracleFail := evalOracle(dir, t.Assert)
+	rm, _ := parseRunMetrics(string(out))
 	return taskResult{
 		stdout:     string(out),
 		actual:     classifyOutcome(string(out)),
 		oraclePass: oraclePass,
 		oracleFail: oracleFail,
+		metrics:    rm,
+		wallMs:     wallMs,
 	}, nil
 }
 
@@ -115,50 +129,68 @@ func runAgentCorpus(root string, o corpusOpts) {
 	}
 
 	tasks := selectTasks(agentTasks(), o.only, o.difficulty)
+
+	// Dry list (no -run): a single table of predictions, no sweep.
+	if !o.run {
+		fmt.Printf("%-18s  %-8s  %-30s  %-9s\n", "id", "level", "probes", "expected")
+		fmt.Println(strings.Repeat("-", 70))
+		for _, t := range tasks {
+			fmt.Printf("%-18s  %-8s  %-30s  %-9s\n", t.ID, t.Difficulty, t.Probes, t.Expected)
+		}
+		fmt.Println(strings.Repeat("-", 70))
+		fmt.Printf("%d tasks listed (pass -agent-corpus-run to execute against the junior)\n", len(tasks))
+		return
+	}
+
+	cells := buildCells(o)
+	summaries := make([]cellSummary, 0, len(cells))
+	for _, cell := range cells {
+		summaries = append(summaries, runCell(o, cell, tasks))
+	}
+
+	// A model×mode sweep (more than one cell) gets a cost-of-pass matrix.
+	if len(cells) > 1 {
+		printSweepMatrix(summaries)
+	}
+}
+
+// runCell executes every task under one sweep cell, prints the per-task
+// table, and returns the aggregated cost summary.
+func runCell(o corpusOpts, cell sweepCell, tasks []agentTask) cellSummary {
+	fmt.Printf("\n=== %s / %s / %s ===\n", cell.provider, cell.model, cell.mode)
 	fmt.Printf("%-18s  %-8s  %-30s  %-9s  %-9s  %s\n",
 		"id", "level", "probes", "expected", "actual", "match")
 	fmt.Println(strings.Repeat("-", 96))
 
-	var runCount, matchCount int
+	sum := cellSummary{provider: cell.provider, model: cell.model, mode: cell.mode}
 	for _, t := range tasks {
-		actual := expectedOutcome("(not run)")
-		match := ""
-		if o.run {
-			res, err := runAgentTask(o, t)
-			got := res.actual
-			if err != nil {
-				got = outError
-			}
-			actual = got
-			runCount++
-			switch {
-			case got != t.Expected:
-				match = "DIFF"
-			case !res.oraclePass:
-				// Outcome matched but the transform didn't provably happen.
-				match = "ORACLE-FAIL"
-			default:
-				matchCount++
-				match = "OK"
-			}
-			if o.verbose {
-				if rm, ok := parseRunMetrics(res.stdout); ok {
-					fmt.Printf("    ↳ %s: %d steps, %d tokens\n", t.ID, rm.Steps, rm.LocalTokens)
-				}
-			}
-			for _, f := range res.oracleFail {
-				fmt.Printf("    ✗ oracle: %s\n", f)
-			}
+		res, err := runAgentTask(o, cell, t)
+		got := res.actual
+		if err != nil {
+			got = outError
+		}
+		pass := got == t.Expected && res.oraclePass
+		match := "OK"
+		switch {
+		case got != t.Expected:
+			match = "DIFF"
+		case !res.oraclePass:
+			match = "ORACLE-FAIL"
+		}
+		sum.observe(cell.model, pass, res)
+		if o.verbose {
+			fmt.Printf("    ↳ %s: %d steps, %d/%d in/out tokens, %dms\n",
+				t.ID, res.metrics.Steps, res.metrics.PromptTokens, res.metrics.CompletionTokens, res.wallMs)
+		}
+		for _, f := range res.oracleFail {
+			fmt.Printf("    ✗ oracle: %s\n", f)
 		}
 		fmt.Printf("%-18s  %-8s  %-30s  %-9s  %-9s  %s\n",
-			t.ID, t.Difficulty, t.Probes, t.Expected, actual, match)
+			t.ID, t.Difficulty, t.Probes, t.Expected, got, match)
 	}
 	fmt.Println(strings.Repeat("-", 96))
-	if o.run {
-		fmt.Printf("%d/%d tasks matched their predicted outcome\n", matchCount, runCount)
-	} else {
-		fmt.Printf("%d tasks listed (pass -agent-corpus-run to execute against the junior)\n", len(tasks))
-	}
+	printCellSummary(sum)
+	return sum
 }
 
 // selectTasks filters the corpus by id and/or difficulty (empty = all).

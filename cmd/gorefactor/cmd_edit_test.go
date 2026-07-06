@@ -69,3 +69,25 @@ func TestEditStatementExactPath(t *testing.T) {
 		t.Errorf("expected statement replaced, got:\n%s", out)
 	}
 }
+
+func TestEditRejectsMalformedReplacement(t *testing.T) {
+	dir := t.TempDir()
+	prev, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(prev) })
+
+	src := "package p\n\nfunc F() int {\n\tx := 1\n\treturn x\n}\n"
+	if err := os.WriteFile("m.go", []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := editCommand([]string{"m.go", "F", "x := 1", "x :="}); err == nil {
+		t.Fatal("edit accepted a malformed replacement; expected rejection")
+	}
+	out, _ := os.ReadFile(filepath.Join(dir, "m.go"))
+	if string(out) != src {
+		t.Errorf("file was mutated by a rejected edit:\n%s", out)
+	}
+}

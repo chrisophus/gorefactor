@@ -40,9 +40,11 @@ func init() {
 }
 
 // editCommand tries a statement-exact replace first; if the pattern isn't a
-// complete statement (parse error, or no statement matched), it falls back
-// to a body-scoped literal text replace. Any other failure (e.g. function
-// not found) is returned as-is rather than masked by the fallback.
+// complete statement (parse error, or no statement matched), it falls back to
+// a body-scoped literal text replace. A genuine target-not-found is returned
+// as-is rather than masked. The fallback can't introduce malformed Go: the
+// text-replace path re-parses its result and reverts on failure, so edit
+// never leaves the file in a state replace itself would have rejected.
 func editCommand(args []string) error {
 	pos, _ := parseFlags(args, editFlags)
 	if len(pos) < 4 {
@@ -63,9 +65,17 @@ func editCommand(args []string) error {
 }
 
 // editShouldFallback reports whether a failed statement-replace should be
-// retried as a text replace. It fires only for the "not a complete
-// statement" family (snippet parse errors, or no statement matched) — never
-// for a genuine target-not-found, which text replace would only repeat.
+// retried as a text replace. It fires for the "not a complete statement"
+// family: an exitParseError (validateGoSnippet couldn't parse old/new as a
+// self-contained statement — the normal case for legitimate partial-text
+// edits like "a, b" -> "c, d") or a no-statement-match not-found. It does not
+// fire for a genuine target-not-found, which text replace would only repeat.
+//
+// A genuinely malformed replacement also lands in the exitParseError bucket,
+// indistinguishable here from a valid fragment. That is safe because the
+// replace-text fallback re-parses the result and reverts (via m.run's
+// snapshot) if the edit would leave the file unparseable — so falling back
+// can never write malformed Go.
 func editShouldFallback(err error) bool {
 	var ce *cliError
 	if !errors.As(err, &ce) {

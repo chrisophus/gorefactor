@@ -110,6 +110,14 @@ func replaceTextCommand(args []string) error {
 		if err := os.WriteFile(file, out, 0644); err != nil {
 			return "", err
 		}
+		// Text substitution is not statement-aware, so a caller-supplied
+		// replacement can leave the body syntactically broken. Refuse that:
+		// returning an error here makes m.run restore the pre-edit snapshot,
+		// upholding the harness guarantee that a mutation never writes
+		// malformed Go (this also backstops `edit`'s fallback path).
+		if _, perr := parser.ParseFile(token.NewFileSet(), file, out, parser.SkipObjectResolution); perr != nil {
+			return "", parseErrorf("replacement would make %s unparseable: %v", file, perr)
+		}
 		if err := orchestrator.FormatImports(file); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", file, err)
 		}

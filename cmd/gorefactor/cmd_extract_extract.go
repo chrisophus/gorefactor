@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"go/ast"
+	"go/token"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -64,6 +66,12 @@ func extractCommand(args []string) error {
 		return m.fail(err)
 	}
 
+	// Improvement plan item 8: continue/break/goto that target an enclosing
+	// scope cannot be extracted without restructuring the caller.
+	if barriers := findJumpBarriers(fset, blockStmts); len(barriers) > 0 {
+		return m.fail(notFoundErrorf("%v", jumpBarrierError(file, startLine, endLine, barriers)))
+	}
+
 	params, returns, err := analyzeBlockTypes(pkg, fileAST, enclosing, blockStmts)
 	if err != nil {
 		// Wrap type analysis errors with DetailedError
@@ -104,6 +112,33 @@ func extractCommand(args []string) error {
 		if err := rewriteExtraction(absFile, fset, enclosing, blockStmts, newFunc, callSite); err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("Extracted %s (params=%d, returns=%d)", methodName, len(params), len(returns)), nil
+		msg := fmt.Sprintf("Extracted %s (params=%d, returns=%d)", methodName, len(params), len(returns))
+		if w := smallExtractionWarning(fset, methodName, blockStmts, startLine, endLine); w != "" {
+			msg += "\n" + w
+		}
+		return msg, nil
 	})
+}
+
+// smallExtractionWarning implements improvement plan item 3: when the requested
+// range clips a statement boundary, the extractor silently trims to the nearest
+// valid statements, sometimes capturing only a line or two. Warn when the result
+// is suspiciously small so the caller can confirm the intended block was taken.
+func smallExtractionWarning(fset *token.FileSet, methodName string, blockStmts []ast.Stmt, startLine, endLine int) string {
+	if len(blockStmts) == 0 {
+		return ""
+	}
+	extractedLines := fset.Position(blockStmts[len(blockStmts)-1].End()).Line -
+		fset.Position(blockStmts[0].Pos()).Line + 1
+	requestedLines := endLine - startLine + 1
+	tooFewStmts := len(blockStmts) < 2
+	muchSmaller := requestedLines >= 5 && extractedLines*100 < requestedLines*60 // >40% smaller
+	if !tooFewStmts && !muchSmaller {
+		return ""
+	}
+	return fmt.Sprintf(
+		"Warning: extracted %s contains %d statement(s) spanning %d line(s), but the requested range was %d line(s). "+
+			"The range was trimmed to statement boundaries — verify the intended block was captured.",
+		methodName, len(blockStmts), extractedLines, requestedLines,
+	)
 }

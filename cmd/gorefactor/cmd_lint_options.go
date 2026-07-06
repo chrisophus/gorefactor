@@ -16,6 +16,8 @@ type lintOptions struct {
 	jsonOut    bool
 	quiet      bool
 	failOnly   bool
+	info       bool // --info: include [info] issues (default hides them)
+	verbose    bool // --verbose: include everything, no collapsing
 	configPath string
 	profile    string
 	cfg        *config.File
@@ -47,6 +49,11 @@ func parseLintOptions(args []string) (lintOptions, error) {
 			opts.quiet = true
 		case a == "--fail-only":
 			opts.failOnly = true
+		case a == "--info":
+			opts.info = true
+		case a == "--verbose":
+			opts.verbose = true
+			opts.info = true
 		case a == "--cpuprofile":
 			if i+1 >= len(args) {
 				return opts, fmt.Errorf("--cpuprofile requires a path")
@@ -126,6 +133,8 @@ func (opts *lintOptions) loadConfig() error {
 		src, _ := cfg.FileLengthLimits()
 		opts.maxSize = src
 	}
+	// Item 6c: feed configured duplicate-ignore patterns to the analyzer.
+	analyzer.DuplicateIgnorePatterns = cfg.Lint.DuplicateIgnore
 	return nil
 }
 

@@ -56,6 +56,45 @@ func TestWrapErrorsTransformsBarrReturns(t *testing.T) {
 	_ = out // summary printed to stdout
 }
 
+// TestWrapErrorsLeavesNilableBareReturnAlone locks in improvement plan item 4:
+// wrap-errors must never wrap a bare `return x, err` that is NOT inside an
+// `if err != nil` guard, because err may be nil there (e.g. the nil-on-success
+// return of filepath.WalkDir). Wrapping a nil err with fmt.Errorf produces a
+// non-nil error and silently breaks callers. wrap-errors only ever rewrites
+// returns inside `if err != nil` blocks, where err is provably non-nil.
+func TestWrapErrorsLeavesNilableBareReturnAlone(t *testing.T) {
+	const src = `package main
+
+import (
+	"io/fs"
+	"path/filepath"
+)
+
+func listFiles(root string) ([]string, error) {
+	var files []string
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		files = append(files, p)
+		return nil
+	})
+	// err is nil on success — must NOT be wrapped.
+	return files, err
+}
+`
+	writeModule(t, map[string]string{"main.go": src})
+	_ = captureStdout(t, func() {
+		if err := wrapErrorsCommand([]string{"main.go"}); err != nil {
+			t.Fatalf("wrap-errors: %v", err)
+		}
+	})
+	got := readFile(t, "main.go")
+	if !strings.Contains(got, "return files, err") {
+		t.Fatalf("nil-able bare return was rewritten (would break on success):\n%s", got)
+	}
+	if strings.Contains(got, "fmt.Errorf") {
+		t.Fatalf("no fmt.Errorf wrapping should have been introduced:\n%s", got)
+	}
+}
+
 func TestWrapErrorsWithFuncFilter(t *testing.T) {
 	writeModule(t, map[string]string{"main.go": wrapErrorsSrc})
 	if err := wrapErrorsCommand([]string{"main.go", "SaveItem"}); err != nil {

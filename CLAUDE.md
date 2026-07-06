@@ -117,7 +117,7 @@ Main commands in `cmd/gorefactor/main.go` (registered in `getCommands()`):
 **Analysis (read-only sensors)**
 - `parse <file.go>`: Parse a Go file → JSON structure
 - `list-functions <file.go>`: List functions/methods with their **line counts**
-- `recommend <file.go>`: JSON of extractable code blocks (with complexity scores)
+- `recommend <file.go> [--reduce-complexity <Func> [--threshold N]]`: JSON of extractable code blocks (with complexity scores). `--reduce-complexity` switches to a threshold-driven mode: given an over-threshold function, it greedily picks the minimum set of top-level blocks to extract to bring the parent under `--threshold` (default 15), instead of surfacing micro-blocks.
 - `inspect <file.go>`: One-page human summary (decls, sizes, lint hints, extraction candidates)
 - `analyze-diff <diff.patch>`: Generate a refactoring plan from a git diff
 - `analyze-file-sizes <dir>`: Find files over the size limit with extraction hints
@@ -161,7 +161,7 @@ Main commands in `cmd/gorefactor/main.go` (registered in `getCommands()`):
 - `implement-interface <file> <Type> <Iface>`: Generate compiling method stubs for every unimplemented interface method.
 
 **Automation**
-- `lint [path] [--fix] [--json] [--max N] [--fail-only]`: Structural linter, 27 default rules (canonical list in `cmd/gorefactor/lint_registry_test.go`):
+- `lint [path] [--fix] [--json] [--max N] [--fail-only] [--info] [--verbose]`: Structural linter, 27 default rules (canonical list in `cmd/gorefactor/lint_registry_test.go`). By default `[info]` issues (e.g. `high-blast-radius`, `untested-*`) are hidden so actionable warnings aren't buried; `--info` shows them (collapsing per-file `high-blast-radius` into one summary line) and `--verbose` shows everything uncollapsed. A `lint.duplicate-ignore` list in `.gorefactor.yaml` excludes extra normalized-code patterns from `duplicate-block` (canonical error idioms like `if err != nil { return err }` are already excluded built-in). Rules:
   - *size/structure*: `file-size`, `long-function`, `deep-nesting`, `complexity`, `extract-candidate`
   - *duplication*: `duplicate-block`, `duplicate-bare-sentinel`
   - *design smells*: `god-object`, `large-class`, `fat-interface`, `excessive-params`, `excessive-returns`, `data-clumps`, `type-switch`, `premature-abstraction`, `high-coupling`, `high-blast-radius`
@@ -176,7 +176,7 @@ Main commands in `cmd/gorefactor/main.go` (registered in `getCommands()`):
 - `format [path ...]`: In-process gofmt+goimports. Replaces external `goimports` dependency.
 - `txn`: Apply a batch of mutation commands transactionally (all-or-nothing, single undo unit).
 - `init-agent-rules [--target claude.md|cursor|agents.md|all] [--mcp|--mcp-only]`: Write the gorefactor agent-rules snippet into CLAUDE.md / `.cursorrules` / AGENTS.md; `--mcp` also merges a `.mcp.json` pointing an MCP client at `gorefactor mcp`.
-- `mcp [--allow-write] [--allow-dirty]`: Run a stdio MCP server (official Go SDK) exposing gorefactor's read-only analysis commands as MCP tools plus `skeleton`/`inspect`/`context` as MCP resources. `--allow-write` additionally exposes the mutation guides (create/insert/replace/move/rename/delete/txn/undo) as destructive-annotated tools, gated on a clean git worktree (skip with `--allow-dirty`). See `docs/mcp-server-plan.md`.
+- `mcp [--allow-write] [--allow-dirty]`: Run a stdio MCP server (official Go SDK) exposing gorefactor's read-only analysis commands as MCP tools plus `skeleton`/`inspect`/`context` as MCP resources. `--allow-write` additionally exposes the mutation guides (create/insert/replace/move/rename/delete/format/txn/undo) as destructive-annotated tools, gated on a clean git worktree (skip with `--allow-dirty`). See `docs/mcp-server-plan.md`.
 
 **Plans**
 - `orchestrate <plan.json>`: Execute a refactoring plan

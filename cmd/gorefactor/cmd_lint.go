@@ -211,6 +211,7 @@ func defaultLintRules() []LintRule {
 		untestedFunctionRule{},
 		golangciLintRule{},
 		archLintRule{},
+		lowAdherenceRule{},
 	)
 	return rules
 }

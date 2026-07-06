@@ -21,8 +21,9 @@ Mapping of common edits to commands (run `./gorefactor` for the full list):
 | Add a function right after another | `gorefactor insert <file> after:Func -` |
 | Add a helper inside a function | `gorefactor insert <file> inside:Func -` |
 | Move a function/method to a new file | `gorefactor move <src> <Func> <dest>` |
-| Replace a complete statement | `gorefactor replace <file> <Func> <old> <new>` |
-| Replace partial text inside a function | `gorefactor replace-text <file> <Func> <old> <new>` |
+| Replace old→new in a function (auto statement-or-text) | `gorefactor edit <file> <Func> <old> <new>` |
+| Replace a complete statement (explicit scope) | `gorefactor replace <file> <Func> <old> <new>` |
+| Replace partial text inside a function (explicit scope) | `gorefactor replace-text <file> <Func> <old> <new>` |
 | Replace a whole function body | `gorefactor replace-body <file> <Func> -` |
 | Delete a function/method | `gorefactor delete <file> <Func> --safe` (checks callers first) |
 | Inline a trivial function into its callers | `gorefactor inline <file> <Func>` |
@@ -140,6 +141,7 @@ Main commands in `cmd/gorefactor/main.go` (registered in `getCommands()`):
 **Mutation (direct CLI — no orchestrator JSON needed)**
 - `create <path> [content|-]`: Create a new .go file (auto-runs goimports). `-` reads stdin.
 - `insert <file> <at-end|at-beginning|before:Func|after:Func|inside:Func> [content|-]`: Insert code.
+- `edit <file> <Func|Receiver:Method> <old> <new>`: convenience dispatcher — tries statement-exact `replace` first, falls back to body-text `replace-text` when the pattern isn't a complete statement (prints which path it took). Additive over the explicit verbs below, which remain for pinning scope. Does **not** fold in `replace-body` (whole-body) or `replace-in-literal` (string contents) — those are distinct operations, not synonyms.
 - `replace <file> <Func|Receiver:Method> <old-stmt> <new-stmt>`: AST-aware replacement (pattern must be a complete statement).
 - `replace-text <file> <Func|Receiver:Method> <old-text> <new-text>`: Literal text replace inside a function body (use this when the pattern isn't a full statement).
 - `replace-body <file> <Func|Receiver:Method> [content|-]`: Replace a function/method body wholesale with new statements.

@@ -78,7 +78,7 @@ func findExtractionTarget(fileAST *ast.File, fset *token.FileSet, startLine, end
 		}
 	}
 	if len(stmts) == 0 {
-		return nil, nil, fmt.Errorf("no complete statements in lines %d-%d (must align with statement boundaries inside the function body)", startLine, endLine)
+		return nil, nil, noStatementsError(fset, enclosing, fset.File(enclosing.Pos()).Name(), startLine, endLine)
 	}
 	return enclosing, stmts, nil
 }

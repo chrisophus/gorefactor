@@ -12,6 +12,18 @@ import (
 // but are typically filtered by callers (see cmd/gorefactor/cmd_lint_duplicates.go).
 const MinDuplicateImpactScore = 5
 
+// MinDuplicateStatements is the minimum number of statements a block must
+// contain to be considered as a duplicate-block candidate (improvement plan
+// item 6a). One- and two-statement blocks are almost always idiomatic guard
+// clauses or error returns and create noise rather than real refactoring signal.
+const MinDuplicateStatements = 3
+
+// DuplicateIgnorePatterns holds normalized-code substring patterns that are
+// excluded from duplicate-block detection in addition to the built-in error
+// idioms (improvement plan item 6c). Callers populate it from .gorefactor.yaml's
+// lint.duplicate-ignore before running duplicate detection.
+var DuplicateIgnorePatterns []string
+
 // WalkOptions configures which directories and files are included when walking
 // a module tree for analysis (lint, duplicate detection, dead code, etc.).
 type WalkOptions struct {

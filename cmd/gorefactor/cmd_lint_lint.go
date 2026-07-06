@@ -59,9 +59,16 @@ func lintCommand(args []string) error {
 		return nil
 	}
 
-	if len(outputIssues) > 0 && (!opts.quiet || shouldFail) {
+	displayIssues := filterDisplayIssues(outputIssues, opts)
+	if len(displayIssues) == 0 && !shouldFail {
+		if !opts.quiet {
+			fmt.Println("No issues found.")
+		}
+		return nil
+	}
+	if len(displayIssues) > 0 && (!opts.quiet || shouldFail) {
 		byRule := map[string]int{}
-		for _, iss := range outputIssues {
+		for _, iss := range displayIssues {
 			byRule[iss.Rule]++
 			fmt.Printf("%s [%s] %s: %s", iss.File, iss.Severity, iss.Rule, iss.Message)
 			if iss.AutoFix != "" {
@@ -70,7 +77,11 @@ func lintCommand(args []string) error {
 			fmt.Println()
 		}
 		fmt.Println()
-		fmt.Printf("Summary: %d issue(s)\n", len(outputIssues))
+		if hidden := len(outputIssues) - len(displayIssues); hidden > 0 && !opts.info {
+			fmt.Printf("Summary: %d shown, %d [info] hidden (use --info to show)\n", len(displayIssues), hidden)
+		} else {
+			fmt.Printf("Summary: %d issue(s)\n", len(displayIssues))
+		}
 		for rule, n := range byRule {
 			fmt.Printf("  %s: %d\n", rule, n)
 		}

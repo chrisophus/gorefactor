@@ -9,12 +9,15 @@ func init() {
 	registerCommand(Command{
 		Name:        "recommend",
 		Description: "Recommend code blocks for method extraction",
-		Usage:       "recommend <file.go> [--short] [--function NAME] [--min-complexity N] [--max-complexity N] [--min-statements N] [--max-statements N] [--max-read-vars N] [--max-write-vars N] [--num-leading-stmts N]",
+		Usage:       "recommend <file.go> [<Func>] [--short] [--reduce-complexity [--threshold N] [--json]] [--function NAME] [--min-complexity N] [--max-complexity N] [--min-statements N] [--max-statements N] [--max-read-vars N] [--max-write-vars N] [--num-leading-stmts N]",
 		MinArgs:     0,
-		MaxArgs:     1,
+		MaxArgs:     2,
 		Flags: map[string]bool{
 			"--help":              false,
 			"--short":             false,
+			"--reduce-complexity": false,
+			"--threshold":         true,
+			"--json":              false,
 			"--function":          true,
 			"--min-complexity":    true,
 			"--max-complexity":    true,
@@ -55,7 +58,7 @@ func init() {
 	registerCommand(Command{
 		Name:        "lint",
 		Description: "Run structural lints (file size, duplicates) [--fix] [--json] [--max N] [--fail-only]",
-		Usage:       "lint [path] [--fix] [--json] [--quiet] [--fail-only] [--max N] [--rule NAME] [--skip-rule NAME] [--fail-on error|warning] [--config PATH] [--profile NAME]",
+		Usage:       "lint [path] [--fix] [--json] [--quiet] [--fail-only] [--info] [--verbose] [--max N] [--rule NAME] [--skip-rule NAME] [--fail-on error|warning] [--config PATH] [--profile NAME]",
 		MinArgs:     0,
 		MaxArgs:     1,
 		Flags: map[string]bool{
@@ -63,6 +66,8 @@ func init() {
 			"--json":          false,
 			"--quiet":         false,
 			"--fail-only":     false,
+			"--info":          false,
+			"--verbose":       false,
 			"--cpuprofile":    true,
 			"--profile-rules": false,
 			"--config":        true,

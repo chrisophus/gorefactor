@@ -44,6 +44,7 @@ var mcpWriteTools = []string{
 	"change-receiver",
 	"set-doc",
 	"extract",
+	"format",
 	"txn",
 	"undo",
 }
@@ -55,6 +56,9 @@ var mcpWriteTools = []string{
 // the tree on each successful application.
 var mcpIdempotentWriteTools = map[string]bool{
 	"undo": true,
+	// format (gofmt+goimports) reaches a fixed point: re-running on an
+	// already-formatted tree changes nothing (improvement plan item 1).
+	"format": true,
 }
 
 // registerMCPWriteTools adds the mutation guides to the server. It reuses the

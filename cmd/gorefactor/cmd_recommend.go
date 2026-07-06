@@ -28,6 +28,12 @@ func recommendExtractions(
 		return nil
 	}
 
+	// Improvement plan item 7: complexity-threshold mode. Collect the non-flag
+	// positionals (file + function) and dispatch to the reduce-complexity path.
+	if hasFlag(args, "--reduce-complexity") {
+		return runReduceComplexity(args)
+	}
+
 	config := analyzer.DefaultConfig()
 	var functionName string
 

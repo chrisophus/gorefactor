@@ -5,6 +5,34 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-07-06
+
+### Added
+- **`recommend --reduce-complexity <Func> [--threshold N]`**: threshold-driven
+  mode that greedily picks the minimum set of top-level blocks to extract to
+  bring an over-threshold function below `--threshold` (default 15), instead of
+  surfacing micro-blocks.
+- **`lint --info` / `--verbose`**: `[info]` issues (e.g. `high-blast-radius`,
+  `untested-*`) are now hidden by default so actionable warnings aren't buried.
+  `--info` shows them (collapsing per-file `high-blast-radius` into one summary
+  line); `--verbose` shows everything uncollapsed.
+- **`lint.duplicate-ignore`** config key in `.gorefactor.yaml`: extra normalized-
+  code patterns excluded from `duplicate-block` detection (additive).
+- **`format` exposed as an MCP write tool** under `--allow-write`.
+
+### Changed
+- **`extract` errors now name the nearest extractable range** instead of the
+  opaque "no complete statements in lines X-Y".
+- **`extract` warns on suspiciously small results** (fewer than 2 statements, or
+  more than 40% smaller than the requested range) after silently trimming to
+  statement boundaries.
+- **`extract` explains control-flow barriers**: `continue`/`break`/`goto`/
+  `fallthrough` that target an enclosing scope are named, with a suggested
+  early-return restructuring.
+- **`duplicate-block` false positives reduced**: minimum block size raised to 3
+  statements, and canonical error idioms (`if err != nil { return err }`, etc.)
+  are excluded by a built-in normalized-form deny-list.
+
 ## [0.4.0] - 2026-06-07
 
 ### Changed

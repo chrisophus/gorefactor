@@ -160,10 +160,14 @@ func extractBlocksFromFunc(fn *ast.FuncDecl, filePath string, fset *token.FileSe
 			bStartLine := fset.Position(block.Pos()).Line
 			bEndLine := fset.Position(block.End()).Line
 
-			// Only extract substantial blocks
-			if bEndLine-bStartLine >= 2 {
+			// Only extract substantial blocks. Improvement plan item 6a: a
+			// block must hold at least MinDuplicateStatements statements — one-
+			// and two-statement blocks are almost always idiomatic (guard
+			// clauses, error returns) and not worth consolidating.
+			if bEndLine-bStartLine >= 2 && countStatements(block) >= MinDuplicateStatements {
 				code := extractCodeFromLinesSlice(fileLines, bStartLine, bEndLine)
-				if code != "" {
+				// Item 6b: canonical error-handling idioms are excluded outright.
+				if code != "" && !isIdiomaticErrorBlock(NormalizeCode(code)) {
 					normalized := NormalizeCode(code)
 					hash := hashCode(normalized)
 

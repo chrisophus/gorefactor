@@ -58,6 +58,30 @@ func isBuiltin(name string) bool {
 	return builtins[name]
 }
 
+// idiomaticErrorBlockRE matches the normalized form of the canonical Go
+// error-return guard, e.g. `if err != nil { return err }`, `return nil, err`,
+// `return 0, err`, `return false, err`. After NormalizeCode, identifiers become
+// VAR, so every variant collapses to `if VAR != nil { return <operands> }`.
+var idiomaticErrorBlockRE = regexp.MustCompile(`^if VAR != nil \{ return [^{}]*\}$`)
+
+// isIdiomaticErrorBlock reports whether normalized is a canonical error-handling
+// idiom (improvement plan item 6b) or matches a user-configured ignore pattern
+// (item 6c). Such blocks are excluded from duplicate detection because they are
+// pervasive, idiomatic, and never refactored out — flagging them only trains
+// users to ignore the duplicate-block rule entirely.
+func isIdiomaticErrorBlock(normalized string) bool {
+	normalized = strings.TrimSpace(normalized)
+	if idiomaticErrorBlockRE.MatchString(normalized) {
+		return true
+	}
+	for _, pat := range DuplicateIgnorePatterns {
+		if pat != "" && strings.Contains(normalized, NormalizeCode(pat)) {
+			return true
+		}
+	}
+	return false
+}
+
 // hashCode creates an MD5 hash of normalized code
 func hashCode(code string) string {
 	hash := md5.Sum([]byte(code))

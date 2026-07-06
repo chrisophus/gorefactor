@@ -50,6 +50,37 @@ func collectGoFiles(root string, walk analyzer.WalkOptions) ([]string, error) {
 	return analyzer.WalkGoFiles(root, walk)
 }
 
+// filterDisplayIssues shapes issues for human (non-JSON) output per improvement
+// plan item 5. By default [info] issues (blast-radius, untested-*) are hidden so
+// actionable warnings aren't buried. --info restores them but collapses repeated
+// high-blast-radius entries per file into a single summary line. --verbose shows
+// everything verbatim. JSON output is never filtered — machine consumers get all.
+func filterDisplayIssues(issues []lintIssue, opts lintOptions) []lintIssue {
+	if opts.verbose {
+		return issues
+	}
+	out := make([]lintIssue, 0, len(issues))
+	blastByFile := map[string]int{}
+	for _, iss := range issues {
+		if iss.Severity == "info" {
+			if !opts.info {
+				continue
+			}
+			if iss.Rule == "high-blast-radius" {
+				blastByFile[iss.File]++
+				continue
+			}
+		}
+		out = append(out, iss)
+	}
+	for file, n := range blastByFile {
+		msg := fmt.Sprintf("%d high-blast-radius function(s) — run `gorefactor blast-radius <func>` for details", n)
+		out = append(out, lintIssue{File: file, Rule: "high-blast-radius", Severity: "info", Message: msg})
+	}
+	sortLintIssues(out)
+	return out
+}
+
 // sortLintIssues orders issues deterministically so output is stable regardless
 // of rule execution order (rules run concurrently) or map-iteration order
 // inside individual rules.

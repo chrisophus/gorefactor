@@ -27,10 +27,19 @@ type Limits struct {
 	FileLengthTest   int `yaml:"file_length_test"`
 }
 
+// Lint holds lint-specific tuning from YAML.
+type Lint struct {
+	// DuplicateIgnore lists normalized-code substring patterns excluded from
+	// duplicate-block detection, in addition to the built-in error idioms
+	// (improvement plan item 6c). e.g. "if err != nil", "t.Fatal".
+	DuplicateIgnore []string `yaml:"duplicate-ignore"`
+}
+
 // File is the parsed gorefactor lint configuration file.
 type File struct {
 	Walk     Walk             `yaml:"walk"`
 	Limits   Limits           `yaml:"limits"`
+	Lint     Lint             `yaml:"lint"`
 	Rules    map[string]Tier  `yaml:"rules"`
 	Profiles map[string]Rules `yaml:"profiles"`
 	path     string

@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/chrisophus/gorefactor/analyzer"
 )
 
 // initGitFixture turns the current directory into a git repo with one commit.
@@ -73,7 +75,7 @@ func TestAPIDiffDetectsChanges(t *testing.T) {
 			t.Errorf("api-diff: %v", err)
 		}
 	})
-	var res apiDiffResult
+	var res analyzer.APIDiffResult
 	if err := json.Unmarshal([]byte(out), &res); err != nil {
 		t.Fatalf("invalid JSON: %v\n%s", err, out)
 	}
@@ -125,7 +127,7 @@ func TestAPIDiffAdditionsOnlyNotBreaking(t *testing.T) {
 			t.Errorf("api-diff: %v", err)
 		}
 	})
-	var res apiDiffResult
+	var res analyzer.APIDiffResult
 	if err := json.Unmarshal([]byte(out), &res); err != nil {
 		t.Fatalf("invalid JSON: %v\n%s", err, out)
 	}

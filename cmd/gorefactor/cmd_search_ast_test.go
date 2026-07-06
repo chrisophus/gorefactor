@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/chrisophus/gorefactor/analyzer"
 )
 
 const searchASTTestSrc = `package x
@@ -68,7 +70,7 @@ func TestSearchASTExpressionPattern(t *testing.T) {
 	})
 	var res struct {
 		Pattern string     `json:"pattern"`
-		Matches []astMatch `json:"matches"`
+		Matches []analyzer.ASTMatch `json:"matches"`
 		Total   int        `json:"total"`
 	}
 	if err := json.Unmarshal([]byte(out), &res); err != nil {

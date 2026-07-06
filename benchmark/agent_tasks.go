@@ -24,6 +24,7 @@ type agentTask struct {
 	Expected   expectedOutcome // efficient | friction | fail
 	Spec       string
 	Fixture    map[string]string // filename -> content; must include go.mod
+	Assert     []oracleCheck
 }
 
 // gomod is the minimal module every fixture ships.
@@ -40,6 +41,12 @@ func agentTasks() []agentTask {
 				"go.mod": gomod,
 				"calc.go": "package fixture\n\nfunc helper(a, b int) int { return a + b }\n\n" +
 					"func Total(xs []int) int {\n\ts := 0\n\tfor _, x := range xs {\n\t\ts = helper(s, x)\n\t}\n\treturn s\n}\n",
+			},
+			Assert: []oracleCheck{
+				declaredIn("compute", "calc.go"),  // the new name exists
+				astAbsent(`helper($_, $_)`),       // no call to the old name survives
+				usesResolve("compute", "calc.go"), // renamed symbol is actually used
+				apiUnchanged(),                    // unexported rename → API is pass-to-pass
 			},
 		},
 		{
@@ -72,6 +79,9 @@ func agentTasks() []agentTask {
 				"calc.go": "package fixture\n\nfunc Scale(x int) int { return x }\n\n" +
 					"func Use() int {\n\ta := Scale(2)\n\tb := Scale(3)\n\treturn a + b\n}\n",
 			},
+			Assert: []oracleCheck{
+				astMatches(`Scale(1, $_)`), // call sites updated to pass the new first arg
+			},
 		},
 		{
 			ID: "med-replacebody", Difficulty: "medium", Probes: "replace_body",
@@ -91,6 +101,9 @@ func agentTasks() []agentTask {
 				"route.go": "package fixture\n\nfunc Route(name string) int {\n\tswitch name {\n" +
 					"\tcase \"get\":\n\t\treturn 1\n\tcase \"put\":\n\t\treturn 2\n\tdefault:\n\t\treturn 0\n\t}\n}\n",
 			},
+			Assert: []oracleCheck{
+				astMatches(`"delete"`), // the new case literal is present
+			},
 		},
 
 		// ── hard: now EFFICIENT after the remaining Slice-3 tools were wired ─
@@ -102,6 +115,10 @@ func agentTasks() []agentTask {
 				"go.mod": gomod,
 				"config.go": "package fixture\n\ntype Config struct {\n\tName string\n}\n\n" +
 					"func NewConfig() Config {\n\treturn Config{Name: \"x\"}\n}\n",
+			},
+			Assert: []oracleCheck{
+				apiAdded("Config.Timeout"),                   // the exported field is added
+				astMatches(`Config{Name: "x", Timeout: 30}`), // the literal is updated to set it
 			},
 		},
 		{
@@ -122,6 +139,9 @@ func agentTasks() []agentTask {
 				"go.mod": gomod,
 				"db.go": "package fixture\n\ntype DB struct{}\n\n" +
 					"func (d *DB) Get(k string) string { return \"\" }\n\nfunc (d *DB) Put(k, v string) {}\n",
+			},
+			Assert: []oracleCheck{
+				apiAdded("Store"), // the extracted interface becomes exported API
 			},
 		},
 	}

@@ -56,19 +56,31 @@ func gitInitCommit(dir string) error {
 	return nil
 }
 
-// runAgentTask executes one task against a fresh fixture and returns the
-// agent's combined stdout and observed outcome.
-func runAgentTask(o corpusOpts, t agentTask) (stdout string, actual expectedOutcome, err error) {
+// taskResult is the observed outcome of one corpus run: the self-reported
+// outcome plus the verdict of the structural intent-oracle. A run only "passes"
+// when the outcome matches the prediction AND every oracle check holds — a green
+// build/test outcome with a failing oracle means the agent stayed green without
+// doing the intended transform.
+type taskResult struct {
+	stdout     string
+	actual     expectedOutcome
+	oraclePass bool
+	oracleFail []string
+}
+
+// runAgentTask executes one task against a fresh fixture and returns its
+// observed outcome plus the intent-oracle verdict.
+func runAgentTask(o corpusOpts, t agentTask) (taskResult, error) {
 	dir, err := os.MkdirTemp("", "corpus-"+t.ID+"-")
 	if err != nil {
-		return "", outError, err
+		return taskResult{actual: outError}, err
 	}
 	defer os.RemoveAll(dir)
 	if err := materializeFixture(dir, t.Fixture); err != nil {
-		return "", outError, err
+		return taskResult{actual: outError}, err
 	}
 	if err := gitInitCommit(dir); err != nil {
-		return "", outError, err
+		return taskResult{actual: outError}, err
 	}
 
 	args := []string{"-spec", t.Spec, "-provider", o.provider, "-model", o.model, "-dir", dir}
@@ -77,8 +89,16 @@ func runAgentTask(o corpusOpts, t agentTask) (stdout string, actual expectedOutc
 	}
 	cmd := exec.Command(o.agentBin, args...)
 	out, _ := cmd.CombinedOutput() // exit code is carried in RUN_METRICS/blocks
-	stdout = string(out)
-	return stdout, classifyOutcome(stdout), nil
+
+	// Evaluate the intent-oracle against the mutated fixture BEFORE the deferred
+	// cleanup removes it. No asserts declared → vacuously passes.
+	oraclePass, oracleFail := evalOracle(dir, t.Assert)
+	return taskResult{
+		stdout:     string(out),
+		actual:     classifyOutcome(string(out)),
+		oraclePass: oraclePass,
+		oracleFail: oracleFail,
+	}, nil
 }
 
 // runAgentCorpus lists (or with -run, executes) the corpus and prints a table
@@ -104,22 +124,30 @@ func runAgentCorpus(root string, o corpusOpts) {
 		actual := expectedOutcome("(not run)")
 		match := ""
 		if o.run {
-			stdout, got, err := runAgentTask(o, t)
+			res, err := runAgentTask(o, t)
+			got := res.actual
 			if err != nil {
 				got = outError
 			}
 			actual = got
 			runCount++
-			if got == t.Expected {
+			switch {
+			case got != t.Expected:
+				match = "DIFF"
+			case !res.oraclePass:
+				// Outcome matched but the transform didn't provably happen.
+				match = "ORACLE-FAIL"
+			default:
 				matchCount++
 				match = "OK"
-			} else {
-				match = "DIFF"
 			}
 			if o.verbose {
-				if rm, ok := parseRunMetrics(stdout); ok {
+				if rm, ok := parseRunMetrics(res.stdout); ok {
 					fmt.Printf("    ↳ %s: %d steps, %d tokens\n", t.ID, rm.Steps, rm.LocalTokens)
 				}
+			}
+			for _, f := range res.oracleFail {
+				fmt.Printf("    ✗ oracle: %s\n", f)
 			}
 		}
 		fmt.Printf("%-18s  %-8s  %-30s  %-9s  %-9s  %s\n",

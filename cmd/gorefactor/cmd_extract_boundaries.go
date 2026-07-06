@@ -176,9 +176,9 @@ func jumpBarrierError(file string, startLine, endLine int, barriers []jumpBarrie
 		}
 	}
 	return fmt.Errorf(
-		"lines %d-%d contain a control-flow jump that targets an enclosing scope: %s. "+
-			"Extraction would require restructuring the caller. Convert the jump branches to early "+
-			"returns from a helper (e.g. `v, ok := helper(...); if !ok { continue }`), then extract that helper.",
+		"lines %d-%d contain a control-flow jump that targets an enclosing scope: %s — "+
+			"extraction would require restructuring the caller; convert the jump branches to early "+
+			"returns from a helper (e.g. `v, ok := helper(...); if !ok { continue }`), then extract that helper",
 		startLine, endLine, strings.Join(kinds, ", "),
 	)
 }

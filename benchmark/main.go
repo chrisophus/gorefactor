@@ -26,6 +26,9 @@ func main() {
 	agentCorpusRun := flag.Bool("agent-corpus-run", false, "execute the agent task corpus against the junior (costs tokens)")
 	only := flag.String("only", "", "corpus: run only the task with this id")
 	difficulty := flag.String("difficulty", "", "corpus: filter by difficulty (easy|medium|hard)")
+	mineFailures := flag.Bool("mine-failures", false, "mine .gorefactor/failures.jsonl into eval-task stubs (Slice 3b), no LLM calls")
+	minCount := flag.Int("min-count", 2, "mine-failures: minimum cluster size to graduate a failure into a task stub")
+	emitTasks := flag.Bool("emit-tasks", false, "mine-failures: write reviewable task stubs to .gorefactor/mined_tasks.go.txt")
 	provider := flag.String("provider", "anthropic", "corpus: agent provider")
 	model := flag.String("model", "claude-sonnet-4-6", "corpus: agent model")
 	budget := flag.Int("budget", 500000, "corpus: per-task token budget")
@@ -35,6 +38,14 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
+	}
+
+	if *mineFailures {
+		if _, err := runMineFailures(root, *minCount, *emitTasks, os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, "mine-failures:", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	if *agentCorpus || *agentCorpusRun {

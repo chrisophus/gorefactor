@@ -53,6 +53,7 @@ Mapping of common edits to commands (run `./gorefactor` for the full list):
 | Find extraction candidates (concise) | `gorefactor recommend <file> --short` |
 | Detect file-size / duplicate / extract issues | `gorefactor lint .` |
 | Autofix file-size issues | `gorefactor lint . --fix` |
+| Audit how much of the diff went through gorefactor | `gorefactor adherence [--since <ref>]` |
 | Final gate (lint + build + test) | `gorefactor doctor` |
 | One-page file summary | `gorefactor inspect <file>` |
 
@@ -134,6 +135,7 @@ Main commands in `cmd/gorefactor/main.go` (registered in `getCommands()`):
 - `test-affected [base] [--run] [--json]`: Map changed files (vs git base, default HEAD) to affected packages and their tests
 - `architect [dir] [--suggest] [--output path]`: Generate a starter `go-arch-lint.yml` from the import graph
 - `history [--json]`: List the journal of mutation operations (most recent last)
+- `adherence [--since <ref>] [--json]`: Harness self-audit — of the changed `.go` files vs a git ref (default HEAD), what fraction of **modifications to existing files** went through a gorefactor op (attributed via the `history` journal, time-bounded) vs raw Write/Edit. **File creation is reported separately and excluded from the ratio** because `create` emits every line regardless of tool (token-neutral); the ratio measures where gorefactor's token value actually is. Advisory/heuristic (file-level, over-approximate) — a ranking signal, never a gate. Backs the `low-gorefactor-adherence` lint rule.
 
 **Mutation (direct CLI — no orchestrator JSON needed)**
 - `create <path> [content|-]`: Create a new .go file (auto-runs goimports). `-` reads stdin.
@@ -157,7 +159,7 @@ Main commands in `cmd/gorefactor/main.go` (registered in `getCommands()`):
 - `implement-interface <file> <Type> <Iface>`: Generate compiling method stubs for every unimplemented interface method.
 
 **Automation**
-- `lint [path] [--fix] [--json] [--max N] [--fail-only]`: Structural linter, 26 default rules (canonical list in `cmd/gorefactor/lint_registry_test.go`):
+- `lint [path] [--fix] [--json] [--max N] [--fail-only]`: Structural linter, 27 default rules (canonical list in `cmd/gorefactor/lint_registry_test.go`):
   - *size/structure*: `file-size`, `long-function`, `deep-nesting`, `complexity`, `extract-candidate`
   - *duplication*: `duplicate-block`, `duplicate-bare-sentinel`
   - *design smells*: `god-object`, `large-class`, `fat-interface`, `excessive-params`, `excessive-returns`, `data-clumps`, `type-switch`, `premature-abstraction`, `high-coupling`, `high-blast-radius`
@@ -165,6 +167,7 @@ Main commands in `cmd/gorefactor/main.go` (registered in `getCommands()`):
   - *coverage*: `untested-function`, `untested-package`
   - *dead code*: `dead-code`
   - *external*: `golangci-lint`, `arch-violation`
+  - *harness self-audit*: `low-gorefactor-adherence` (advisory; fires when too few existing-file edits went through gorefactor)
   - `--fix` autofixes the three rules with a single safe transform: `file-size` (via `split`), `dead-code` (delete unreferenced decls), `error-not-wrapped` (wrap with `fmt.Errorf(... %w)`). `--fail-only` prints only error-severity (blocking) issues.
 - `doctor [dir] [--json]`: Aggregate gate — structural lint + `go build ./...` + `go test ./...`; non-zero on failure
 - `split <file> [--max N] [--dry-run]`: Auto-split an oversized file by grouping methods on same receiver / functions sharing a CamelCase prefix.

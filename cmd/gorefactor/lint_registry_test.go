@@ -34,6 +34,7 @@ func TestDefaultLintRules_ExpectedSet(t *testing.T) {
 		"untested-function",
 		"golangci-lint",
 		"arch-violation",
+		"low-gorefactor-adherence",
 	}
 	got := defaultLintRules()
 	if len(got) != len(want) {

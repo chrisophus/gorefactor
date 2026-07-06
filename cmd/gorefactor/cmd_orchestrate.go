@@ -111,28 +111,7 @@ func orchestrateRefactoring(args []string) error {
 	journalPlanRun(plan, planFiles, before)
 
 	// Output results
-	fmt.Printf("\nExecution completed at: %s\n", result.Executed.Format("2006-01-02 15:04:05"))
-	fmt.Printf("Success: %t\n", result.Success)
-	fmt.Printf("Statistics:\n")
-	fmt.Printf("  Total operations: %d\n", result.Statistics.TotalOperations)
-	fmt.Printf("  Successful: %d\n", result.Statistics.SuccessfulOperations)
-	fmt.Printf("  Failed: %d\n", result.Statistics.FailedOperations)
-	fmt.Printf("  Fallback used: %d\n", result.Statistics.FallbackUsed)
-	fmt.Printf("  Total changes: %d\n", result.Statistics.TotalChanges)
-
-	if len(result.Errors) > 0 {
-		fmt.Printf("\nErrors:\n")
-		for _, err := range result.Errors {
-			fmt.Printf("  - %s\n", err)
-		}
-	}
-
-	if len(result.Warnings) > 0 {
-		fmt.Printf("\nWarnings:\n")
-		for _, warning := range result.Warnings {
-			fmt.Printf("  - %s\n", warning)
-		}
-	}
+	printExecutionResult(result)
 
 	// --test: run go test for affected packages; on failure restore snapshot and exit 4.
 	if runTests {
@@ -164,6 +143,29 @@ func orchestrateRefactoring(args []string) error {
 	}
 
 	return nil
+}
+
+func printExecutionResult(result *orchestrator.ExecutionResult) {
+	fmt.Printf("\nExecution completed at: %s\n", result.Executed.Format("2006-01-02 15:04:05"))
+	fmt.Printf("Success: %t\n", result.Success)
+	fmt.Printf("Statistics:\n")
+	fmt.Printf("  Total operations: %d\n", result.Statistics.TotalOperations)
+	fmt.Printf("  Successful: %d\n", result.Statistics.SuccessfulOperations)
+	fmt.Printf("  Failed: %d\n", result.Statistics.FailedOperations)
+	fmt.Printf("  Fallback used: %d\n", result.Statistics.FallbackUsed)
+	fmt.Printf("  Total changes: %d\n", result.Statistics.TotalChanges)
+	if len(result.Errors) > 0 {
+		fmt.Printf("\nErrors:\n")
+		for _, err := range result.Errors {
+			fmt.Printf("  - %s\n", err)
+		}
+	}
+	if len(result.Warnings) > 0 {
+		fmt.Printf("\nWarnings:\n")
+		for _, warning := range result.Warnings {
+			fmt.Printf("  - %s\n", warning)
+		}
+	}
 }
 
 // runAffectedTests runs go test for the packages that contain the files

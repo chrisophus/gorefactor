@@ -194,7 +194,7 @@ func (p *openAIProvider) ChatTools(ctx context.Context, messages []chatMessage, 
 	elapsed := time.Since(start)
 	if err != nil {
 		provDebugf("openai ChatTools FAILED after %s: %v", elapsed, err)
-		return chatMessage{}, err
+		return chatMessage{}, fmt.Errorf("openai chat: %w", err)
 	}
 	if status != http.StatusOK {
 		provDebugf("openai ChatTools <- HTTP %d in %s (%d bytes): %s",

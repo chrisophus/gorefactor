@@ -74,7 +74,10 @@ func RestoreSnapshot(snapshotDir string) (int, error) {
 		count++
 		return nil
 	})
-	return count, err
+	if err != nil {
+		return count, fmt.Errorf("restore snapshot: %w", err)
+	}
+	return count, nil
 }
 
 func SnapshotDir(planName string) string {

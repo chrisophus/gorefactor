@@ -46,7 +46,7 @@ func ComputeAPIDiff(dir, ref string) (*APIDiffResult, error) {
 
 	files, err := WalkGoFiles(dir, DefaultWalkOptions())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("walk go files: %w", err)
 	}
 	for _, f := range files {
 		if strings.HasSuffix(f, "_test.go") {

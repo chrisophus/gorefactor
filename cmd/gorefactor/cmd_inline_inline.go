@@ -44,13 +44,7 @@ func inlineCommand(args []string) error {
 		return m.fail(parseErrorf("failed to parse %s: %v", file, err))
 	}
 
-	var target *ast.FuncDecl
-	for _, d := range node.Decls {
-		if fd, ok := d.(*ast.FuncDecl); ok && fd.Recv == nil && fd.Name.Name == funcName {
-			target = fd
-			break
-		}
-	}
+	target := findInlineTarget(node, funcName)
 	if target == nil {
 		funcs, _ := declNames(node)
 		return m.fail(notFoundError(
@@ -111,7 +105,7 @@ func inlineCommand(args []string) error {
 	}
 
 	// Delete the declaration (including its doc comment).
-	delStart := fset.Position(target.Pos()).Offset
+	delStart := buildInlineEdits(fset, target)
 	if target.Doc != nil {
 		delStart = fset.Position(target.Doc.Pos()).Offset
 	}
@@ -149,4 +143,20 @@ func inlineCommand(args []string) error {
 		}
 		return fmt.Sprintf("Inlined %s into %d call site(s) and deleted it from %s", funcName, len(sites), file), nil
 	})
+}
+
+func buildInlineEdits(fset *token.FileSet, target *ast.FuncDecl) int {
+	delStart := fset.Position(target.Pos()).Offset
+	return delStart
+}
+
+func findInlineTarget(node *ast.File, funcName string) *ast.FuncDecl {
+	var target *ast.FuncDecl
+	for _, d := range node.Decls {
+		if fd, ok := d.(*ast.FuncDecl); ok && fd.Recv == nil && fd.Name.Name == funcName {
+			target = fd
+			break
+		}
+	}
+	return target
 }

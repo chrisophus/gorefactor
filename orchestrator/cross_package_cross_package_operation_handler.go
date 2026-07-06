@@ -15,7 +15,10 @@ import (
 // whenever the move would break the build.
 func (h *CrossPackageOperationHandler) MoveAcrossPackages(sourceFile, destFile, funcName string) error {
 	_, err := h.moveAcrossPackages(sourceFile, destFile, funcName)
-	return err
+	if err != nil {
+		return fmt.Errorf("move %s -> %s: %w", sourceFile, destFile, err)
+	}
+	return nil
 }
 
 // moveAcrossPackages implements MoveAcrossPackages and returns a report.

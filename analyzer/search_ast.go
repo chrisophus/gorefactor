@@ -26,11 +26,11 @@ type ASTMatch struct {
 func SearchASTInDir(dir, pattern string) ([]ASTMatch, error) {
 	patExpr, patStmts, err := ParseSearchPattern(pattern)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse search pattern: %w", err)
 	}
 	files, err := WalkGoFiles(dir, DefaultWalkOptions())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("walk go files: %w", err)
 	}
 	var matches []ASTMatch
 	for _, file := range files {

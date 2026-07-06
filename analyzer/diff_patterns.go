@@ -93,58 +93,40 @@ func (da *DiffAnalyzer) isFunctionModification(oldCode, newCode string) bool {
 	return strings.Contains(oldCode, "func ") && strings.Contains(newCode, "func ")
 }
 
-// Extraction methods
-func (da *DiffAnalyzer) extractFunctionName(code string) string {
-	re := regexp.MustCompile(`func\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(`)
-	matches := re.FindStringSubmatch(code)
+// extractByPattern returns the first capture group from pattern applied to code, or ""
+func extractByPattern(pattern, code string) string {
+	matches := regexp.MustCompile(pattern).FindStringSubmatch(code)
 	if len(matches) > 1 {
 		return matches[1]
 	}
 	return ""
+}
+
+// Extraction methods
+func (da *DiffAnalyzer) extractFunctionName(code string) string {
+	return extractByPattern(`func\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(`, code)
 }
 
 func (da *DiffAnalyzer) extractMethodName(code string) string {
-	re := regexp.MustCompile(`func\s*\([^)]+\)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(`)
-	matches := re.FindStringSubmatch(code)
-	if len(matches) > 1 {
-		return matches[1]
-	}
-	return ""
+	return extractByPattern(`func\s*\([^)]+\)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(`, code)
 }
 
 func (da *DiffAnalyzer) extractReceiverType(code string) string {
-	re := regexp.MustCompile(`func\s*\([^*]*\*?([a-zA-Z_][a-zA-Z0-9_]*)\s*\)`)
-	matches := re.FindStringSubmatch(code)
-	if len(matches) > 1 {
-		return matches[1]
-	}
-	return ""
+	return extractByPattern(`func\s*\([^*]*\*?([a-zA-Z_][a-zA-Z0-9_]*)\s*\)`, code)
 }
 
 func (da *DiffAnalyzer) extractInterfaceName(code string) string {
-	re := regexp.MustCompile(`type\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+interface`)
-	matches := re.FindStringSubmatch(code)
-	if len(matches) > 1 {
-		return matches[1]
-	}
-	return ""
+	return extractByPattern(`type\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+interface`, code)
 }
 
 func (da *DiffAnalyzer) extractStructName(code string) string {
-	re := regexp.MustCompile(`type\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+struct`)
-	matches := re.FindStringSubmatch(code)
-	if len(matches) > 1 {
-		return matches[1]
-	}
-	return ""
+	return extractByPattern(`type\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+struct`, code)
 }
 
 func (da *DiffAnalyzer) extractVariableName(code string) string {
 	// First try assignment (x :=)
-	re := regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*)\s*:=`)
-	matches := re.FindStringSubmatch(code)
-	if len(matches) > 1 {
-		return matches[1]
+	if name := extractByPattern(`([a-zA-Z_][a-zA-Z0-9_]*)\s*:=`, code); name != "" {
+		return name
 	}
 
 	// Fall back to extracting the single identifier from the code

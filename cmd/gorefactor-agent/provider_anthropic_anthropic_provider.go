@@ -158,7 +158,7 @@ func (p *anthropicProvider) ChatTools(ctx context.Context, messages []chatMessag
 	elapsed := time.Since(start)
 	if err != nil {
 		provDebugf("anthropic ChatTools FAILED after %s: %v", elapsed, err)
-		return chatMessage{}, err
+		return chatMessage{}, fmt.Errorf("anthropic chat: %w", err)
 	}
 	if status != http.StatusOK {
 		provDebugf("anthropic ChatTools <- HTTP %d in %s (%d bytes): %s",

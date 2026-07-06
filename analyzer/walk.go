@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"fmt"
 	"io/fs"
 	"path/filepath"
 	"strings"
@@ -105,7 +106,10 @@ func WalkGoFiles(root string, opts WalkOptions) ([]string, error) {
 		files = append(files, path)
 		return nil
 	})
-	return files, err
+	if err != nil {
+		return files, fmt.Errorf("walk: %w", err)
+	}
+	return files, nil
 }
 
 // GroupFilesByDir groups file paths by their containing directory (Go package dir).

@@ -147,42 +147,54 @@ func matchASTNodes(pat, node interface{}) bool {
 		return false
 	}
 	switch pv.Kind() {
-	case reflect.Pointer:
-		if pv.IsNil() || nv.IsNil() {
-			return pv.IsNil() == nv.IsNil()
-		}
-		return matchASTNodes(pv.Elem().Interface(), nv.Elem().Interface())
-	case reflect.Interface:
-		if pv.IsNil() || nv.IsNil() {
-			return pv.IsNil() == nv.IsNil()
-		}
-		return matchASTNodes(pv.Elem().Interface(), nv.Elem().Interface())
+	case reflect.Pointer, reflect.Interface:
+		return matchASTIndirect(pv, nv)
 	case reflect.Struct:
-		for i := 0; i < pv.NumField(); i++ {
-			ft := pv.Type().Field(i)
-			if ft.Type == reflect.TypeOf(token.Pos(0)) {
-				continue
-			}
-			switch ft.Name {
-			case "Obj", "Doc", "Comment":
-				continue
-			}
-			if !matchASTNodes(pv.Field(i).Interface(), nv.Field(i).Interface()) {
-				return false
-			}
-		}
-		return true
+		return matchASTStruct(pv, nv)
 	case reflect.Slice:
-		if pv.Len() != nv.Len() {
-			return false
-		}
-		for i := 0; i < pv.Len(); i++ {
-			if !matchASTNodes(pv.Index(i).Interface(), nv.Index(i).Interface()) {
-				return false
-			}
-		}
-		return true
+		return matchASTSlice(pv, nv)
 	default:
 		return pv.Interface() == nv.Interface()
 	}
+
+}
+
+func matchASTIndirect(pv, nv reflect.Value) bool {
+	if pv.IsNil() || nv.IsNil() {
+		return pv.IsNil() == nv.IsNil()
+	}
+	return matchASTNodes(pv.Elem().Interface(), nv.Elem().Interface())
+}
+
+func astSkipField(name string) bool {
+	switch name {
+	case "Obj", "Doc", "Comment":
+		return true
+	}
+	return false
+}
+
+func matchASTStruct(pv, nv reflect.Value) bool {
+	for i := 0; i < pv.NumField(); i++ {
+		ft := pv.Type().Field(i)
+		if ft.Type == reflect.TypeOf(token.Pos(0)) || astSkipField(ft.Name) {
+			continue
+		}
+		if !matchASTNodes(pv.Field(i).Interface(), nv.Field(i).Interface()) {
+			return false
+		}
+	}
+	return true
+}
+
+func matchASTSlice(pv, nv reflect.Value) bool {
+	if pv.Len() != nv.Len() {
+		return false
+	}
+	for i := 0; i < pv.Len(); i++ {
+		if !matchASTNodes(pv.Index(i).Interface(), nv.Index(i).Interface()) {
+			return false
+		}
+	}
+	return true
 }

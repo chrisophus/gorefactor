@@ -33,7 +33,7 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "insert",
-		Description: "Insert code into a file at a location (at-end | at-beginning | before:Func | after:Func | inside:Func)",
+		Description: "Insert code into a file at a location (at-end | at-beginning | before:Func | after:Func | inside:Func; Func may be Receiver:Method)",
 		Usage:       "insert <file> <at-end|at-beginning|before:Func|after:Func|inside:Func> [content|-] [--json] [--dry-run] [--gate]",
 		MinArgs:     2,
 		MaxArgs:     3,
@@ -138,20 +138,29 @@ func createCommand(args []string) error {
 	})
 }
 
+// parseLocSpec // parseLocSpec parses an insert location spec. The function part of //
+// before:/after:/inside: accepts both plain Func and Receiver:Method forms // (split via
+// parseFuncLocator, same as every other command's locator).
 func parseLocSpec(s string) (*orchestrator.InsertionLocation, error) {
+	locFor := func(typ, target string) *orchestrator.InsertionLocation {
+		loc, _ := parseFuncLocator(target)
+		loc.Type = typ
+		return loc
+	}
 	switch {
 	case s == "at-end":
 		return &orchestrator.InsertionLocation{Type: "at_end"}, nil
 	case s == "at-beginning":
 		return &orchestrator.InsertionLocation{Type: "at_beginning"}, nil
 	case strings.HasPrefix(s, "before:"):
-		return &orchestrator.InsertionLocation{Type: "before_function", FunctionName: strings.TrimPrefix(s, "before:")}, nil
+		return locFor("before_function", strings.TrimPrefix(s, "before:")), nil
 	case strings.HasPrefix(s, "after:"):
-		return &orchestrator.InsertionLocation{Type: "after_function", FunctionName: strings.TrimPrefix(s, "after:")}, nil
+		return locFor("after_function", strings.TrimPrefix(s, "after:")), nil
 	case strings.HasPrefix(s, "inside:"):
-		return &orchestrator.InsertionLocation{Type: "inside_function", FunctionName: strings.TrimPrefix(s, "inside:")}, nil
+		return locFor("inside_function", strings.TrimPrefix(s, "inside:")), nil
 	}
-	return nil, usageErrorf("unknown location %q; valid forms: at-end | at-beginning | before:Func | after:Func | inside:Func", s)
+	return nil, usageErrorf("unknown location %q; valid forms: at-end | at-beginning | before:Func | after:Func | inside:Func (Func may be Receiver:Method)", s)
+
 }
 
 func insertCommand(args []string) error {

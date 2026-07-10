@@ -156,18 +156,68 @@ func matchesReceiverType(funcDecl *ast.FuncDecl, receiverType string) bool {
 	return false
 }
 
-// Insert the snippet after the function
-
-func findStmtByPattern(src []byte, stmts []ast.Stmt, fset *token.FileSet, normPattern string) int {
-	for i, stmt := range stmts {
+func findStmtListMatch(src []byte, list *[]ast.Stmt, fset *token.FileSet, normPattern string) (*[]ast.Stmt, int) {
+	for i, stmt := range *list {
 		start := fset.Position(stmt.Pos()).Offset
 		end := fset.Position(stmt.End()).Offset
 		if start < 0 || end > len(src) || end <= start {
 			continue
 		}
-		if strings.Contains(stripWhitespace(string(src[start:end])), normPattern) {
-			return i
+		norm := stripWhitespace(string(src[start:end]))
+		if norm == normPattern {
+			return list, i
+		}
+		if !strings.Contains(norm, normPattern) {
+			continue
+		}
+		if owner, idx := findStmtMatchInside(src, stmt, fset, normPattern); owner != nil {
+			return owner, idx
 		}
 	}
-	return -1
+	return nil, -1
 }
+
+func findStmtMatchInside(src []byte, stmt ast.Stmt, fset *token.FileSet, normPattern string) (*[]ast.Stmt, int) {
+	switch s := stmt.(type) {
+	case *ast.BlockStmt:
+		return findStmtListMatch(src, &s.List, fset, normPattern)
+	case *ast.IfStmt:
+		if owner, idx := findStmtListMatch(src, &s.Body.List, fset, normPattern); owner != nil {
+			return owner, idx
+		}
+		if s.Else != nil {
+			return findStmtMatchInside(src, s.Else, fset, normPattern)
+		}
+	case *ast.ForStmt:
+		return findStmtListMatch(src, &s.Body.List, fset, normPattern)
+	case *ast.RangeStmt:
+		return findStmtListMatch(src, &s.Body.List, fset, normPattern)
+	case *ast.SwitchStmt:
+		return findStmtMatchInClauses(src, s.Body, fset, normPattern)
+	case *ast.TypeSwitchStmt:
+		return findStmtMatchInClauses(src, s.Body, fset, normPattern)
+	case *ast.SelectStmt:
+		return findStmtMatchInClauses(src, s.Body, fset, normPattern)
+	case *ast.LabeledStmt:
+		return findStmtMatchInside(src, s.Stmt, fset, normPattern)
+	}
+	return nil, -1
+}
+
+func findStmtMatchInClauses(src []byte, body *ast.BlockStmt, fset *token.FileSet, normPattern string) (*[]ast.Stmt, int) {
+	for _, c := range body.List {
+		switch cc := c.(type) {
+		case *ast.CaseClause:
+			if owner, idx := findStmtListMatch(src, &cc.Body, fset, normPattern); owner != nil {
+				return owner, idx
+			}
+		case *ast.CommClause:
+			if owner, idx := findStmtListMatch(src, &cc.Body, fset, normPattern); owner != nil {
+				return owner, idx
+			}
+		}
+	}
+	return nil, -1
+}
+
+// Insert the snippet after the function

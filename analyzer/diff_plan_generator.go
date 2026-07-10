@@ -2,10 +2,11 @@ package analyzer
 
 import (
 	"fmt"
-	"github.com/chrisophus/gorefactor/orchestrator"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/chrisophus/gorefactor/orchestrator"
 )
 
 // consolidateChanges consolidates related changes (e.g., multiple renames of the same variable)

@@ -15,6 +15,7 @@ type LogPropagationIssue struct {
 	Column  int
 	Rule    string
 	Message string
+	Symbol  string
 }
 
 // fileBlockLogReturnIssues parses file and runs a per-block scanner, tagging

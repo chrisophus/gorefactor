@@ -184,13 +184,14 @@ func (ci *CodeInserter) RemoveCodeBlock(filePath string, location *InsertionLoca
 	if err != nil {
 		return nil, fmt.Errorf("resolve target func: %w", err)
 	}
-	removedIdx := findStmtByPattern(src, targetFunc.Body.List, fset, stripWhitespace(codePattern))
-	if removedIdx < 0 {
+	owner, removedIdx := findStmtListMatch(src, &targetFunc.Body.List, fset, stripWhitespace(codePattern))
+	if owner == nil {
 		return nil, fmt.Errorf("no statement matching %q found in %s", codePattern, targetFunc.Name.Name)
 	}
-	startLine := fset.Position(targetFunc.Body.List[removedIdx].Pos()).Line
-	endLine := fset.Position(targetFunc.Body.List[removedIdx].End()).Line
-	targetFunc.Body.List = append(targetFunc.Body.List[:removedIdx], targetFunc.Body.List[removedIdx+1:]...)
+	removed := (*owner)[removedIdx]
+	startLine := fset.Position(removed.Pos()).Line
+	endLine := fset.Position(removed.End()).Line
+	*owner = append((*owner)[:removedIdx], (*owner)[removedIdx+1:]...)
 	if err := ci.writeFormattedFile(filePath, node, fset); err != nil {
 		return nil, fmt.Errorf("write formatted file: %w", err)
 	}
@@ -201,6 +202,7 @@ func (ci *CodeInserter) RemoveCodeBlock(filePath string, location *InsertionLoca
 		EndLine:     endLine,
 		Description: fmt.Sprintf("Removed code block matching %q from %s", codePattern, targetFunc.Name.Name),
 	}, nil
+
 }
 func (ci *CodeInserter) ReplaceCodeBlock(filePath string, location *InsertionLocation, codePattern string, replacementCode string) (*InsertionResult, error) {
 	src, err := os.ReadFile(filePath)
@@ -216,19 +218,20 @@ func (ci *CodeInserter) ReplaceCodeBlock(filePath string, location *InsertionLoc
 	if err != nil {
 		return nil, fmt.Errorf("resolve target func: %w", err)
 	}
-	foundIdx := findStmtByPattern(src, targetFunc.Body.List, fset, stripWhitespace(codePattern))
-	if foundIdx < 0 {
+	owner, foundIdx := findStmtListMatch(src, &targetFunc.Body.List, fset, stripWhitespace(codePattern))
+	if owner == nil {
 		return nil, fmt.Errorf("no statement matching %q found in %s", codePattern, targetFunc.Name.Name)
 	}
 	replacementStmts, err := ci.parseCodeSnippetAsStatements(replacementCode, fset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse replacement code: %w", err)
 	}
-	startLine := fset.Position(targetFunc.Body.List[foundIdx].Pos()).Line
-	endLine := fset.Position(targetFunc.Body.List[foundIdx].End()).Line
-	targetFunc.Body.List = append(
-		targetFunc.Body.List[:foundIdx],
-		append(replacementStmts, targetFunc.Body.List[foundIdx+1:]...)...,
+	matched := (*owner)[foundIdx]
+	startLine := fset.Position(matched.Pos()).Line
+	endLine := fset.Position(matched.End()).Line
+	*owner = append(
+		(*owner)[:foundIdx],
+		append(replacementStmts, (*owner)[foundIdx+1:]...)...,
 	)
 	if err := ci.writeFormattedFile(filePath, node, fset); err != nil {
 		return nil, fmt.Errorf("write formatted file: %w", err)
@@ -241,4 +244,5 @@ func (ci *CodeInserter) ReplaceCodeBlock(filePath string, location *InsertionLoc
 		Description:  fmt.Sprintf("Replaced code matching %q in %s", codePattern, targetFunc.Name.Name),
 		InsertedCode: replacementCode,
 	}, nil
+
 }

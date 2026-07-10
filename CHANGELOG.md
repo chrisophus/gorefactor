@@ -5,9 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.0] - 2026-07-10
 
 ### Added
+- **Autofixes for the log-propagation lint family**: `lint --fix` now covers
+  seven rules (up from three). New mutation commands carry the transforms:
+  - **`remove-log-return <file> [--rule <name>]`** fixes `if-err-log-return`,
+    `wrap-log-return`, and `wrap-bridge-log-return` by deleting the redundant
+    log statement adjacent to an error-propagating return and wrapping a bare
+    `return err` it uncovers. Only adjacent log/return sites get an autofix;
+    lint attaches the fix only to issues the fixer can actually resolve.
+  - **`wrap-sentinels <file> <Sentinel>`** fixes `duplicate-bare-sentinel` by
+    wrapping each bare sentinel return with `fmt.Errorf("<context>: %w", ...)`.
 - **`lint --fix --verify`**: each autofix is now self-checking. The affected
   package is snapshotted before the fix, then `go build ./...` + `go test ./...`
   runs (doctor's gate minus lint); if it goes red the fix is reverted and the
@@ -16,6 +25,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for unsupervised cleanup — the over-approximate sensors (e.g. a `dead-code`
   symbol reached only via reflection or build tags) are backstopped by the gate.
   The summary reports `N applied, M reverted (gate failed), K failed to apply`.
+
+### Changed
+- **golangci-lint moved from `lint` to `doctor`**: `gorefactor lint` no longer
+  shells out to golangci-lint (26 default rules, all in-process); `doctor` now
+  runs it as its own gate stage, skipped cleanly when the binary or a
+  `.golangci.*` config is absent. Previously it was backwards: `lint` ran it
+  and `doctor` didn't.
+
+### Fixed
+- **`replace`/`edit`/`remove` statement matching no longer clobbers enclosing
+  code**: the matcher required exact (whitespace-normalized) statement equality
+  and recurses into nested blocks. Previously a pattern that was only a
+  fragment of a statement — or a statement nested inside a loop — matched its
+  entire enclosing top-level statement by substring, and `replace` silently
+  replaced all of it. Fragments now fall back to text replace under `edit` and
+  report not-found under `replace`; nested statements are replaced in place.
+- **`insert before:/after:/inside:` accepts `Receiver:Method` locators**,
+  matching every other command; previously the receiver form failed with
+  not-found while listing the same name as a candidate.
 
 ## [0.7.0] - 2026-07-06
 

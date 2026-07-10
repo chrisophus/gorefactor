@@ -9,6 +9,10 @@ import (
 	"strings"
 )
 
+// golangciLintRule // golangciLintRule wraps `golangci-lint run` output as lint issues. It is //
+// deliberately NOT part of defaultLintRules(): `gorefactor lint` stays a fast // in-process
+// structural sensor, while this subprocess-backed rule runs as its // own stage in `gorefactor
+// doctor` (the aggregate final gate).
 type golangciLintRule struct{}
 
 func (golangciLintRule) Name() string { return "golangci-lint" }

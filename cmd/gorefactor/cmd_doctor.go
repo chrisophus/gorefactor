@@ -11,13 +11,14 @@ import (
 func init() {
 	registerCommand(Command{
 		Name:        "doctor",
-		Description: "Aggregate health gate: lint + build + test. Exits non-zero on failure. [--json]",
+		Description: "Aggregate health gate: lint + golangci-lint + build + test. Exits non-zero on failure. [--json]",
 		Usage:       "doctor [dir] [--json]",
 		MinArgs:     0,
 		MaxArgs:     1,
 		Flags:       map[string]bool{"--json": false},
 		Run:         doctorCommand,
 	})
+
 }
 
 // 1. structural lint
@@ -87,6 +88,18 @@ func doctorCommand(args []string) error {
 		ok:   errCount == 0,
 		info: fmt.Sprintf("%d issue(s), %d error(s)", len(issues), errCount),
 	})
+
+	gciOK := true
+	gciInfo := "skipped (golangci-lint not installed or no config)"
+	if golangciLintAvailable(root) {
+		gci := golangciLintRule{}.Run(LintContext{Root: root, WalkOpts: walk})
+		gciOK = len(gci) == 0
+		gciInfo = "ok"
+		if !gciOK {
+			gciInfo = fmt.Sprintf("%d issue(s)", len(gci))
+		}
+	}
+	stages = append(stages, stage{name: "golangci", ok: gciOK, info: gciInfo})
 
 	buildOut, err := exec.Command("go", "build", "./...").CombinedOutput()
 	stages = append(stages, stage{

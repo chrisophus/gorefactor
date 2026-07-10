@@ -73,10 +73,10 @@ gorefactor lint .                  # Detect structural issues
 gorefactor lint . --fix            # Auto-fix what's safe (split files, remove dead code, wrap errors)
 gorefactor lint . --fix --verify   # ...and revert any fix that breaks `go build`/`go test`
 gorefactor lint . --fail-only      # Show only blocking (error-severity) issues
-gorefactor doctor                  # Lint + build + test (final gate)
+gorefactor doctor                  # Lint + golangci-lint + build + test (final gate)
 ```
 
-The default rule set has 25 rules, grouped by concern:
+The default rule set has 26 rules, grouped by concern:
 
 - **Size & structure**: `file-size` (>500 lines, split hints by receiver/prefix), `long-function`, `deep-nesting`, `complexity` (cyclomatic), `extract-candidate`
 - **Duplication**: `duplicate-block` (>100-line clones with consolidation hints), `duplicate-bare-sentinel`
@@ -84,7 +84,7 @@ The default rule set has 25 rules, grouped by concern:
 - **Error handling**: `error-not-wrapped` (bare `return err`), `if-err-log-return`, `wrap-log-return`, `wrap-bridge-log-return`
 - **Coverage**: `untested-function`, `untested-package`
 - **Dead code**: `dead-code` (unused funcs/types across the module)
-- **External**: `golangci-lint` (wraps golangci-lint output), `arch-violation` (your `go-arch-lint.yml` rules)
+- **External**: `arch-violation` (your `go-arch-lint.yml` rules). golangci-lint is deliberately not a `lint` rule — `doctor` runs it as its own stage, keeping `lint` fast and fully in-process.
 
 `--fix` autofixes the three rules with a single safe transformation: `file-size` (via `split`), `dead-code` (delete unreferenced decls), and `error-not-wrapped` (wrap with `fmt.Errorf(... %w)`). Add `--verify` to make each fix self-checking: it runs `go build ./...` + `go test ./...` after applying and reverts any fix that fails the gate, keeping the rest — so bulk `--fix` is safe to run unsupervised even where a sensor over-approximates.
 

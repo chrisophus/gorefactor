@@ -274,7 +274,6 @@ func defaultLintRules() []LintRule {
 		deadCodeRule{},
 		untestedPackageRule{},
 		untestedFunctionRule{},
-		archLintRule{},
 		lowAdherenceRule{},
 	)
 	return rules

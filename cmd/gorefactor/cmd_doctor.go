@@ -11,7 +11,7 @@ import (
 func init() {
 	registerCommand(Command{
 		Name:        "doctor",
-		Description: "Aggregate health gate: lint + golangci-lint + build + test. Exits non-zero on failure. [--json]",
+		Description: "Aggregate health gate: lint + golangci-lint + go-arch-lint + build + test. Exits non-zero on failure. [--json]",
 		Usage:       "doctor [dir] [--json]",
 		MinArgs:     0,
 		MaxArgs:     1,
@@ -49,6 +49,7 @@ func doctorCommand(args []string) error {
 	stages := []doctorStage{
 		lintStage,
 		doctorGolangciStage(root),
+		doctorArchStage(root),
 		doctorGoStage(root, "build"),
 		doctorGoStage(root, "test"),
 	}
@@ -104,6 +105,20 @@ func doctorGolangciStage(root string) doctorStage {
 		return doctorStage{name: "golangci", ok: true, info: "ok"}
 	}
 	return doctorStage{name: "golangci", ok: false, info: fmt.Sprintf("%d issue(s)", len(gci))}
+}
+
+func doctorArchStage(root string) doctorStage {
+	if detectArchConfig(root) == "" {
+		return doctorStage{name: "arch", ok: true, info: "skipped (no .go-arch-lint config)"}
+	}
+	if _, err := exec.LookPath("go-arch-lint"); err != nil {
+		return doctorStage{name: "arch", ok: true, info: "skipped (go-arch-lint not installed)"}
+	}
+	arch := archLintRule{}.Run(LintContext{Root: root, WalkOpts: analyzer.DefaultWalkOptions()})
+	if len(arch) == 0 {
+		return doctorStage{name: "arch", ok: true, info: "ok"}
+	}
+	return doctorStage{name: "arch", ok: false, info: fmt.Sprintf("%d violation(s)", len(arch))}
 }
 
 func doctorGoStage(root, verb string) doctorStage {

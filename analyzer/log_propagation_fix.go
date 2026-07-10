@@ -190,7 +190,7 @@ func camelWords(name string) string {
 	for i := 0; i < len(name); i++ {
 		c := name[i]
 		if c >= 'A' && c <= 'Z' {
-			if i > 0 && !(name[i-1] >= 'A' && name[i-1] <= 'Z') {
+			if i > 0 && (name[i-1] < 'A' || name[i-1] > 'Z') {
 				b.WriteByte(' ')
 			}
 			c += 'a' - 'A'

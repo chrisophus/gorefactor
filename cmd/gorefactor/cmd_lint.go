@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"runtime/pprof"
 	"sort"
@@ -158,7 +159,12 @@ func runLintRules(rules []LintRule, ctx LintContext, opts lintOptions) []lintIss
 	return issues
 }
 
-func applyAutoFixes(issues []lintIssue, ctx LintContext, rules []LintRule) (applied, failed int) {
+// applyAutoFixes runs every issue's registered autofix. With verify set, each
+// fix is guarded: the affected package is snapshotted first, and if the
+// project no longer builds-and-tests clean after the fix, that one fix is
+// reverted and counted separately — good fixes already applied are kept.
+// Without verify it is the original apply-and-hope behavior.
+func applyAutoFixes(issues []lintIssue, ctx LintContext, rules []LintRule, verify bool) (applied, reverted, failed int) {
 	rulesByName := make(map[string]LintRule, len(rules))
 	for _, r := range rules {
 		rulesByName[r.Name()] = r
@@ -175,10 +181,38 @@ func applyAutoFixes(issues []lintIssue, ctx LintContext, rules []LintRule) (appl
 		if !ok {
 			continue
 		}
+
+		// Snapshot the affected package before the fix so we can revert exactly
+		// this fix if the gate goes red. If the snapshot itself fails we still
+		// apply the fix, but without a revert guard, and say so.
+		var snap dirSnapshot
+		haveSnap := false
+		if verify {
+			if s, serr := snapshotGoDir(filepath.Dir(iss.File)); serr != nil {
+				fmt.Fprintf(os.Stderr, "verify: cannot snapshot for %s: %v (applying %s unguarded)\n",
+					iss.File, serr, iss.Rule)
+			} else {
+				snap, haveSnap = s, true
+			}
+		}
+
 		if err := fixer.AutoFix(iss, ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "fix failed for %s: %v\n", iss.File, err)
 			failed++
 			continue
+		}
+
+		if verify {
+			if gerr := verifyGateFn(ctx.Root); gerr != nil {
+				if haveSnap {
+					if rerr := snap.restore(); rerr != nil {
+						fmt.Fprintf(os.Stderr, "verify: revert of %s failed: %v\n", iss.File, rerr)
+					}
+				}
+				fmt.Fprintf(os.Stderr, "reverted %s [%s]: gate failed after fix\n%v\n", iss.File, iss.Rule, gerr)
+				reverted++
+				continue
+			}
 		}
 		applied++
 	}

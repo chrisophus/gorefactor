@@ -11,6 +11,9 @@ func lintCommand(args []string) error {
 	if err != nil {
 		return err
 	}
+	if opts.verify && !opts.fix {
+		fmt.Fprintln(os.Stderr, "note: --verify only applies with --fix; ignoring")
+	}
 
 	ctx := opts.lintContext(nil)
 	files, err := collectGoFiles(opts.root, ctx.WalkOpts)
@@ -87,8 +90,13 @@ func lintCommand(args []string) error {
 		}
 
 		if opts.fix {
-			applied, failed := applyAutoFixes(issues, ctx, rules)
-			fmt.Printf("\nAuto-fixes: %d applied, %d failed\n", applied, failed)
+			applied, reverted, failed := applyAutoFixes(issues, ctx, rules, opts.verify)
+			if opts.verify {
+				fmt.Printf("\nAuto-fixes: %d applied, %d reverted (gate failed), %d failed to apply\n",
+					applied, reverted, failed)
+			} else {
+				fmt.Printf("\nAuto-fixes: %d applied, %d failed\n", applied, failed)
+			}
 		}
 	}
 	if shouldFail {

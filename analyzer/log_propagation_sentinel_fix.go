@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-// PackageErrorSentinels reports the package-level `errors.New` sentinel var
-// names declared across files (test files excluded), keyed by name.
+// parseNonTestFiles parses every non-test file in files, silently skipping unparsable ones, and
+// returns the survivors with their paths.
 func parseNonTestFiles(files []string) (*token.FileSet, []*ast.File, []string) {
 	fset := token.NewFileSet()
 	var astFiles []*ast.File
@@ -28,6 +28,8 @@ func parseNonTestFiles(files []string) (*token.FileSet, []*ast.File, []string) {
 	return fset, astFiles, paths
 }
 
+// PackageErrorSentinels reports the package-level `errors.New` sentinel var names declared across
+// files (test files excluded), keyed by name.
 func PackageErrorSentinels(files []string) (map[string]bool, error) {
 	_, astFiles, paths := parseNonTestFiles(files)
 	return collectErrorsNewSentinels(astFiles, paths), nil

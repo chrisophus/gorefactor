@@ -6,10 +6,9 @@ import (
 	"github.com/chrisophus/gorefactor/analyzer"
 )
 
-// BenchmarkLint // BenchmarkLint measures the in-process lint rule phase over this repo. It //
-// excludes the subprocess-backed rules (arch-violation, untested-function; // golangci-lint is no
-// longer a default lint rule — it runs in doctor) so the // numbers reflect the AST work being
-// optimized.
+// BenchmarkLint measures the in-process lint rule phase over this repo. It excludes the
+// subprocess-backed rules (arch-violation, untested-function; golangci-lint is no longer a default
+// lint rule — it runs in doctor) so the numbers reflect the AST work being optimized.
 func BenchmarkLint(b *testing.B) {
 	files, err := analyzer.WalkGoFiles("../..", analyzer.DefaultWalkOptions())
 	if err != nil {

@@ -138,9 +138,9 @@ func createCommand(args []string) error {
 	})
 }
 
-// parseLocSpec // parseLocSpec parses an insert location spec. The function part of //
-// before:/after:/inside: accepts both plain Func and Receiver:Method forms // (split via
-// parseFuncLocator, same as every other command's locator).
+// parseLocSpec parses an insert location spec. The function part of before:/after:/inside: accepts
+// both plain Func and Receiver:Method forms (split via parseFuncLocator, same as every other
+// command's locator).
 func parseLocSpec(s string) (*orchestrator.InsertionLocation, error) {
 	locFor := func(typ, target string) *orchestrator.InsertionLocation {
 		loc, _ := parseFuncLocator(target)

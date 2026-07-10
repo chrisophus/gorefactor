@@ -52,11 +52,11 @@ func walkOneStmtLogReturn(stmt ast.Stmt, logSeen bool, fset *token.FileSet, repo
 	case *ast.RangeStmt:
 		return walkStmtListLogReturn(s.Body.List, logSeen, fset, report)
 	case *ast.SwitchStmt:
-		return walkCaseClausesLogReturn(s.Body, logSeen, fset, report)
+		return walkClausesLogReturn(s.Body, logSeen, fset, report)
 	case *ast.TypeSwitchStmt:
-		return walkCaseClausesLogReturn(s.Body, logSeen, fset, report)
+		return walkClausesLogReturn(s.Body, logSeen, fset, report)
 	case *ast.SelectStmt:
-		return walkCommClausesLogReturn(s.Body, logSeen, fset, report)
+		return walkClausesLogReturn(s.Body, logSeen, fset, report)
 	case *ast.BlockStmt:
 		return walkStmtListLogReturn(s.List, logSeen, fset, report)
 	case *ast.LabeledStmt:
@@ -66,24 +66,16 @@ func walkOneStmtLogReturn(stmt ast.Stmt, logSeen bool, fset *token.FileSet, repo
 	}
 }
 
-func walkCaseClausesLogReturn(body *ast.BlockStmt, logSeen bool, fset *token.FileSet, report logReportFn) bool {
+// walkClausesLogReturn walks the statement lists of switch/select clauses
+// (both CaseClause and CommClause bodies).
+func walkClausesLogReturn(body *ast.BlockStmt, logSeen bool, fset *token.FileSet, report logReportFn) bool {
 	for _, c := range body.List {
-		cc, ok := c.(*ast.CaseClause)
-		if !ok {
-			continue
+		switch cc := c.(type) {
+		case *ast.CaseClause:
+			logSeen = walkStmtListLogReturn(cc.Body, logSeen, fset, report)
+		case *ast.CommClause:
+			logSeen = walkStmtListLogReturn(cc.Body, logSeen, fset, report)
 		}
-		logSeen = walkStmtListLogReturn(cc.Body, logSeen, fset, report)
-	}
-	return logSeen
-}
-
-func walkCommClausesLogReturn(body *ast.BlockStmt, logSeen bool, fset *token.FileSet, report logReportFn) bool {
-	for _, c := range body.List {
-		cc, ok := c.(*ast.CommClause)
-		if !ok {
-			continue
-		}
-		logSeen = walkStmtListLogReturn(cc.Body, logSeen, fset, report)
 	}
 	return logSeen
 }

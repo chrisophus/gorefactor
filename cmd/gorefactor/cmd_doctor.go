@@ -18,14 +18,7 @@ func init() {
 		Flags:       map[string]bool{"--json": false},
 		Run:         doctorCommand,
 	})
-
 }
-
-// 1. structural lint
-
-// 2. build
-
-// 3. test
 
 func trimOutput(b []byte) string {
 	s := strings.TrimSpace(string(b))
@@ -49,72 +42,78 @@ func doctorCommand(args []string) error {
 			root = a
 		}
 	}
-
-	type stage struct {
-		name string
-		ok   bool
-		info string
-	}
-	var stages []stage
-
-	files, err := collectGoFiles(root, analyzer.DefaultWalkOptions())
+	lintStage, err := doctorLintStage(root)
 	if err != nil {
 		return err
 	}
-	// Use the same per-file size limit the lint command applies, so doctor and
-	// lint never disagree. effectiveMaxSizeForFile relaxes the limit for
-	// _test.go files; a flat limit here previously made doctor report test
-	// files as errors that lint correctly passed.
+	stages := []doctorStage{
+		lintStage,
+		doctorGolangciStage(root),
+		doctorGoStage(root, "build"),
+		doctorGoStage(root, "test"),
+	}
+	reportDoctorStages(stages, jsonOut)
+	for _, s := range stages {
+		if !s.ok {
+			return gateErrorf("doctor: %s failed", s.name)
+		}
+	}
+	return nil
+
+}
+
+type doctorStage struct {
+	name string
+	ok   bool
+	info string
+}
+
+func doctorLintStage(root string) (doctorStage, error) {
+	files, err := collectGoFiles(root, analyzer.DefaultWalkOptions())
+	if err != nil {
+		return doctorStage{}, err
+	}
+
 	sizeCtx := LintContext{MaxSize: defaultSplitMaxLines}
 	var issues []lintIssue
 	for _, f := range files {
 		issues = append(issues, checkFileSize(f, effectiveMaxSizeForFile(f, sizeCtx))...)
 	}
 	walk := analyzer.DefaultWalkOptions()
-	if dups := checkDuplicates(root, walk); len(dups) > 0 {
-		issues = append(issues, dups...)
-	}
-	if untested := checkUntestedPackages(root, walk); len(untested) > 0 {
-		issues = append(issues, untested...)
-	}
+	issues = append(issues, checkDuplicates(root, walk)...)
+	issues = append(issues, checkUntestedPackages(root, walk)...)
 	errCount := 0
 	for _, iss := range issues {
 		if iss.Severity == "error" {
 			errCount++
 		}
 	}
-	stages = append(stages, stage{
+	return doctorStage{
 		name: "lint",
 		ok:   errCount == 0,
 		info: fmt.Sprintf("%d issue(s), %d error(s)", len(issues), errCount),
-	})
+	}, nil
+}
 
-	gciOK := true
-	gciInfo := "skipped (golangci-lint not installed or no config)"
-	if golangciLintAvailable(root) {
-		gci := golangciLintRule{}.Run(LintContext{Root: root, WalkOpts: walk})
-		gciOK = len(gci) == 0
-		gciInfo = "ok"
-		if !gciOK {
-			gciInfo = fmt.Sprintf("%d issue(s)", len(gci))
-		}
+func doctorGolangciStage(root string) doctorStage {
+	if !golangciLintAvailable(root) {
+		return doctorStage{name: "golangci", ok: true, info: "skipped (golangci-lint not installed or no config)"}
 	}
-	stages = append(stages, stage{name: "golangci", ok: gciOK, info: gciInfo})
+	gci := golangciLintRule{}.Run(LintContext{Root: root, WalkOpts: analyzer.DefaultWalkOptions()})
+	if len(gci) == 0 {
+		return doctorStage{name: "golangci", ok: true, info: "ok"}
+	}
+	return doctorStage{name: "golangci", ok: false, info: fmt.Sprintf("%d issue(s)", len(gci))}
+}
 
-	buildOut, err := exec.Command("go", "build", "./...").CombinedOutput()
-	stages = append(stages, stage{
-		name: "build",
-		ok:   err == nil,
-		info: trimOutput(buildOut),
-	})
+func doctorGoStage(root, verb string) doctorStage {
+	cmd := exec.Command("go", verb, "./...")
+	cmd.Dir = root
+	out, err := cmd.CombinedOutput()
+	return doctorStage{name: verb, ok: err == nil, info: trimOutput(out)}
+}
 
-	testOut, err := exec.Command("go", "test", "./...").CombinedOutput()
-	stages = append(stages, stage{
-		name: "test",
-		ok:   err == nil,
-		info: trimOutput(testOut),
-	})
-
+func reportDoctorStages(stages []doctorStage, jsonOut bool) {
 	if jsonOut {
 		fmt.Print("{\"stages\":[")
 		for i, s := range stages {
@@ -124,21 +123,14 @@ func doctorCommand(args []string) error {
 			fmt.Printf("{\"name\":%q,\"ok\":%v,\"info\":%q}", s.name, s.ok, s.info)
 		}
 		fmt.Println("]}")
-	} else {
-		fmt.Println("gorefactor doctor")
-		for _, s := range stages {
-			status := "PASS"
-			if !s.ok {
-				status = "FAIL"
-			}
-			fmt.Printf("  [%s] %-6s %s\n", status, s.name, s.info)
-		}
+		return
 	}
-
+	fmt.Println("gorefactor doctor")
 	for _, s := range stages {
+		status := "PASS"
 		if !s.ok {
-			return gateErrorf("doctor: %s failed", s.name)
+			status = "FAIL"
 		}
+		fmt.Printf("  [%s] %-6s %s\n", status, s.name, s.info)
 	}
-	return nil
 }

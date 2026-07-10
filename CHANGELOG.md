@@ -44,6 +44,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`insert before:/after:/inside:` accepts `Receiver:Method` locators**,
   matching every other command; previously the receiver form failed with
   not-found while listing the same name as a candidate.
+- **`doctor <dir>` runs build/test in the target directory**: the `go build` /
+  `go test` stages never set the working directory, so `doctor some/dir` could
+  lint one module and build/test another.
+- **`set-doc` accepts already-formatted comment blocks**: `//` markers are
+  stripped before reflowing and blank comment lines survive as paragraph
+  breaks. Previously the markers were treated as words, producing run-on
+  comments with embedded `//` mid-sentence.
 
 ## [0.7.0] - 2026-07-06
 

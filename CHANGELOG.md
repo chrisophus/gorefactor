@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`lint --fix --verify`**: each autofix is now self-checking. The affected
+  package is snapshotted before the fix, then `go build ./...` + `go test ./...`
+  runs (doctor's gate minus lint); if it goes red the fix is reverted and the
+  remaining fixes continue. Kept fixes are journaled so `undo` still works;
+  reverted fixes leave the tree untouched. This makes bulk `--fix` trustworthy
+  for unsupervised cleanup — the over-approximate sensors (e.g. a `dead-code`
+  symbol reached only via reflection or build tags) are backstopped by the gate.
+  The summary reports `N applied, M reverted (gate failed), K failed to apply`.
+
 ## [0.7.0] - 2026-07-06
 
 ### Added

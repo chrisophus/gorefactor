@@ -54,6 +54,7 @@ Mapping of common edits to commands (run `./gorefactor` for the full list):
 | Find extraction candidates (concise) | `gorefactor recommend <file> --short` |
 | Detect file-size / duplicate / extract issues | `gorefactor lint .` |
 | Autofix file-size issues | `gorefactor lint . --fix` |
+| Autofix, reverting any fix that breaks build/test | `gorefactor lint . --fix --verify` |
 | Audit how much of the diff went through gorefactor | `gorefactor adherence [--since <ref>]` |
 | Final gate (lint + build + test) | `gorefactor doctor` |
 | One-page file summary | `gorefactor inspect <file>` |
@@ -161,7 +162,7 @@ Main commands in `cmd/gorefactor/main.go` (registered in `getCommands()`):
 - `implement-interface <file> <Type> <Iface>`: Generate compiling method stubs for every unimplemented interface method.
 
 **Automation**
-- `lint [path] [--fix] [--json] [--max N] [--fail-only] [--info] [--verbose]`: Structural linter, 27 default rules (canonical list in `cmd/gorefactor/lint_registry_test.go`). By default `[info]` issues (e.g. `high-blast-radius`, `untested-*`) are hidden so actionable warnings aren't buried; `--info` shows them (collapsing per-file `high-blast-radius` into one summary line) and `--verbose` shows everything uncollapsed. A `lint.duplicate-ignore` list in `.gorefactor.yaml` excludes extra normalized-code patterns from `duplicate-block` (canonical error idioms like `if err != nil { return err }` are already excluded built-in). Rules:
+- `lint [path] [--fix [--verify]] [--json] [--max N] [--fail-only] [--info] [--verbose]`: Structural linter, 27 default rules (canonical list in `cmd/gorefactor/lint_registry_test.go`). By default `[info]` issues (e.g. `high-blast-radius`, `untested-*`) are hidden so actionable warnings aren't buried; `--info` shows them (collapsing per-file `high-blast-radius` into one summary line) and `--verbose` shows everything uncollapsed. A `lint.duplicate-ignore` list in `.gorefactor.yaml` excludes extra normalized-code patterns from `duplicate-block` (canonical error idioms like `if err != nil { return err }` are already excluded built-in). Rules:
   - *size/structure*: `file-size`, `long-function`, `deep-nesting`, `complexity`, `extract-candidate`
   - *duplication*: `duplicate-block`, `duplicate-bare-sentinel`
   - *design smells*: `god-object`, `large-class`, `fat-interface`, `excessive-params`, `excessive-returns`, `data-clumps`, `type-switch`, `premature-abstraction`, `high-coupling`, `high-blast-radius`
@@ -171,6 +172,7 @@ Main commands in `cmd/gorefactor/main.go` (registered in `getCommands()`):
   - *external*: `golangci-lint`, `arch-violation`
   - *harness self-audit*: `low-gorefactor-adherence` (advisory; fires when too few existing-file edits went through gorefactor)
   - `--fix` autofixes the three rules with a single safe transform: `file-size` (via `split`), `dead-code` (delete unreferenced decls), `error-not-wrapped` (wrap with `fmt.Errorf(... %w)`). `--fail-only` prints only error-severity (blocking) issues.
+  - `--verify` (only with `--fix`) makes each autofix self-checking: the affected package is snapshotted before the fix, then `go build ./...` + `go test ./...` runs (doctor's gate minus lint); if it goes red, that one fix is reverted and the rest continue. Good fixes are kept and journaled (so `undo` still works); reverted ones leave the tree untouched. This is the trust unlock for unsupervised bulk cleanup — the sensors are over-approximate (a `dead-code` symbol reached via reflection/build tags, a `split` that breaks a downstream package), and the gate is the backstop that catches those and rolls them back. Slower (a build+test per applied fix) and human-path only. The summary line becomes `N applied, M reverted (gate failed), K failed to apply`.
 - `doctor [dir] [--json]`: Aggregate gate — structural lint + `go build ./...` + `go test ./...`; non-zero on failure
 - `split <file> [--max N] [--dry-run]`: Auto-split an oversized file by grouping methods on same receiver / functions sharing a CamelCase prefix.
 - `format [path ...]`: In-process gofmt+goimports. Replaces external `goimports` dependency.

@@ -13,6 +13,7 @@ type lintOptions struct {
 	maxSize    int
 	maxSet     bool
 	fix        bool
+	verify     bool // --verify: gate each autofix (build+test) and revert it on failure
 	jsonOut    bool
 	quiet      bool
 	failOnly   bool
@@ -43,6 +44,8 @@ func parseLintOptions(args []string) (lintOptions, error) {
 		switch {
 		case a == "--fix":
 			opts.fix = true
+		case a == "--verify":
+			opts.verify = true
 		case a == "--json":
 			opts.jsonOut = true
 		case a == "--quiet":

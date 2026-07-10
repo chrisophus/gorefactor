@@ -71,6 +71,7 @@ gorefactor orchestrate consolidate-error-handling.json
 ```bash
 gorefactor lint .                  # Detect structural issues
 gorefactor lint . --fix            # Auto-fix what's safe (split files, remove dead code, wrap errors)
+gorefactor lint . --fix --verify   # ...and revert any fix that breaks `go build`/`go test`
 gorefactor lint . --fail-only      # Show only blocking (error-severity) issues
 gorefactor doctor                  # Lint + build + test (final gate)
 ```
@@ -85,7 +86,7 @@ The default rule set has 25 rules, grouped by concern:
 - **Dead code**: `dead-code` (unused funcs/types across the module)
 - **External**: `golangci-lint` (wraps golangci-lint output), `arch-violation` (your `go-arch-lint.yml` rules)
 
-`--fix` autofixes the three rules with a single safe transformation: `file-size` (via `split`), `dead-code` (delete unreferenced decls), and `error-not-wrapped` (wrap with `fmt.Errorf(... %w)`).
+`--fix` autofixes the three rules with a single safe transformation: `file-size` (via `split`), `dead-code` (delete unreferenced decls), and `error-not-wrapped` (wrap with `fmt.Errorf(... %w)`). Add `--verify` to make each fix self-checking: it runs `go build ./...` + `go test ./...` after applying and reverts any fix that fails the gate, keeping the rest — so bulk `--fix` is safe to run unsupervised even where a sensor over-approximates.
 
 **vs. alternatives:**
 - **gopls**: Great for interactive refactoring in an IDE, slow for CLI (60× slower cold-start)
@@ -207,7 +208,7 @@ Methods use `Receiver:Method` (no `*` on the receiver). Many commands accept `-`
 
 | Command | Purpose |
 |---------|---------|
-| `lint` | 25 structural rules (size, duplication, smells, error handling, coverage, dead-code, arch); skips `vendor`/`.git`/`node_modules` and `*.gen.go`/`_gen.go`. `--fix` autofixes `file-size`, `dead-code`, `error-not-wrapped`; `--fail-only` shows blocking issues only |
+| `lint` | 25 structural rules (size, duplication, smells, error handling, coverage, dead-code, arch); skips `vendor`/`.git`/`node_modules` and `*.gen.go`/`_gen.go`. `--fix` autofixes `file-size`, `dead-code`, `error-not-wrapped` (add `--verify` to revert any fix that breaks build/test); `--fail-only` shows blocking issues only |
 | `doctor` | Lint + `go build` + `go test`; non-zero on failure |
 | `txn` | Apply a batch of mutation commands transactionally (all-or-nothing, single undo unit) |
 | `undo` | Undo the most recent journaled mutation (or restore a named plan snapshot) |

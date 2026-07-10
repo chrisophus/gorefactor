@@ -70,7 +70,7 @@ gorefactor orchestrate consolidate-error-handling.json
 ### 5. **Built-in linting with autofix**
 ```bash
 gorefactor lint .                  # Detect structural issues
-gorefactor lint . --fix            # Auto-fix what's safe (split files, remove dead code, wrap errors)
+gorefactor lint . --fix            # Auto-fix what's safe (split files, remove dead code, wrap errors, drop redundant logs)
 gorefactor lint . --fix --verify   # ...and revert any fix that breaks `go build`/`go test`
 gorefactor lint . --fail-only      # Show only blocking (error-severity) issues
 gorefactor doctor                  # Lint + golangci-lint + build + test (final gate)
@@ -86,7 +86,7 @@ The default rule set has 26 rules, grouped by concern:
 - **Dead code**: `dead-code` (unused funcs/types across the module)
 - **External**: `arch-violation` (your `go-arch-lint.yml` rules). golangci-lint is deliberately not a `lint` rule — `doctor` runs it as its own stage, keeping `lint` fast and fully in-process.
 
-`--fix` autofixes the three rules with a single safe transformation: `file-size` (via `split`), `dead-code` (delete unreferenced decls), and `error-not-wrapped` (wrap with `fmt.Errorf(... %w)`). Add `--verify` to make each fix self-checking: it runs `go build ./...` + `go test ./...` after applying and reverts any fix that fails the gate, keeping the rest — so bulk `--fix` is safe to run unsupervised even where a sensor over-approximates.
+`--fix` autofixes the rules with a single safe transformation: `file-size` (via `split`), `dead-code` (delete unreferenced decls), `error-not-wrapped` (wrap with `fmt.Errorf(... %w)`), the log-propagation rules (via `remove-log-return` — delete the redundant log next to a propagating return, wrap a bare `return err`), and `duplicate-bare-sentinel` (via `wrap-sentinels`). Add `--verify` to make each fix self-checking: it runs `go build ./...` + `go test ./...` after applying and reverts any fix that fails the gate, keeping the rest — so bulk `--fix` is safe to run unsupervised even where a sensor over-approximates.
 
 **vs. alternatives:**
 - **gopls**: Great for interactive refactoring in an IDE, slow for CLI (60× slower cold-start)

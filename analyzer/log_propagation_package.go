@@ -2,10 +2,6 @@ package analyzer
 
 import (
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
-	"strings"
 )
 
 // PackageDuplicateBareSentinelIssues flags bare returns of the same errors.New sentinel.
@@ -13,20 +9,7 @@ func PackageDuplicateBareSentinelIssues(files []string) ([]LogPropagationIssue, 
 	if len(files) == 0 {
 		return nil, nil
 	}
-	fset := token.NewFileSet()
-	var astFiles []*ast.File
-	var paths []string
-	for _, path := range files {
-		if strings.HasSuffix(path, "_test.go") {
-			continue
-		}
-		f, err := parser.ParseFile(fset, path, nil, 0)
-		if err != nil {
-			continue
-		}
-		astFiles = append(astFiles, f)
-		paths = append(paths, path)
-	}
+	fset, astFiles, paths := parseNonTestFiles(files)
 	if len(astFiles) == 0 {
 		return nil, nil
 	}
@@ -43,9 +26,10 @@ func PackageDuplicateBareSentinelIssues(files []string) ([]LogPropagationIssue, 
 		for _, pos := range positions {
 			out = append(out, LogPropagationIssue{
 				File: pos.Filename, Line: pos.Line, Column: pos.Column,
-				Rule: "duplicate-bare-sentinel", Message: msg,
+				Rule: "duplicate-bare-sentinel", Message: msg, Symbol: name,
 			})
 		}
 	}
 	return out, nil
+
 }

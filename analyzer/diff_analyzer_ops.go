@@ -2,8 +2,9 @@ package analyzer
 
 import (
 	"fmt"
-	"github.com/chrisophus/gorefactor/orchestrator"
 	"strings"
+
+	"github.com/chrisophus/gorefactor/orchestrator"
 )
 
 // analyzeAddedCode analyzes added code to detect patterns

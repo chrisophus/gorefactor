@@ -74,8 +74,16 @@ func TestLintRules_RuleFieldMatchesName(t *testing.T) {
 	}
 }
 
-func TestFixableRule_OnlyFileSizeAndDeadCode(t *testing.T) {
-	want := map[string]bool{"file-size": true, "dead-code": true, "error-not-wrapped": true}
+func TestFixableRule_ExpectedSet(t *testing.T) {
+	want := map[string]bool{
+		"file-size":               true,
+		"dead-code":               true,
+		"error-not-wrapped":       true,
+		"if-err-log-return":       true,
+		"wrap-log-return":         true,
+		"wrap-bridge-log-return":  true,
+		"duplicate-bare-sentinel": true,
+	}
 	got := make(map[string]bool)
 	for _, r := range defaultLintRules() {
 		if _, ok := r.(FixableRule); ok {

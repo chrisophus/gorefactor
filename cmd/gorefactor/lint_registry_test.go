@@ -32,7 +32,6 @@ func TestDefaultLintRules_ExpectedSet(t *testing.T) {
 		"dead-code",
 		"untested-package",
 		"untested-function",
-		"golangci-lint",
 		"arch-violation",
 		"low-gorefactor-adherence",
 	}

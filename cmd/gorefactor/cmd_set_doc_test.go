@@ -99,3 +99,21 @@ func TestFormatDocComment(t *testing.T) {
 		t.Fatalf("formatDocComment with name = %q", got)
 	}
 }
+
+func TestSetDocAcceptsCommentPrefixedParagraphs(t *testing.T) {
+	writeModule(t, map[string]string{"main.go": "package main\n\nfunc Target() {}\n\nfunc main() {}\n"})
+	captureStdout(t, func() {
+		err := setDocCommand([]string{"main.go", "Target",
+			"// Target does the first thing.\n//\n// And a second paragraph."})
+		if err != nil {
+			t.Fatalf("set-doc: %v", err)
+		}
+	})
+	src := readFile(t, "main.go")
+	if !strings.Contains(src, "// Target does the first thing.\n//\n// And a second paragraph.\nfunc Target()") {
+		t.Errorf("comment-prefixed input should round-trip cleanly:\n%s", src)
+	}
+	if strings.Contains(src, "// Target // Target") || strings.Contains(src, ". //") {
+		t.Errorf("markers must not leak into the comment text:\n%s", src)
+	}
+}

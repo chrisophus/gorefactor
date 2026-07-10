@@ -154,25 +154,53 @@ func declDoc(decl ast.Decl) *ast.CommentGroup {
 	return nil
 }
 
-// formatDocComment renders plain text as a `// ` comment block wrapped at
-// docCommentWidth columns. Per Go convention the comment starts with the
-// declaration name; it is prepended when missing.
+// formatDocComment renders text as a `// ` comment block wrapped at docCommentWidth columns,
+// preserving paragraph breaks. Per Go convention the comment starts with the declaration name; it
+// is prepended when missing.
 func formatDocComment(name, text string) string {
-	words := strings.Fields(text)
-	if len(words) == 0 || words[0] != name {
-		words = append([]string{name}, words...)
-	}
 	var b strings.Builder
-	line := "//"
-	for _, w := range words {
-		if len(line)+1+len(w) > docCommentWidth && line != "//" {
-			b.WriteString(line)
-			b.WriteString("\n")
-			line = "//"
+	for pi, para := range docParagraphs(text) {
+		if pi > 0 {
+			b.WriteString("//\n")
 		}
-		line += " " + w
+		words := strings.Fields(para)
+		if pi == 0 && (len(words) == 0 || words[0] != name) {
+			words = append([]string{name}, words...)
+		}
+		line := "//"
+		for _, w := range words {
+			if len(line)+1+len(w) > docCommentWidth && line != "//" {
+				b.WriteString(line)
+				b.WriteString("\n")
+				line = "//"
+			}
+			line += " " + w
+		}
+		b.WriteString(line)
+		b.WriteString("\n")
 	}
-	b.WriteString(line)
-	b.WriteString("\n")
 	return b.String()
+
+}
+
+func docParagraphs(text string) []string {
+	var paras []string
+	var cur []string
+	flush := func() {
+		if len(cur) > 0 {
+			paras = append(paras, strings.Join(cur, " "))
+			cur = nil
+		}
+	}
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		line = strings.TrimSpace(strings.TrimPrefix(line, "//"))
+		if line == "" {
+			flush()
+			continue
+		}
+		cur = append(cur, line)
+	}
+	flush()
+	return paras
 }

@@ -240,7 +240,7 @@ func F(x int) error {
 			return true
 		}
 		// logSeen=true simulates having seen a log call before the switch.
-		walkCaseClausesLogReturn(sw.Body, true, fset, report)
+		walkClausesLogReturn(sw.Body, true, fset, report)
 		return true
 	})
 
@@ -277,7 +277,7 @@ func F(x int) error {
 		if !ok {
 			return true
 		}
-		walkCaseClausesLogReturn(sw.Body, false, fset, report)
+		walkClausesLogReturn(sw.Body, false, fset, report)
 		return true
 	})
 
@@ -318,7 +318,7 @@ func F(ch <-chan error) error {
 			return true
 		}
 		// logSeen=true to trigger the return check inside the case body.
-		walkCommClausesLogReturn(sel.Body, true, fset, report)
+		walkClausesLogReturn(sel.Body, true, fset, report)
 		return true
 	})
 

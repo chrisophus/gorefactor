@@ -8,15 +8,16 @@ import (
 	"strings"
 )
 
-// dirSnapshot // dirSnapshot captures the .go files of a single package directory so an // autofix
-// confined to that package can be reverted byte-for-byte when the // verify gate rejects it. It
-// records the content of every .go file that // existed at snapshot time; restore rewrites those
-// and deletes any .go file // the fix newly created. // // A directory-scoped snapshot is
-// sufficient because every fixable rule // (file-size → split, dead-code → delete,
-// error-not-wrapped → wrap-errors, // the log-propagation rules → remove-log-return /
-// wrap-sentinels) only // touches the issue file's own package directory: split writes sibling
-// files // in the same dir, the others edit a single file in place. The gate itself is // still
-// project-wide, so a fix that compiles locally but breaks a downstream // package is caught and
+// dirSnapshot captures the .go files of a single package directory so an autofix confined to that
+// package can be reverted byte-for-byte when the verify gate rejects it. It records the content of
+// every .go file that existed at snapshot time; restore rewrites those and deletes any .go file the
+// fix newly created.
+//
+// A directory-scoped snapshot is sufficient because every fixable rule (file-size → split,
+// dead-code → delete, error-not-wrapped → wrap-errors, the log-propagation rules →
+// remove-log-return / wrap-sentinels) only touches the issue file's own package directory: split
+// writes sibling files in the same dir, the others edit a single file in place. The gate itself is
+// still project-wide, so a fix that compiles locally but breaks a downstream package is caught and
 // reverted at its source directory.
 type dirSnapshot struct {
 	dir   string

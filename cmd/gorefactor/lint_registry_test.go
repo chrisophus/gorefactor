@@ -77,6 +77,8 @@ func TestFixableRule_ExpectedSet(t *testing.T) {
 	want := map[string]bool{
 		"file-size":               true,
 		"complexity":              true,
+		"long-function":           true,
+		"extract-candidate":       true,
 		"dead-code":               true,
 		"error-not-wrapped":       true,
 		"if-err-log-return":       true,

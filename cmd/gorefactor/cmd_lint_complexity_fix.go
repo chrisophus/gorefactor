@@ -26,7 +26,7 @@ func (r complexityRule) AutoFix(issue lintIssue, _ LintContext) error {
 	if !ok {
 		return fmt.Errorf("malformed complexity autofix command: %q", issue.AutoFixCmd)
 	}
-	applied, err := reduceComplexityByExtraction(file, function, defaultComplexityThreshold)
+	applied, err := reduceComplexityByExtraction(file, function, defaultComplexityThreshold, strings.Contains(issue.AutoFixCmd, "--allow-returns"))
 	if err != nil {
 		return fmt.Errorf("reduce complexity by extraction: %w", err)
 	}
@@ -39,7 +39,11 @@ func (r complexityRule) AutoFix(issue lintIssue, _ LintContext) error {
 // reduceComplexityByExtraction applies the extractions recommended for function
 // in file and returns how many blocks were successfully extracted. It is shared
 // by the complexity autofix and `recommend --reduce-complexity --apply`.
-func reduceComplexityByExtraction(file, function string, threshold int) (int, error) {
+// allowReturns forwards --allow-returns to the extract engine so aggressive
+// runs can lift return-bearing blocks. (Signature edited directly:
+// change-signature requires a type-checking module, which the new body
+// prevents mid-edit.)
+func reduceComplexityByExtraction(file, function string, threshold int, allowReturns bool) (int, error) {
 	res, err := analyzer.RecommendComplexityReduction(file, function, threshold)
 	if err != nil {
 		return 0, err
@@ -52,6 +56,9 @@ func reduceComplexityByExtraction(file, function string, threshold int) (int, er
 	applied := 0
 	for _, e := range ext {
 		args := []string{file, strconv.Itoa(e.StartLine), strconv.Itoa(e.EndLine), e.Suggestion}
+		if allowReturns {
+			args = append(args, "--allow-returns")
+		}
 		if err := extractCommand(args); err != nil {
 			fmt.Fprintf(os.Stderr, "  skip block L%d-%d: %v\n", e.StartLine, e.EndLine, err)
 			continue
@@ -59,6 +66,7 @@ func reduceComplexityByExtraction(file, function string, threshold int) (int, er
 		applied++
 	}
 	return applied, nil
+
 }
 
 // parseComplexityAutoFixCmd pulls the file and function out of the autofix

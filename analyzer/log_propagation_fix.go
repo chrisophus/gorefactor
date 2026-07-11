@@ -38,27 +38,30 @@ type srcEdit struct {
 //     return inside an `if err != nil` body is deleted; a bare `return err`
 //     is additionally wrapped with fmt.Errorf("<context>: %w", err).
 //
-// Non-adjacent log/return findings are left alone — deleting a log that also
-// serves other code paths is not a single safe transform. rule limits fixing
-// to one detector ("" fixes all three). Returns nil output when nothing
-// matched.
-func ApplyLogReturnFixes(filename string, src []byte, rule string) ([]byte, []LogReturnFixSite, error) {
+// Non-adjacent log/return findings are left alone by default — deleting a log
+// that also serves other code paths is not a single safe transform. With
+// aggressive set, a log followed by the flagged return with other statements
+// between them (same statement list of an `if err != nil` body) is fixed too;
+// callers must gate that on build+test verification. rule limits fixing to
+// one detector ("" fixes all three). Returns nil output when nothing matched.
+func ApplyLogReturnFixes(filename string, src []byte, rule string, aggressive bool) ([]byte, []LogReturnFixSite, error) {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, filename, src, parser.ParseComments)
 	if err != nil {
 		return nil, nil, fmt.Errorf("parse %s: %w", filename, err)
 	}
-	edits, sites := collectLogReturnEdits(f, fset, src, rule)
+	edits, sites := collectLogReturnEdits(f, fset, src, rule, aggressive)
 	if len(edits) == 0 {
 		return nil, nil, nil
 	}
 	return applySrcEdits(src, edits), sites, nil
+
 }
 
 // ListLogReturnFixSites reports the sites ApplyLogReturnFixes would fix in
 // file, without modifying anything. Lint rules use it to attach an autofix
 // only to issues the fixer can actually resolve.
-func ListLogReturnFixSites(file string) ([]LogReturnFixSite, error) {
+func ListLogReturnFixSites(file string, aggressive bool) ([]LogReturnFixSite, error) {
 	src, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("read file: %w", err)
@@ -68,15 +71,17 @@ func ListLogReturnFixSites(file string) ([]LogReturnFixSite, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse %s: %w", file, err)
 	}
-	_, sites := collectLogReturnEdits(f, fset, src, "")
+	_, sites := collectLogReturnEdits(f, fset, src, "", aggressive)
 	return sites, nil
+
 }
 
-func collectLogReturnEdits(f *ast.File, fset *token.FileSet, src []byte, rule string) ([]srcEdit, []LogReturnFixSite) {
+func collectLogReturnEdits(f *ast.File, fset *token.FileSet, src []byte, rule string, aggressive bool) ([]srcEdit, []LogReturnFixSite) {
 	want := func(r string) bool { return rule == "" || rule == r }
 	var edits []srcEdit
 	var sites []LogReturnFixSite
 	deletedLogs := make(map[ast.Stmt]bool)
+	wrappedRets := make(map[*ast.ReturnStmt]bool)
 
 	record := func(r string, fn *ast.FuncDecl, ret *ast.ReturnStmt) {
 		pos := fset.Position(ret.Pos())
@@ -118,8 +123,11 @@ func collectLogReturnEdits(f *ast.File, fset *token.FileSet, src []byte, rule st
 		if !want("if-err-log-return") {
 			continue
 		}
-		// Pass 2: adjacent log/return pairs at the top level of an
-		// `if err != nil` body — the safe subset of what the detector flags.
+		// Pass 2: log/return pairs at the top level of an `if err != nil`
+		// body. The safe subset requires the flagged return immediately after
+		// the log; aggressive mode tolerates other statements between them —
+		// the log still duplicates the context the propagated error carries,
+		// and the caller's verify gate backstops the deletion.
 		ast.Inspect(fn.Body, func(n ast.Node) bool {
 			ifStmt, ok := n.(*ast.IfStmt)
 			if !ok || !isErrNotNil(ifStmt.Cond) {
@@ -136,7 +144,19 @@ func collectLogReturnEdits(f *ast.File, fset *token.FileSet, src []byte, rule st
 				if i > 0 && isAssignErrFmtWrap(list[i-1]) {
 					continue
 				}
-				ret, ok := list[i+1].(*ast.ReturnStmt)
+				j := i + 1
+				if aggressive {
+					for j < len(list) {
+						if _, isRet := list[j].(*ast.ReturnStmt); isRet {
+							break
+						}
+						j++
+					}
+					if j >= len(list) {
+						continue
+					}
+				}
+				ret, ok := list[j].(*ast.ReturnStmt)
 				if !ok {
 					continue
 				}
@@ -144,7 +164,12 @@ func collectLogReturnEdits(f *ast.File, fset *token.FileSet, src []byte, rule st
 				case isBareReturnErr(ret):
 					deletedLogs[list[i]] = true
 					edits = append(edits, deleteStmtEdit(fset, src, list[i]))
-					edits = append(edits, wrapReturnErrEdit(fset, ret, logReturnWrapContext(ifStmt, fn)))
+					// Several logs can precede the same return in aggressive
+					// mode; wrap it exactly once or the edits would overlap.
+					if !wrappedRets[ret] {
+						wrappedRets[ret] = true
+						edits = append(edits, wrapReturnErrEdit(fset, ret, logReturnWrapContext(ifStmt, fn)))
+					}
 					record("if-err-log-return", fn, ret)
 				case isReturnFmtErrorfWrappingErr(ret):
 					deletedLogs[list[i]] = true
@@ -156,6 +181,7 @@ func collectLogReturnEdits(f *ast.File, fset *token.FileSet, src []byte, rule st
 		})
 	}
 	return edits, sites
+
 }
 
 // logReturnWrapContext derives the fmt.Errorf context for a wrapped return:

@@ -98,7 +98,7 @@ func Big(xs []int) int {
 `
 	path := writeComplexityModule(t, src)
 
-	applied, err := reduceComplexityByExtraction(path, "Big", defaultComplexityThreshold)
+	applied, err := reduceComplexityByExtraction(path, "Big", defaultComplexityThreshold, false)
 	if err != nil {
 		t.Fatalf("reduceComplexityByExtraction: %v", err)
 	}
@@ -184,7 +184,7 @@ func Guard(n int) (int, error) {
 	path := writeComplexityModule(t, src)
 	before, _ := os.ReadFile(path)
 
-	applied, err := reduceComplexityByExtraction(path, "Guard", defaultComplexityThreshold)
+	applied, err := reduceComplexityByExtraction(path, "Guard", defaultComplexityThreshold, false)
 	if err != nil {
 		t.Fatalf("reduceComplexityByExtraction: %v", err)
 	}

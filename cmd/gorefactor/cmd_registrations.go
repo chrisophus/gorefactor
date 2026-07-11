@@ -59,12 +59,13 @@ func init() {
 	registerCommand(Command{
 		Name:        "lint",
 		Description: "Run structural lints (file size, duplicates) [--fix [--verify]] [--json] [--max N] [--fail-only]",
-		Usage:       "lint [path] [--fix] [--verify] [--json] [--quiet] [--fail-only] [--info] [--verbose] [--max N] [--rule NAME] [--skip-rule NAME] [--fail-on error|warning] [--config PATH] [--profile NAME]",
+		Usage:       "lint [path] [--fix] [--verify] [--fix-level safe|aggressive] [--json] [--quiet] [--fail-only] [--info] [--verbose] [--max N] [--rule NAME] [--skip-rule NAME] [--fail-on error|warning] [--config PATH] [--profile NAME]",
 		MinArgs:     0,
 		MaxArgs:     1,
 		Flags: map[string]bool{
 			"--fix":           false,
 			"--verify":        false,
+			"--fix-level":     true,
 			"--json":          false,
 			"--quiet":         false,
 			"--fail-only":     false,

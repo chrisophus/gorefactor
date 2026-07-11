@@ -5,6 +5,56 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-07-11
+
+### Added
+- **`lint --fix-level aggressive`**: a second autofix tier above the default
+  `safe` level. Aggressive fixes are mechanical but not provably
+  behavior-preserving, so the flag is only accepted together with
+  `--fix --verify` — every aggressive fix is build+test gated and individually
+  reverted on failure. It unlocks:
+  - **`long-function` autofix**: shortens an over-threshold function by
+    extracting its greedily-chosen largest top-level blocks under generated
+    names (`gorefactor recommend --reduce-length <file> <Func> --apply`).
+  - **`extract-candidate` autofix**: extracts the flagged function's largest
+    top-level block, re-derived at apply time so line numbers never go stale.
+  - **`complexity` autofix upgrade**: passes `--allow-returns` so complexity
+    concentrated in return-bearing error branches stops being skipped.
+  - **Non-adjacent log/return fixes**: `remove-log-return --aggressive` (and
+    the `if-err-log-return` autofix at the aggressive level) also deletes a
+    log separated from the flagged return by other statements, wrapping the
+    bare `return err` exactly once even when several logs precede it.
+  - **Module-wide dead exported functions**: the `dead-code` rule additionally
+    flags exported top-level functions referenced nowhere in the module
+    (`analyzer.DetectDeadExportedFunctions`). Methods are excluded —
+    reflection/interface dispatch can invoke them with no in-module ident —
+    and out-of-module consumers are exactly why this is verify-gated.
+- **`extract --allow-returns`**: the extract engine can now lift a
+  return-bearing block into a `(results..., done bool)` helper; each direct
+  `return e1, e2` becomes `return e1, e2, true`, the helper falls through to a
+  naked `return` (zero values, `done=false`), and the call site propagates via
+  `if r0, r1, done := helper(...); done { return r0, r1 }`. Blocks that also
+  assign outer variables used later, naked returns under named results, and
+  single-call multi-value returns are refused with teaching errors. Returns
+  inside function literals are no longer treated as barriers at all.
+- **`recommend --reduce-length <file> <Func|Recv:Method> [--max-lines N]
+  [--apply [--allow-returns]]`**: line-count analog of `--reduce-complexity`;
+  backs the two new autofixes. `--reduce-complexity --apply` also accepts
+  `--allow-returns` now.
+
+### Fixed
+- **Extraction write-back for mutated outer variables**: `extract` treated an
+  outer variable assigned inside the block as a by-value parameter, silently
+  discarding the mutation (`total += ...` extracted into a helper changed
+  program output). Such variables are now returned and written back at the
+  call site (`total = helper(items, total)`, `=` not `:=`), and writes that
+  reach shared memory (pointer/slice/map paths) are recognized as needing no
+  write-back. Return order is now deterministic (declaration order).
+- **`long-function` and `deep-nesting` rules were silently dead**:
+  `FunctionMetricsForFile` passed a typed-nil `[]byte` to `parser.ParseFile`,
+  which treats it as empty source, so every file "failed to parse" and the
+  rules never fired.
+
 ## [0.8.0] - 2026-07-10
 
 ### Added

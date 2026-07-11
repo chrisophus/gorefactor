@@ -159,6 +159,11 @@ func runLintRules(rules []LintRule, ctx LintContext, opts lintOptions) []lintIss
 	return issues
 }
 
+const (
+	fixLevelSafe       = "safe"
+	fixLevelAggressive = "aggressive"
+)
+
 // applyAutoFixes runs every issue's registered autofix. With verify set, each
 // fix is guarded: the affected package is snapshotted first, and if the
 // project no longer builds-and-tests clean after the fix, that one fix is
@@ -227,7 +232,10 @@ type LintContext struct {
 	WalkOpts    analyzer.WalkOptions
 	Config      *config.File
 	Profile     string
+	FixLevel    string
 }
+
+func (c LintContext) AggressiveFix() bool { return c.FixLevel == fixLevelAggressive }
 
 func effectiveMaxSizeForFile(file string, ctx LintContext) int {
 	if strings.HasSuffix(file, "_test.go") {

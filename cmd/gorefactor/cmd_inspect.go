@@ -75,7 +75,7 @@ func inspectCommand(args []string) error {
 	fmt.Println()
 
 	issues := checkFileSize(file, maxSize)
-	issues = append(issues, checkExtractable(file, 5)...)
+	issues = append(issues, checkExtractable(file, 5, false)...)
 	if len(issues) == 0 {
 		fmt.Println("Lint issues: none")
 		return nil

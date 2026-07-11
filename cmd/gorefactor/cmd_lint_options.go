@@ -13,7 +13,8 @@ type lintOptions struct {
 	maxSize    int
 	maxSet     bool
 	fix        bool
-	verify     bool // --verify: gate each autofix (build+test) and revert it on failure
+	verify     bool
+	fixLevel   string // --verify: gate each autofix (build+test) and revert it on failure
 	jsonOut    bool
 	quiet      bool
 	failOnly   bool
@@ -34,6 +35,7 @@ type lintOptions struct {
 func parseLintOptions(args []string) (lintOptions, error) {
 	opts := lintOptions{
 		root:      ".",
+		fixLevel:  fixLevelSafe,
 		maxSize:   defaultSplitMaxLines,
 		failOn:    "error",
 		onlyRules: make(map[string]bool),
@@ -46,6 +48,17 @@ func parseLintOptions(args []string) (lintOptions, error) {
 			opts.fix = true
 		case a == "--verify":
 			opts.verify = true
+		case a == "--fix-level":
+			if i+1 >= len(args) {
+				return opts, fmt.Errorf("--fix-level requires safe or aggressive")
+			}
+			switch args[i+1] {
+			case fixLevelSafe, fixLevelAggressive:
+				opts.fixLevel = args[i+1]
+			default:
+				return opts, fmt.Errorf("--fix-level must be safe or aggressive")
+			}
+			i++
 		case a == "--json":
 			opts.jsonOut = true
 		case a == "--quiet":
@@ -116,6 +129,9 @@ func parseLintOptions(args []string) (lintOptions, error) {
 		default:
 			opts.root = a
 		}
+	}
+	if opts.fixLevel == fixLevelAggressive && (!opts.fix || !opts.verify) {
+		return opts, fmt.Errorf("--fix-level aggressive requires --fix --verify: every aggressive fix must be build+test gated and revertible")
 	}
 	if err := opts.loadConfig(); err != nil {
 		return opts, err
@@ -190,6 +206,7 @@ func lintShouldFail(issues []lintIssue, failOn string) bool {
 func (opts lintOptions) lintContext(files []string) LintContext {
 	ctx := LintContext{
 		Root:     opts.root,
+		FixLevel: opts.fixLevel,
 		Files:    files,
 		MaxSize:  opts.maxSize,
 		WalkOpts: analyzer.DefaultWalkOptions(),

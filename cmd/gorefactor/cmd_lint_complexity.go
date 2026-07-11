@@ -41,6 +41,13 @@ func (r complexityRule) Run(ctx LintContext) []lintIssue {
 			if red, rerr := analyzer.RecommendComplexityReduction(f, c.Name, defaultComplexityThreshold); rerr == nil && len(red.Extractions) > 0 {
 				iss.AutoFix = "extract sub-blocks"
 				iss.AutoFixCmd = fmt.Sprintf("gorefactor recommend --reduce-complexity %s %s --apply", f, c.Name)
+				// At the aggressive level the extract engine may also lift
+				// return-bearing blocks (verify-gated), so complexity
+				// concentrated in error branches stops being skipped.
+				if ctx.AggressiveFix() {
+					iss.AutoFix = "extract sub-blocks (aggressive)"
+					iss.AutoFixCmd += " --allow-returns"
+				}
 			}
 			out = append(out, iss)
 		}

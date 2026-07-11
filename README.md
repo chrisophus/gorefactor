@@ -72,6 +72,7 @@ gorefactor orchestrate consolidate-error-handling.json
 gorefactor lint .                  # Detect structural issues
 gorefactor lint . --fix            # Auto-fix what's safe (split files, remove dead code, wrap errors, drop redundant logs)
 gorefactor lint . --fix --verify   # ...and revert any fix that breaks `go build`/`go test`
+gorefactor lint . --fix --verify --fix-level aggressive  # also shorten long functions, lift return-bearing blocks, delete module-wide dead exported funcs, fix non-adjacent log/return
 gorefactor lint . --fail-only      # Show only blocking (error-severity) issues
 gorefactor doctor                  # Lint + golangci-lint + build + test (final gate)
 ```
@@ -208,7 +209,7 @@ Methods use `Receiver:Method` (no `*` on the receiver). Many commands accept `-`
 
 | Command | Purpose |
 |---------|---------|
-| `lint` | 25 structural rules (size, duplication, smells, error handling, coverage, dead-code, arch); skips `vendor`/`.git`/`node_modules` and `*.gen.go`/`_gen.go`. `--fix` autofixes `file-size`, `dead-code`, `error-not-wrapped` (add `--verify` to revert any fix that breaks build/test); `--fail-only` shows blocking issues only |
+| `lint` | 25 structural rules (size, duplication, smells, error handling, coverage, dead-code, arch); skips `vendor`/`.git`/`node_modules` and `*.gen.go`/`_gen.go`. `--fix` autofixes `file-size`, `dead-code`, `error-not-wrapped`, `complexity`, the log-propagation family (add `--verify` to revert any fix that breaks build/test). `--fix-level aggressive` (requires `--fix --verify`) additionally autofixes `long-function`/`extract-candidate` by extraction, lifts return-bearing blocks, fixes non-adjacent log/return pairs, and deletes module-wide unreferenced exported functions. `--fail-only` shows blocking issues only |
 | `doctor` | Lint + `go build` + `go test`; non-zero on failure |
 | `txn` | Apply a batch of mutation commands transactionally (all-or-nothing, single undo unit) |
 | `undo` | Undo the most recent journaled mutation (or restore a named plan snapshot) |

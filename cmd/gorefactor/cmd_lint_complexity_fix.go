@@ -2,9 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/chrisophus/gorefactor/analyzer"
@@ -48,24 +45,11 @@ func reduceComplexityByExtraction(file, function string, threshold int, allowRet
 	if err != nil {
 		return 0, err
 	}
-	// Apply bottom-up so extracting a lower block never shifts the line numbers
-	// of a higher block still queued.
-	ext := append([]analyzer.ComplexityExtraction(nil), res.Extractions...)
-	sort.SliceStable(ext, func(i, j int) bool { return ext[i].StartLine > ext[j].StartLine })
-
-	applied := 0
-	for _, e := range ext {
-		args := []string{file, strconv.Itoa(e.StartLine), strconv.Itoa(e.EndLine), e.Suggestion}
-		if allowReturns {
-			args = append(args, "--allow-returns")
-		}
-		if err := extractCommand(args); err != nil {
-			fmt.Fprintf(os.Stderr, "  skip block L%d-%d: %v\n", e.StartLine, e.EndLine, err)
-			continue
-		}
-		applied++
+	specs := make([]extractionSpec, len(res.Extractions))
+	for i, e := range res.Extractions {
+		specs[i] = extractionSpec{StartLine: e.StartLine, EndLine: e.EndLine, Suggestion: e.Suggestion}
 	}
-	return applied, nil
+	return applyExtractionsBottomUp(file, specs, allowReturns), nil
 
 }
 

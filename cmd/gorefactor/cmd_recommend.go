@@ -33,6 +33,9 @@ func recommendExtractions(
 	if hasFlag(args, "--reduce-complexity") {
 		return runReduceComplexity(args)
 	}
+	if hasFlag(args, "--reduce-length") {
+		return runReduceLength(args)
+	}
 
 	config := analyzer.DefaultConfig()
 	var functionName string

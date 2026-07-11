@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"go/ast"
+	"go/token"
 	"go/types"
+	"sort"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -25,8 +27,20 @@ func analyzeBlockTypes(pkg *packages.Package, fileAST *ast.File, enclosing *ast.
 		})
 	}
 
-	blockStart := stmts[0].Pos()
 	blockEnd := stmts[len(stmts)-1].End()
+
+	isCandidateVar := func(obj types.Object) bool {
+		if obj == nil || declaredInBlock[obj] {
+			return false
+		}
+		if _, isVar := obj.(*types.Var); !isVar {
+			return false
+		}
+		if obj.Pkg() == nil || obj.Pkg().Path() != pkg.PkgPath {
+			return false
+		}
+		return isLocalToFunc(obj, enclosing, info)
+	}
 
 	seenRead := map[types.Object]bool{}
 	for _, stmt := range stmts {
@@ -36,22 +50,7 @@ func analyzeBlockTypes(pkg *packages.Package, fileAST *ast.File, enclosing *ast.
 				return true
 			}
 			obj := info.Uses[id]
-			if obj == nil {
-				return true
-			}
-			if declaredInBlock[obj] {
-				return true
-			}
-			if _, isVar := obj.(*types.Var); !isVar {
-				return true
-			}
-			if obj.Pkg() == nil || obj.Pkg().Path() != pkg.PkgPath {
-				return true
-			}
-			if seenRead[obj] {
-				return true
-			}
-			if !isLocalToFunc(obj, enclosing, info) {
+			if !isCandidateVar(obj) || seenRead[obj] {
 				return true
 			}
 			seenRead[obj] = true
@@ -77,18 +76,98 @@ func analyzeBlockTypes(pkg *packages.Package, fileAST *ast.File, enclosing *ast.
 		return false
 	}
 
+	// Outer variables the block assigns through a pure value path lose the
+	// mutation when they become by-value parameters, so any of them still used
+	// after the block must be returned and written back at the call site.
+	// (Writes that reach shared memory — through a pointer, slice, or map —
+	// survive the copy and need no write-back.)
+	mutatedOuter := map[types.Object]bool{}
+	markRoot := func(e ast.Expr) {
+		root := lhsRootIfValuePath(info, e)
+		if root == nil {
+			return
+		}
+		if obj := info.Uses[root]; isCandidateVar(obj) {
+			mutatedOuter[obj] = true
+		}
+	}
+	for _, stmt := range stmts {
+		ast.Inspect(stmt, func(n ast.Node) bool {
+			switch s := n.(type) {
+			case *ast.AssignStmt:
+				for _, lhs := range s.Lhs {
+					markRoot(lhs)
+				}
+			case *ast.IncDecStmt:
+				markRoot(s.X)
+			case *ast.RangeStmt:
+				if s.Tok == token.ASSIGN {
+					if s.Key != nil {
+						markRoot(s.Key)
+					}
+					if s.Value != nil {
+						markRoot(s.Value)
+					}
+				}
+			}
+			return true
+		})
+	}
+
+	appendReturn := func(obj types.Object, outer bool) {
+		returns = append(returns, paramSpec{
+			name:   obj.Name(),
+			typeS:  types.TypeString(obj.Type(), relativeToPkg(pkg.Types)),
+			object: obj,
+			outer:  outer,
+		})
+	}
 	for obj := range declaredInBlock {
 		if _, isVar := obj.(*types.Var); !isVar {
 			continue
 		}
 		if usedAfterBlock(obj) {
-			returns = append(returns, paramSpec{
-				name:   obj.Name(),
-				typeS:  types.TypeString(obj.Type(), relativeToPkg(pkg.Types)),
-				object: obj,
-			})
+			appendReturn(obj, false)
 		}
 	}
-	_ = blockStart
+	for obj := range mutatedOuter {
+		if usedAfterBlock(obj) {
+			appendReturn(obj, true)
+		}
+	}
+	// Map iteration above is unordered; sort by declaration position so the
+	// generated signature and call site are deterministic across runs.
+	sort.Slice(returns, func(i, j int) bool { return returns[i].object.Pos() < returns[j].object.Pos() })
 	return params, returns, nil
+
+}
+
+func lhsRootIfValuePath(info *types.Info, e ast.Expr) *ast.Ident {
+	for {
+		switch v := e.(type) {
+		case *ast.Ident:
+			return v
+		case *ast.ParenExpr:
+			e = v.X
+		case *ast.SelectorExpr:
+			if t, ok := info.Types[v.X]; ok && t.Type != nil {
+				if _, isPtr := t.Type.Underlying().(*types.Pointer); isPtr {
+					return nil
+				}
+			}
+			e = v.X
+		case *ast.IndexExpr:
+			if t, ok := info.Types[v.X]; ok && t.Type != nil {
+				switch t.Type.Underlying().(type) {
+				case *types.Slice, *types.Map, *types.Pointer:
+					return nil
+				}
+			}
+			e = v.X
+		case *ast.StarExpr:
+			return nil
+		default:
+			return nil
+		}
+	}
 }

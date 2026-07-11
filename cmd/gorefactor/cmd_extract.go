@@ -16,13 +16,16 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-var extractFlags = mutFlagSpec(nil)
+// extractFlags: --allow-returns opts into lifting return-bearing blocks into a
+// (results..., done bool) helper instead of refusing them. (Package-level var
+// initializer — outside gorefactor's function-scoped edit commands.)
+var extractFlags = mutFlagSpec(map[string]bool{"--allow-returns": false})
 
 func init() {
 	registerCommand(Command{
 		Name:        "extract",
-		Description: "Extract a code block into a new function. Args: <file> <startLine> <endLine> <methodName>",
-		Usage:       "extract <file> <startLine> <endLine> <methodName> [--json] [--dry-run] [--gate]",
+		Description: "Extract a code block into a new function (--allow-returns lifts return-bearing blocks). Args: <file> <startLine> <endLine> <methodName>",
+		Usage:       "extract <file> <startLine> <endLine> <methodName> [--allow-returns] [--json] [--dry-run] [--gate]",
 		MinArgs:     4,
 		MaxArgs:     4,
 		Flags:       extractFlags,
@@ -83,41 +86,11 @@ func findExtractionTarget(fileAST *ast.File, fset *token.FileSet, startLine, end
 	return enclosing, stmts, nil
 }
 
-func containsReturn(stmts []ast.Stmt) bool {
-	for _, s := range stmts {
-		found := false
-		ast.Inspect(s, func(n ast.Node) bool {
-			if _, ok := n.(*ast.ReturnStmt); ok {
-				found = true
-				return false
-			}
-			return true
-		})
-		if found {
-			return true
-		}
-	}
-	return false
-}
-
-// findReturnLines returns line numbers of all return statements in block
-func findReturnLines(fset *token.FileSet, stmts []ast.Stmt) []int {
-	var lines []int
-	for _, stmt := range stmts {
-		ast.Inspect(stmt, func(n ast.Node) bool {
-			if ret, ok := n.(*ast.ReturnStmt); ok {
-				lines = append(lines, fset.Position(ret.Pos()).Line)
-			}
-			return true
-		})
-	}
-	return lines
-}
-
 type paramSpec struct {
 	name   string
 	typeS  string
 	object types.Object
+	outer  bool // a pre-existing variable the block mutates (write-back at call site with =, not :=)
 }
 
 func isLocalToFunc(obj types.Object, fn *ast.FuncDecl, info *types.Info) bool {
@@ -212,10 +185,21 @@ func buildExtractedFunc(fset *token.FileSet, methodName string, stmts []ast.Stmt
 		callSite = fmt.Sprintf("%s(%s)", methodName, strings.Join(args, ", "))
 	} else {
 		var names []string
+		allOuter := true
 		for _, r := range returns {
 			names = append(names, r.name)
+			if !r.outer {
+				allOuter = false
+			}
 		}
-		callSite = fmt.Sprintf("%s := %s(%s)", strings.Join(names, ", "), methodName, strings.Join(args, ", "))
+		// When every returned variable already exists before the block the
+		// call site is a plain write-back; := would shadow (or fail to
+		// compile with no new variables on the left).
+		assign := ":="
+		if allOuter {
+			assign = "="
+		}
+		callSite = fmt.Sprintf("%s %s %s(%s)", strings.Join(names, ", "), assign, methodName, strings.Join(args, ", "))
 	}
 	return sb.String(), callSite, nil
 }

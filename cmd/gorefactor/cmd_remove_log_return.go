@@ -9,7 +9,7 @@ import (
 	"github.com/chrisophus/gorefactor/orchestrator"
 )
 
-var removeLogReturnFlags = mutFlagSpec(map[string]bool{"--rule": true})
+var removeLogReturnFlags = mutFlagSpec(map[string]bool{"--rule": true, "--aggressive": false})
 
 var removeLogReturnRules = map[string]bool{
 	"if-err-log-return":      true,
@@ -20,8 +20,8 @@ var removeLogReturnRules = map[string]bool{
 func init() {
 	registerCommand(Command{
 		Name:        "remove-log-return",
-		Description: "Delete redundant log statements next to error-propagating returns; wrap bare 'return err'",
-		Usage:       "remove-log-return <file> [--rule <if-err-log-return|wrap-log-return|wrap-bridge-log-return>] [--json] [--dry-run] [--gate]",
+		Description: "Delete redundant log statements next to error-propagating returns; wrap bare 'return err' (--aggressive also fixes non-adjacent log/return pairs)",
+		Usage:       "remove-log-return <file> [--rule <if-err-log-return|wrap-log-return|wrap-bridge-log-return>] [--aggressive] [--json] [--dry-run] [--gate]",
 		MinArgs:     1,
 		MaxArgs:     1,
 		Flags:       removeLogReturnFlags,
@@ -42,17 +42,17 @@ func removeLogReturnCommand(args []string) error {
 	m := &mutation{op: "remove-log-return", file: file}
 	m.setCommonFlags(flags)
 	return m.run(func() (string, error) {
-		return applyRemoveLogReturn(file, rule)
+		return applyRemoveLogReturn(file, rule, flags["--aggressive"] != "")
 	})
 }
 
 // applyRemoveLogReturn rewrites file in place and returns a human summary.
-func applyRemoveLogReturn(file, rule string) (string, error) {
+func applyRemoveLogReturn(file, rule string, aggressive bool) (string, error) {
 	src, err := os.ReadFile(file)
 	if err != nil {
 		return "", err
 	}
-	out, sites, err := analyzer.ApplyLogReturnFixes(file, src, rule)
+	out, sites, err := analyzer.ApplyLogReturnFixes(file, src, rule, aggressive)
 	if err != nil {
 		return "", parseErrorf("%v", err)
 	}

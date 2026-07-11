@@ -60,6 +60,7 @@ type fileLogFn func(file string) ([]analyzer.LogPropagationIssue, error)
 
 func fileLogPropagationIssues(ctx LintContext, fn fileLogFn) []lintIssue {
 	var out []lintIssue
+	aggressive := ctx.AggressiveFix()
 	for _, f := range ctx.Files {
 		if analyzer.ShouldSkipFile(f, ctx.WalkOpts) {
 			continue
@@ -68,12 +69,18 @@ func fileLogPropagationIssues(ctx LintContext, fn fileLogFn) []lintIssue {
 		if err != nil || len(issues) == 0 {
 			continue
 		}
-		fixable := fixableLogReturnSites(f)
+		fixable := fixableLogReturnSites(f, aggressive)
 		for _, iss := range issues {
 			li := logPropagationToLintIssue(iss)
 			if fixable[fmt.Sprintf("%s:%d:%d", iss.Rule, iss.Line, iss.Column)] {
 				li.AutoFix = "remove-log-return"
 				li.AutoFixCmd = fmt.Sprintf("remove-log-return %s --rule %s", f, iss.Rule)
+				// The site was only reachable through the aggressive scan, so
+				// the replayed command needs the same reach.
+				if aggressive {
+					li.AutoFix = "remove-log-return (aggressive)"
+					li.AutoFixCmd += " --aggressive"
+				}
 			}
 			out = append(out, li)
 		}
@@ -82,8 +89,8 @@ func fileLogPropagationIssues(ctx LintContext, fn fileLogFn) []lintIssue {
 
 }
 
-func fixableLogReturnSites(f string) map[string]bool {
-	sites, err := analyzer.ListLogReturnFixSites(f)
+func fixableLogReturnSites(f string, aggressive bool) map[string]bool {
+	sites, err := analyzer.ListLogReturnFixSites(f, aggressive)
 	if err != nil {
 		return nil
 	}
@@ -92,6 +99,7 @@ func fixableLogReturnSites(f string) map[string]bool {
 		m[fmt.Sprintf("%s:%d:%d", s.Rule, s.Line, s.Column)] = true
 	}
 	return m
+
 }
 
 func runLogPropagationAutoFix(issue lintIssue, cmdName string, run func([]string) error) error {

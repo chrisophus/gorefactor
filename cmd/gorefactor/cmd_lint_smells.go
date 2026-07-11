@@ -35,7 +35,23 @@ func checkDeadCode(ctx LintContext) []lintIssue {
 			})
 		}
 	}
+	// Aggressive level: exported top-level functions unreferenced anywhere in
+	// the module. External (out-of-module) consumers are invisible to this
+	// scan, which is exactly why the fix level demands the verify gate.
+	if ctx.AggressiveFix() {
+		for _, d := range analyzer.DetectDeadExportedFunctions(files) {
+			issues = append(issues, lintIssue{
+				File:       d.File,
+				Rule:       "dead-code",
+				Severity:   "warning",
+				Message:    d.Summary(),
+				AutoFix:    "delete (aggressive)",
+				AutoFixCmd: "delete " + d.File + " " + d.Name + " --safe",
+			})
+		}
+	}
 	return issues
+
 }
 
 // smellRule is parametric so one struct handles all seven smell types.

@@ -27,6 +27,7 @@ func runReduceComplexity(args []string) error {
 	threshold := defaultComplexityThreshold
 	jsonOut := false
 	apply := false
+	allowReturns := false
 	var positionals []string
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -34,6 +35,8 @@ func runReduceComplexity(args []string) error {
 			// mode flag, consume nothing
 		case "--apply":
 			apply = true
+		case "--allow-returns":
+			allowReturns = true
 		case "--json":
 			jsonOut = true
 		case "--function":
@@ -61,7 +64,7 @@ func runReduceComplexity(args []string) error {
 	file, function := positionals[0], positionals[1]
 
 	if apply {
-		applied, err := reduceComplexityByExtraction(file, function, threshold)
+		applied, err := reduceComplexityByExtraction(file, function, threshold, allowReturns)
 		if err != nil {
 			return err
 		}

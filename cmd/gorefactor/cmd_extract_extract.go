@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -19,7 +20,7 @@ import (
 func extractCommand(args []string) error {
 	pos, flags := parseFlags(args, extractFlags)
 	if len(pos) < 4 {
-		return usageErrorf("usage: extract <file> <startLine> <endLine> <methodName>")
+		return usageErrorf("usage: extract <file> <startLine> <endLine> <methodName> [--allow-returns]")
 	}
 	file := pos[0]
 	m := &mutation{op: "extract", file: file}
@@ -59,11 +60,18 @@ func extractCommand(args []string) error {
 		return m.fail(notFoundErrorf("%v", err))
 	}
 
-	// Check for return statements with detailed error
-	if containsReturn(blockStmts) {
-		returnLines := findReturnLines(fset, blockStmts)
-		err := ExampleReturnStatementError(file, startLine, endLine, returnLines)
-		return m.fail(err)
+	// Return statements that belong to the block itself (not to function
+	// literals inside it) end the enclosing function, so a plain extraction
+	// would change behavior. With --allow-returns they are lifted into a
+	// (results..., done bool) helper instead of refused.
+	rets := directReturns(blockStmts)
+	allowReturns := flags["--allow-returns"] != ""
+	if len(rets) > 0 && !allowReturns {
+		returnLines := make([]int, 0, len(rets))
+		for _, r := range rets {
+			returnLines = append(returnLines, fset.Position(r.Pos()).Line)
+		}
+		return m.fail(ExampleReturnStatementError(file, startLine, endLine, returnLines))
 	}
 
 	// Improvement plan item 8: continue/break/goto that target an enclosing
@@ -76,7 +84,7 @@ func extractCommand(args []string) error {
 	if err != nil {
 		// Wrap type analysis errors with DetailedError
 		stderr := err.Error()
-		
+
 		// Check if it's an undefined variable/type error
 		if strings.Contains(stderr, "undefined") || strings.Contains(stderr, "not defined") {
 			detErr := NewDetailedError(ErrVariableOutOfScope, fmt.Sprintf("Cannot extract: %v", err)).
@@ -91,7 +99,7 @@ func extractCommand(args []string) error {
 				WithDetail("error", stderr)
 			return m.fail(detErr)
 		}
-		
+
 		// Generic type error
 		detErr := NewDetailedError(ErrTypeConflict, fmt.Sprintf("Cannot extract: %v", err)).
 			WithContext(file, startLine, endLine, "Type analysis failed").
@@ -103,7 +111,23 @@ func extractCommand(args []string) error {
 		return m.fail(detErr)
 	}
 
-	newFunc, callSite, err := buildExtractedFunc(fset, methodName, blockStmts, params, returns)
+	var newFunc, callSite string
+	if len(rets) > 0 {
+		resultTypes, rerr := enclosingResultTypes(fset, enclosing)
+		if rerr != nil {
+			return m.fail(rerr)
+		}
+		if verr := validateReturnLift(fset, rets, len(resultTypes), returns); verr != nil {
+			return m.fail(notFoundErrorf("cannot lift returns in lines %d-%d: %v", startLine, endLine, verr))
+		}
+		src, rerr := os.ReadFile(absFile)
+		if rerr != nil {
+			return m.fail(rerr)
+		}
+		newFunc, callSite, err = buildReturnLiftedFunc(fset, methodName, blockStmts, params, rets, resultTypes, src)
+	} else {
+		newFunc, callSite, err = buildExtractedFunc(fset, methodName, blockStmts, params, returns)
+	}
 	if err != nil {
 		return m.fail(err)
 	}
@@ -113,11 +137,15 @@ func extractCommand(args []string) error {
 			return "", err
 		}
 		msg := fmt.Sprintf("Extracted %s (params=%d, returns=%d)", methodName, len(params), len(returns))
+		if len(rets) > 0 {
+			msg = fmt.Sprintf("Extracted %s (params=%d, lifted returns=%d)", methodName, len(params), len(rets))
+		}
 		if w := smallExtractionWarning(fset, methodName, blockStmts, startLine, endLine); w != "" {
 			msg += "\n" + w
 		}
 		return msg, nil
 	})
+
 }
 
 // smallExtractionWarning implements improvement plan item 3: when the requested

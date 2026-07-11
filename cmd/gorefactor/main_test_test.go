@@ -187,7 +187,7 @@ func TestCheckExtractable(t *testing.T) {
 	b.WriteString("\tif true {\n\t\tfor i := 0; i < 10; i++ {\n\t\t\t_ = i\n\t\t}\n\t}\n")
 	b.WriteString("\treturn 0\n}\n")
 	path := writeTempGo(t, dir, "big.go", b.String())
-	hints := checkExtractable(path, 8)
+	hints := checkExtractable(path, 8, false)
 	if len(hints) == 0 {
 		t.Skip("priority threshold may filter out; ensure no panic")
 	}

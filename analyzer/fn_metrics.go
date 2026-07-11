@@ -40,7 +40,16 @@ func FunctionMetricsForFile(file string) ([]FunctionMetrics, error) {
 // function and method declaration.
 func FunctionMetricsForSource(filename string, src []byte) ([]FunctionMetrics, error) {
 	fset := token.NewFileSet()
-	astFile, err := parser.ParseFile(fset, filename, src, 0)
+	// parser.ParseFile takes src as `any`: a typed-nil []byte is a non-nil
+	// interface, which readSource treats as empty source instead of "read the
+	// file from disk". Convert to an untyped nil so the from-disk contract in
+	// this function's doc comment actually holds (this had silently disabled
+	// every FunctionMetricsForFile-based lint rule).
+	var srcAny any
+	if src != nil {
+		srcAny = src
+	}
+	astFile, err := parser.ParseFile(fset, filename, srcAny, 0)
 	if err != nil {
 		return nil, fmt.Errorf("parse file: %w", err)
 	}
@@ -63,6 +72,7 @@ func FunctionMetricsForSource(filename string, src []byte) ([]FunctionMetrics, e
 		})
 	}
 	return out, nil
+
 }
 
 // receiverTypeName returns the bare receiver type name (no "*", no type

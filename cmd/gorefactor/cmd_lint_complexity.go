@@ -27,12 +27,22 @@ func (r complexityRule) Run(ctx LintContext) []lintIssue {
 			if c.Complexity > defaultComplexityThreshold*2 {
 				sev = "error"
 			}
-			out = append(out, lintIssue{
+			iss := lintIssue{
 				File:     f,
 				Rule:     "complexity",
 				Severity: sev,
 				Message:  fmt.Sprintf("%s has cyclomatic complexity %d (threshold %d, line %d) — consider extracting", c.Name, c.Complexity, defaultComplexityThreshold, c.Line),
-			})
+			}
+			// Only offer the autofix when there is at least one block to shed;
+			// a function whose complexity is pure straight-line branching has no
+			// extractable top-level block (RecommendComplexityReduction returns
+			// none), and the extract engine additionally refuses return-bearing
+			// blocks, so the fix is advertised optimistically and best-effort.
+			if red, rerr := analyzer.RecommendComplexityReduction(f, c.Name, defaultComplexityThreshold); rerr == nil && len(red.Extractions) > 0 {
+				iss.AutoFix = "extract sub-blocks"
+				iss.AutoFixCmd = fmt.Sprintf("gorefactor recommend --reduce-complexity %s %s --apply", f, c.Name)
+			}
+			out = append(out, iss)
 		}
 	}
 	return out

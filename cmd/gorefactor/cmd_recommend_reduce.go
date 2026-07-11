@@ -26,11 +26,14 @@ func hasFlag(args []string, flag string) bool {
 func runReduceComplexity(args []string) error {
 	threshold := defaultComplexityThreshold
 	jsonOut := false
+	apply := false
 	var positionals []string
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--reduce-complexity":
 			// mode flag, consume nothing
+		case "--apply":
+			apply = true
 		case "--json":
 			jsonOut = true
 		case "--function":
@@ -56,6 +59,19 @@ func runReduceComplexity(args []string) error {
 		return fmt.Errorf("usage: recommend --reduce-complexity <file> <Func> [--threshold N] [--json]")
 	}
 	file, function := positionals[0], positionals[1]
+
+	if apply {
+		applied, err := reduceComplexityByExtraction(file, function, threshold)
+		if err != nil {
+			return err
+		}
+		if applied == 0 {
+			fmt.Printf("No blocks extracted from %s — complexity is concentrated in return-bearing branches the extract engine cannot lift.\n", function)
+			return nil
+		}
+		fmt.Printf("Extracted %d block(s) from %s to reduce complexity.\n", applied, function)
+		return nil
+	}
 
 	res, err := analyzer.RecommendComplexityReduction(file, function, threshold)
 	if err != nil {

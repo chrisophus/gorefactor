@@ -9,13 +9,14 @@ func init() {
 	registerCommand(Command{
 		Name:        "recommend",
 		Description: "Recommend code blocks for method extraction",
-		Usage:       "recommend <file.go> [<Func>] [--short] [--reduce-complexity [--threshold N] [--json]] [--function NAME] [--min-complexity N] [--max-complexity N] [--min-statements N] [--max-statements N] [--max-read-vars N] [--max-write-vars N] [--num-leading-stmts N]",
+		Usage:       "recommend <file.go> [<Func>] [--short] [--reduce-complexity [--threshold N] [--apply] [--json]] [--function NAME] [--min-complexity N] [--max-complexity N] [--min-statements N] [--max-statements N] [--max-read-vars N] [--max-write-vars N] [--num-leading-stmts N]",
 		MinArgs:     0,
 		MaxArgs:     2,
 		Flags: map[string]bool{
 			"--help":              false,
 			"--short":             false,
 			"--reduce-complexity": false,
+			"--apply":             false,
 			"--threshold":         true,
 			"--json":              false,
 			"--function":          true,

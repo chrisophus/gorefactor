@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
 
 	"github.com/chrisophus/gorefactor/analyzer"
 )
@@ -24,47 +23,18 @@ func hasFlag(args []string, flag string) bool {
 // minimum set of extractable top-level blocks that brings an over-threshold
 // function below the complexity threshold.
 func runReduceComplexity(args []string) error {
-	threshold := defaultComplexityThreshold
-	jsonOut := false
-	apply := false
-	allowReturns := false
-	var positionals []string
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--reduce-complexity":
-			// mode flag, consume nothing
-		case "--apply":
-			apply = true
-		case "--allow-returns":
-			allowReturns = true
-		case "--json":
-			jsonOut = true
-		case "--function":
-			if i+1 < len(args) {
-				positionals = append(positionals, args[i+1])
-				i++
-			}
-		case "--threshold":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --threshold")
-			}
-			val, err := strconv.Atoi(args[i+1])
-			if err != nil {
-				return fmt.Errorf("invalid value for --threshold: %v", err)
-			}
-			threshold = val
-			i++
-		default:
-			positionals = append(positionals, args[i])
-		}
+	rf, err := parseReduceFlags(args, "--reduce-complexity", "--threshold", defaultComplexityThreshold)
+	if err != nil {
+		return err
 	}
-	if len(positionals) < 2 {
+	if len(rf.positionals) < 2 {
 		return fmt.Errorf("usage: recommend --reduce-complexity <file> <Func> [--threshold N] [--json]")
 	}
-	file, function := positionals[0], positionals[1]
+	file, function := rf.positionals[0], rf.positionals[1]
+	threshold := rf.numeric
 
-	if apply {
-		applied, err := reduceComplexityByExtraction(file, function, threshold, allowReturns)
+	if rf.apply {
+		applied, err := reduceComplexityByExtraction(file, function, threshold, rf.allowReturns)
 		if err != nil {
 			return err
 		}
@@ -81,7 +51,7 @@ func runReduceComplexity(args []string) error {
 		return err
 	}
 
-	if jsonOut {
+	if rf.jsonOut {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(res)
@@ -108,4 +78,5 @@ func runReduceComplexity(args []string) error {
 			res.Projected, res.Threshold)
 	}
 	return nil
+
 }

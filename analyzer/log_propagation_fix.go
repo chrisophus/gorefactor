@@ -93,95 +93,98 @@ func collectLogReturnEdits(f *ast.File, fset *token.FileSet, src []byte, rule st
 		if !ok || fn.Body == nil {
 			continue
 		}
-		// Pass 1: wrap/log/return triples and wrap/bridge/log/return quads in
-		// every statement block. Runs before the pair pass so a pair scan
-		// never re-claims a log statement that belongs to a triple or quad.
-		ast.Inspect(fn.Body, func(n ast.Node) bool {
-			blk, ok := n.(*ast.BlockStmt)
-			if !ok {
-				return true
-			}
-			list := blk.List
-			for i := 0; i+2 < len(list); i++ {
-				if want("wrap-log-return") && isAssignErrFmtWrap(list[i]) && isStructuredLogStmt(list[i+1]) {
-					if ret, ok := list[i+2].(*ast.ReturnStmt); ok && returnLastIsBareErr(ret) && !deletedLogs[list[i+1]] {
-						deletedLogs[list[i+1]] = true
-						edits = append(edits, deleteStmtEdit(fset, src, list[i+1]))
-						record("wrap-log-return", fn, ret)
-					}
-				}
-				if want("wrap-bridge-log-return") {
-					if ret, ok := wrapBridgeLogReturnQuadAt(list, i); ok && !deletedLogs[list[i+2]] {
-						deletedLogs[list[i+2]] = true
-						edits = append(edits, deleteStmtEdit(fset, src, list[i+2]))
-						record("wrap-bridge-log-return", fn, ret)
-					}
-				}
-			}
-			return true
-		})
+		// Runs before the if-err-log-return pass so that pass never re-claims a
+		// log statement that belongs to a triple or quad.
+		edits = append(edits, collectWrapQuadEdits(fn, fset, src, want, deletedLogs, record)...)
 		if !want("if-err-log-return") {
 			continue
 		}
-		// Pass 2: log/return pairs at the top level of an `if err != nil`
-		// body. The safe subset requires the flagged return immediately after
-		// the log; aggressive mode tolerates other statements between them —
-		// the log still duplicates the context the propagated error carries,
-		// and the caller's verify gate backstops the deletion.
-		ast.Inspect(fn.Body, func(n ast.Node) bool {
-			ifStmt, ok := n.(*ast.IfStmt)
-			if !ok || !isErrNotNil(ifStmt.Cond) {
-				return true
-			}
-			list := ifStmt.Body.List
-			for i := 0; i+1 < len(list); i++ {
-				if !isStructuredLogStmt(list[i]) || deletedLogs[list[i]] {
-					continue
-				}
-				// A log preceded by an err = fmt.Errorf wrap is the tail of a
-				// wrap-log-return triple; that rule's fix (log deletion alone)
-				// is the right transform, so never wrap here on top of it.
-				if i > 0 && isAssignErrFmtWrap(list[i-1]) {
-					continue
-				}
-				j := i + 1
-				if aggressive {
-					for j < len(list) {
-						if _, isRet := list[j].(*ast.ReturnStmt); isRet {
-							break
-						}
-						j++
-					}
-					if j >= len(list) {
-						continue
-					}
-				}
-				ret, ok := list[j].(*ast.ReturnStmt)
-				if !ok {
-					continue
-				}
-				switch {
-				case isBareReturnErr(ret):
-					deletedLogs[list[i]] = true
-					edits = append(edits, deleteStmtEdit(fset, src, list[i]))
-					// Several logs can precede the same return in aggressive
-					// mode; wrap it exactly once or the edits would overlap.
-					if !wrappedRets[ret] {
-						wrappedRets[ret] = true
-						edits = append(edits, wrapReturnErrEdit(fset, ret, logReturnWrapContext(ifStmt, fn)))
-					}
-					record("if-err-log-return", fn, ret)
-				case isReturnFmtErrorfWrappingErr(ret):
-					deletedLogs[list[i]] = true
-					edits = append(edits, deleteStmtEdit(fset, src, list[i]))
-					record("if-err-log-return", fn, ret)
-				}
-			}
-			return true
-		})
+		edits = append(edits, collectIfErrLogReturnEdits(fn, fset, src, aggressive, deletedLogs, wrappedRets, record)...)
 	}
 	return edits, sites
 
+}
+
+func collectWrapQuadEdits(fn *ast.FuncDecl, fset *token.FileSet, src []byte, want func(string) bool, deletedLogs map[ast.Stmt]bool, record func(string, *ast.FuncDecl, *ast.ReturnStmt)) []srcEdit {
+	var edits []srcEdit
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		blk, ok := n.(*ast.BlockStmt)
+		if !ok {
+			return true
+		}
+		list := blk.List
+		for i := 0; i+2 < len(list); i++ {
+			if want("wrap-log-return") && isAssignErrFmtWrap(list[i]) && isStructuredLogStmt(list[i+1]) {
+				if ret, ok := list[i+2].(*ast.ReturnStmt); ok && returnLastIsBareErr(ret) && !deletedLogs[list[i+1]] {
+					deletedLogs[list[i+1]] = true
+					edits = append(edits, deleteStmtEdit(fset, src, list[i+1]))
+					record("wrap-log-return", fn, ret)
+				}
+			}
+			if want("wrap-bridge-log-return") {
+				if ret, ok := wrapBridgeLogReturnQuadAt(list, i); ok && !deletedLogs[list[i+2]] {
+					deletedLogs[list[i+2]] = true
+					edits = append(edits, deleteStmtEdit(fset, src, list[i+2]))
+					record("wrap-bridge-log-return", fn, ret)
+				}
+			}
+		}
+		return true
+	})
+	return edits
+}
+
+func collectIfErrLogReturnEdits(fn *ast.FuncDecl, fset *token.FileSet, src []byte, aggressive bool, deletedLogs map[ast.Stmt]bool, wrappedRets map[*ast.ReturnStmt]bool, record func(string, *ast.FuncDecl, *ast.ReturnStmt)) []srcEdit {
+	var edits []srcEdit
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		ifStmt, ok := n.(*ast.IfStmt)
+		if !ok || !isErrNotNil(ifStmt.Cond) {
+			return true
+		}
+		list := ifStmt.Body.List
+		for i := 0; i+1 < len(list); i++ {
+			if !isStructuredLogStmt(list[i]) || deletedLogs[list[i]] {
+				continue
+			}
+
+			if i > 0 && isAssignErrFmtWrap(list[i-1]) {
+				continue
+			}
+			j := i + 1
+			if aggressive {
+				for j < len(list) {
+					if _, isRet := list[j].(*ast.ReturnStmt); isRet {
+						break
+					}
+					j++
+				}
+				if j >= len(list) {
+					continue
+				}
+			}
+			ret, ok := list[j].(*ast.ReturnStmt)
+			if !ok {
+				continue
+			}
+			switch {
+			case isBareReturnErr(ret):
+				deletedLogs[list[i]] = true
+				edits = append(edits, deleteStmtEdit(fset, src, list[i]))
+
+				if !wrappedRets[ret] {
+					wrappedRets[ret] = true
+					edits = append(edits, wrapReturnErrEdit(fset, ret, logReturnWrapContext(ifStmt, fn)))
+				}
+				record("if-err-log-return", fn, ret)
+			case isReturnFmtErrorfWrappingErr(ret):
+				deletedLogs[list[i]] = true
+				edits = append(edits, deleteStmtEdit(fset, src, list[i]))
+				record("if-err-log-return", fn, ret)
+			}
+		}
+		return true
+	})
+	return edits
 }
 
 // logReturnWrapContext derives the fmt.Errorf context for a wrapped return:

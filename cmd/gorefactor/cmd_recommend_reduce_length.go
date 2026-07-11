@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"sort"
-	"strconv"
 
 	"github.com/chrisophus/gorefactor/analyzer"
 )
@@ -16,47 +14,18 @@ import (
 // top-level blocks whose extraction brings an over-threshold function under
 // the line limit, and with --apply extracts them.
 func runReduceLength(args []string) error {
-	maxLines := longFunctionThreshold
-	jsonOut := false
-	apply := false
-	allowReturns := false
-	var positionals []string
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--reduce-length":
-			// mode flag, consume nothing
-		case "--apply":
-			apply = true
-		case "--allow-returns":
-			allowReturns = true
-		case "--json":
-			jsonOut = true
-		case "--function":
-			if i+1 < len(args) {
-				positionals = append(positionals, args[i+1])
-				i++
-			}
-		case "--max-lines":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --max-lines")
-			}
-			val, err := strconv.Atoi(args[i+1])
-			if err != nil {
-				return fmt.Errorf("invalid value for --max-lines: %v", err)
-			}
-			maxLines = val
-			i++
-		default:
-			positionals = append(positionals, args[i])
-		}
+	rf, err := parseReduceFlags(args, "--reduce-length", "--max-lines", longFunctionThreshold)
+	if err != nil {
+		return err
 	}
-	if len(positionals) < 2 {
+	if len(rf.positionals) < 2 {
 		return fmt.Errorf("usage: recommend --reduce-length <file> <Func|Receiver:Method> [--max-lines N] [--json] [--apply [--allow-returns]]")
 	}
-	file, function := positionals[0], positionals[1]
+	file, function := rf.positionals[0], rf.positionals[1]
+	maxLines := rf.numeric
 
-	if apply {
-		applied, err := reduceLengthByExtraction(file, function, maxLines, allowReturns)
+	if rf.apply {
+		applied, err := reduceLengthByExtraction(file, function, maxLines, rf.allowReturns)
 		if err != nil {
 			return err
 		}
@@ -72,7 +41,7 @@ func runReduceLength(args []string) error {
 	if err != nil {
 		return err
 	}
-	if jsonOut {
+	if rf.jsonOut {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(res)
@@ -88,6 +57,7 @@ func runReduceLength(args []string) error {
 	}
 	fmt.Printf("Apply with: gorefactor recommend --reduce-length %s %s --apply\n", file, function)
 	return nil
+
 }
 
 // reduceLengthByExtraction applies the extractions recommended for function in
@@ -100,20 +70,10 @@ func reduceLengthByExtraction(file, function string, maxLines int, allowReturns 
 	if err != nil {
 		return 0, err
 	}
-	ext := append([]analyzer.LengthExtraction(nil), res.Extractions...)
-	sort.SliceStable(ext, func(i, j int) bool { return ext[i].StartLine > ext[j].StartLine })
-
-	applied := 0
-	for _, e := range ext {
-		args := []string{file, strconv.Itoa(e.StartLine), strconv.Itoa(e.EndLine), e.Suggestion}
-		if allowReturns {
-			args = append(args, "--allow-returns")
-		}
-		if err := extractCommand(args); err != nil {
-			fmt.Fprintf(os.Stderr, "  skip block L%d-%d: %v\n", e.StartLine, e.EndLine, err)
-			continue
-		}
-		applied++
+	specs := make([]extractionSpec, len(res.Extractions))
+	for i, e := range res.Extractions {
+		specs[i] = extractionSpec{StartLine: e.StartLine, EndLine: e.EndLine, Suggestion: e.Suggestion}
 	}
-	return applied, nil
+	return applyExtractionsBottomUp(file, specs, allowReturns), nil
+
 }

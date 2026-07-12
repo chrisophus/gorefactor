@@ -57,15 +57,29 @@ func fileFuncorderIssues(ctx LintContext, rule string) []lintIssue {
 	return out
 }
 
+type funcorderFunctionRule struct{}
+
+func (funcorderFunctionRule) Name() string { return "funcorder-function" }
+
+func (r funcorderFunctionRule) Run(ctx LintContext) []lintIssue {
+	return fileFuncorderIssues(ctx, "funcorder-function")
+}
+
+func (r funcorderFunctionRule) AutoFix(issue lintIssue, _ LintContext) error {
+	return runFuncorderAutoFix(issue)
+}
+
 func runFuncorderAutoFix(issue lintIssue) error {
 	return runLogPropagationAutoFix(issue, "reorder-funcorder", reorderFuncorderCommand)
 }
 
 // funcorderRules returns the funcorder-derived lint rules (constructor
-// placement and exported-before-unexported method ordering).
+// placement, exported-before-unexported method ordering, and
+// exported-before-unexported top-level function ordering).
 func funcorderRules() []LintRule {
 	return []LintRule{
 		funcorderConstructorRule{},
 		funcorderStructMethodRule{},
+		funcorderFunctionRule{},
 	}
 }

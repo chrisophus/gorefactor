@@ -176,6 +176,230 @@ func TestApplyFuncorderFixes_Idempotent(t *testing.T) {
 	}
 }
 
+const funcorderLooseFuncSrc = `package main
+
+func init() {
+	println("init")
+}
+
+func helper() int {
+	return 1
+}
+
+func Exported() int {
+	return helper()
+}
+
+func main() {}
+`
+
+const funcorderLooseFuncCleanSrc = `package main
+
+func init() {
+	println("init")
+}
+
+func Exported() int {
+	return helper()
+}
+
+func helper() int {
+	return 1
+}
+
+func main() {}
+`
+
+const funcorderOnlyCtorAndInitSrc = `package main
+
+type Widget struct {
+	name string
+}
+
+func NewWidget(name string) *Widget {
+	return &Widget{name: name}
+}
+
+func init() {
+	println("boot")
+}
+
+func (w *Widget) Exported() string {
+	return w.name
+}
+`
+
+func TestFileFuncorderIssues_DetectsLooseFunctionViolation(t *testing.T) {
+	path := writeTempGoFile(t, funcorderLooseFuncSrc)
+	issues, err := FileFuncorderIssues(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, iss := range issues {
+		if iss.Rule == funcorderFunctionRuleName {
+			found = true
+			if iss.FuncName != "helper" {
+				t.Errorf("expected FuncName=helper, got %q", iss.FuncName)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("expected funcorder-function issue, got: %+v", issues)
+	}
+}
+
+func TestFileFuncorderIssues_NoFalsePositiveForCtorAndInit(t *testing.T) {
+	path := writeTempGoFile(t, funcorderOnlyCtorAndInitSrc)
+	issues, err := FileFuncorderIssues(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, iss := range issues {
+		if iss.Rule == funcorderFunctionRuleName {
+			t.Errorf("did not expect funcorder-function issue (only ctor+init are loose), got: %+v", issues)
+		}
+	}
+}
+
+func TestFileFuncorderIssues_InitNeverFlagged(t *testing.T) {
+	path := writeTempGoFile(t, funcorderLooseFuncCleanSrc)
+	issues, err := FileFuncorderIssues(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, iss := range issues {
+		if iss.Rule == funcorderFunctionRuleName {
+			t.Errorf("clean loose-function ordering should have no issue, got: %+v", issues)
+		}
+		if iss.FuncName == "init" {
+			t.Errorf("init() must never be flagged, got: %+v", issues)
+		}
+	}
+}
+
+func TestApplyFuncorderFixes_ReordersLooseFunctions(t *testing.T) {
+	path := writeTempGoFile(t, funcorderLooseFuncSrc)
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, n, err := ApplyFuncorderFixes(path, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n == 0 {
+		t.Fatal("expected at least 1 fix applied")
+	}
+	result := string(out)
+	initIdx := strings.Index(result, "func init()")
+	helperIdx := strings.Index(result, "func helper()")
+	exportedIdx := strings.Index(result, "func Exported()")
+	mainIdx := strings.Index(result, "func main()")
+	if initIdx < 0 || helperIdx < 0 || exportedIdx < 0 || mainIdx < 0 {
+		t.Fatalf("expected all decls present:\n%s", result)
+	}
+	if !(initIdx < exportedIdx && initIdx < helperIdx) {
+		t.Errorf("init() must stay first:\n%s", result)
+	}
+	if !(exportedIdx < helperIdx) {
+		t.Errorf("expected Exported() before helper():\n%s", result)
+	}
+	if mainIdx < helperIdx {
+		t.Errorf("main() should remain after the reordered loose functions:\n%s", result)
+	}
+}
+
+func TestApplyFuncorderFixes_NoopWhenLooseFunctionsAlreadyOrdered(t *testing.T) {
+	path := writeTempGoFile(t, funcorderLooseFuncCleanSrc)
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, n, err := ApplyFuncorderFixes(path, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Errorf("expected 0 fixes on already-clean file, got %d", n)
+	}
+	if string(out) != string(src) {
+		t.Error("clean file should be returned unchanged")
+	}
+}
+
+func TestApplyFuncorderFixes_CombinedStructAndFunctionViolations(t *testing.T) {
+	src := `package main
+
+type Widget struct {
+	name string
+}
+
+func (w *Widget) unexported() string {
+	return w.name
+}
+
+func (w *Widget) Exported() string {
+	return w.name
+}
+
+func NewWidget(name string) *Widget {
+	return &Widget{name: name}
+}
+
+func helper() int {
+	return 1
+}
+
+func Exported2() int {
+	return helper()
+}
+
+func main() {}
+`
+	path := writeTempGoFile(t, src)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, n, err := ApplyFuncorderFixes(path, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n < 2 {
+		t.Fatalf("expected both the struct group and the loose-function group fixed, got n=%d", n)
+	}
+	result := string(out)
+
+	structIdx := strings.Index(result, "type Widget struct")
+	ctorIdx := strings.Index(result, "func NewWidget")
+	structExportedIdx := strings.Index(result, "func (w *Widget) Exported")
+	structUnexpIdx := strings.Index(result, "func (w *Widget) unexported")
+	helperIdx := strings.Index(result, "func helper()")
+	exported2Idx := strings.Index(result, "func Exported2()")
+	if structIdx < 0 || ctorIdx < 0 || structExportedIdx < 0 || structUnexpIdx < 0 || helperIdx < 0 || exported2Idx < 0 {
+		t.Fatalf("expected all decls present:\n%s", result)
+	}
+	if !(structIdx < ctorIdx && ctorIdx < structExportedIdx && structExportedIdx < structUnexpIdx) {
+		t.Errorf("struct group not fixed:\n%s", result)
+	}
+	if !(exported2Idx < helperIdx) {
+		t.Errorf("loose function group not fixed:\n%s", result)
+	}
+
+	// Idempotent.
+	second, n2, err := ApplyFuncorderFixes(path, out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n2 != 0 {
+		t.Errorf("second pass should be a no-op, changed %d", n2)
+	}
+	if string(second) != string(out) {
+		t.Error("second pass should return the same source unchanged")
+	}
+}
+
 func TestApplyFuncorderFixes_UnrelatedDeclsUntouched(t *testing.T) {
 	src := `package main
 

@@ -23,6 +23,7 @@ func TestDefaultLintRules_ExpectedSet(t *testing.T) {
 		"duplicate-bare-sentinel",
 		"funcorder-constructor",
 		"funcorder-struct-method",
+		"funcorder-function",
 		"god-object",
 		"excessive-params",
 		"excessive-returns",
@@ -89,6 +90,7 @@ func TestFixableRule_ExpectedSet(t *testing.T) {
 		"duplicate-bare-sentinel": true,
 		"funcorder-constructor":   true,
 		"funcorder-struct-method": true,
+		"funcorder-function":      true,
 	}
 	got := make(map[string]bool)
 	for _, r := range defaultLintRules() {

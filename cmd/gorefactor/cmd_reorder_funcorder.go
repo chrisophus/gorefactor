@@ -14,7 +14,7 @@ var reorderFuncorderFlags = mutFlagSpec(nil)
 func init() {
 	registerCommand(Command{
 		Name:        "reorder-funcorder",
-		Description: "Reorder struct constructors/methods to satisfy funcorder placement rules (constructor after struct, exported methods before unexported)",
+		Description: "Reorder struct constructors/methods and top-level functions to satisfy funcorder placement rules (constructor after struct, exported methods/functions before unexported)",
 		Usage:       "reorder-funcorder <file> [--json] [--dry-run] [--gate]",
 		MinArgs:     1,
 		MaxArgs:     1,
@@ -59,5 +59,5 @@ func applyReorderFuncorder(file string) (string, error) {
 	if err := orchestrator.FormatImports(file); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", file, err)
 	}
-	return fmt.Sprintf("reorder-funcorder: reordered %d struct group(s) in %s", n, file), nil
+	return fmt.Sprintf("reorder-funcorder: reordered %d group(s) in %s", n, file), nil
 }

@@ -31,6 +31,7 @@ type FuncorderIssue struct {
 const (
 	funcorderConstructorRuleName  = "funcorder-constructor"
 	funcorderStructMethodRuleName = "funcorder-struct-method"
+	funcorderFunctionRuleName     = "funcorder-function"
 )
 
 // FileFuncorderIssues parses file and reports funcorder-constructor and
@@ -49,6 +50,9 @@ func funcorderIssuesForFile(f *ast.File, fset *token.FileSet, filename string) [
 	var out []FuncorderIssue
 	for _, g := range groups {
 		out = append(out, g.issues(fset, filename)...)
+	}
+	if iss, ok := funcorderFunctionIssue(f, fset, filename, groups); ok {
+		out = append(out, iss)
 	}
 	return out
 }
@@ -233,15 +237,22 @@ type declSpan struct {
 }
 
 // ApplyFuncorderFixes rewrites the top-level declaration order of file to
-// satisfy funcorder's constructor and struct-method placement rules:
+// satisfy funcorder's constructor, struct-method, and loose-function
+// placement rules:
 //
 //	struct type decl -> constructor(s) (original relative order) ->
 //	exported methods (original relative order) -> unexported methods
 //	(original relative order)
 //
-// Declarations unrelated to any struct group keep their original relative
-// order and position untouched. Returns the rewritten, gofmt'd source and
-// the number of struct groups that were actually reordered.
+// and, independently, top-level functions that aren't methods, `init()`, or
+// a tracked constructor are reordered so exported ones precede unexported
+// ones (each subgroup keeping its original relative order).
+//
+// Declarations unrelated to any struct group or loose-function slot keep
+// their original relative order and position untouched. Returns the
+// rewritten, gofmt'd source and the number of fixes actually applied
+// (struct groups reordered, plus 1 if the loose-function pass changed
+// anything).
 func ApplyFuncorderFixes(filename string, src []byte) ([]byte, int, error) {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, filename, src, parser.ParseComments)
@@ -249,9 +260,6 @@ func ApplyFuncorderFixes(filename string, src []byte) ([]byte, int, error) {
 		return nil, 0, fmt.Errorf("parse %s: %w", filename, err)
 	}
 	groups := funcorderGroups(f)
-	if len(groups) == 0 {
-		return src, 0, nil
-	}
 
 	// Build the desired index permutation per group; count only groups that
 	// actually need reordering.
@@ -298,6 +306,31 @@ func ApplyFuncorderFixes(filename string, src []byte) ([]byte, int, error) {
 		if !placed[i] {
 			newOrder = append(newOrder, i)
 			placed[i] = true
+		}
+	}
+
+	// Second pass: reorder loose top-level functions (excluding methods,
+	// init, and tracked constructors — those are covered by the group pass
+	// above) so exported functions precede unexported ones. Only the decl
+	// occupying each loose-function slot in newOrder changes; every other
+	// slot (struct groups, types, vars, imports) keeps its exact position.
+	ctorIdx := funcorderCtorIdxSet(groups)
+	var loosePositions, looseDeclIdx []int
+	for pos, idx := range newOrder {
+		fn, ok := f.Decls[idx].(*ast.FuncDecl)
+		if !ok || (fn.Recv != nil && len(fn.Recv.List) > 0) || fn.Name.Name == "init" || ctorIdx[idx] {
+			continue
+		}
+		loosePositions = append(loosePositions, pos)
+		looseDeclIdx = append(looseDeclIdx, idx)
+	}
+	if len(looseDeclIdx) >= 2 {
+		reordered := funcorderStablePartitionExported(f, looseDeclIdx)
+		if !sameOrder(reordered, looseDeclIdx) {
+			changed++
+			for i, pos := range loosePositions {
+				newOrder[pos] = reordered[i]
+			}
 		}
 	}
 

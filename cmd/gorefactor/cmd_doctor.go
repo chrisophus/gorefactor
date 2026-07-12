@@ -11,11 +11,11 @@ import (
 func init() {
 	registerCommand(Command{
 		Name:        "doctor",
-		Description: "Aggregate health gate: lint + golangci-lint + go-arch-lint + build + test. Exits non-zero on failure. [--json]",
-		Usage:       "doctor [dir] [--json]",
+		Description: "Aggregate health gate: lint + golangci-lint + go-arch-lint + build + test. Exits non-zero on failure. [--json] [--fix [--fix-level safe|aggressive]]",
+		Usage:       "doctor [dir] [--json] [--fix] [--fix-level safe|aggressive]",
 		MinArgs:     0,
 		MaxArgs:     1,
-		Flags:       map[string]bool{"--json": false},
+		Flags:       map[string]bool{"--json": false, "--fix": false, "--fix-level": true},
 		Run:         doctorCommand,
 	})
 }
@@ -34,25 +34,55 @@ func trimOutput(b []byte) string {
 func doctorCommand(args []string) error {
 	root := "."
 	jsonOut := false
-	for _, a := range args {
+	fix := false
+	fixLevel := fixLevelSafe
+	for i := 0; i < len(args); i++ {
+		a := args[i]
 		switch {
 		case a == "--json":
 			jsonOut = true
+		case a == "--fix":
+			fix = true
+		case a == "--fix-level":
+			if i+1 >= len(args) {
+				return fmt.Errorf("--fix-level requires safe or aggressive")
+			}
+			switch args[i+1] {
+			case fixLevelSafe, fixLevelAggressive:
+				fixLevel = args[i+1]
+			default:
+				return fmt.Errorf("--fix-level must be safe or aggressive")
+			}
+			i++
 		case !strings.HasPrefix(a, "--"):
 			root = a
 		}
 	}
+
+	var stages []doctorStage
+	if fix {
+		applied, reverted, failed, ferr := doctorAutoFix(root, fixLevel)
+		if ferr != nil {
+			return ferr
+		}
+		stages = append(stages, doctorStage{
+			name: "autofix",
+			ok:   failed == 0,
+			info: fmt.Sprintf("%d applied, %d reverted (gate failed), %d failed to apply", applied, reverted, failed),
+		})
+	}
+
 	lintStage, err := doctorLintStage(root)
 	if err != nil {
 		return err
 	}
-	stages := []doctorStage{
+	stages = append(stages,
 		lintStage,
 		doctorGolangciStage(root),
 		doctorArchStage(root),
 		doctorGoStage(root, "build"),
 		doctorGoStage(root, "test"),
-	}
+	)
 	reportDoctorStages(stages, jsonOut)
 	for _, s := range stages {
 		if !s.ok {
@@ -148,4 +178,28 @@ func reportDoctorStages(stages []doctorStage, jsonOut bool) {
 		}
 		fmt.Printf("  [%s] %-6s %s\n", status, s.name, s.info)
 	}
+}
+
+// doctorAutoFix runs the default lint ruleset over root and applies every
+// autofix with the build+test gate on (each fix is snapshotted and reverted
+// individually if it breaks the gate) — the same guarantee as
+// `lint --fix --verify`, but silent and always verified, since doctor is
+// itself the trust gate. Used by `doctor --fix`.
+func doctorAutoFix(root, fixLevel string) (applied, reverted, failed int, err error) {
+	opts := lintOptions{root: root, fix: true, verify: true, fixLevel: fixLevel}
+	if err := opts.loadConfig(); err != nil {
+		return 0, 0, 0, err
+	}
+	ctx := opts.lintContext(nil)
+	files, ferr := collectGoFiles(root, ctx.WalkOpts)
+	if ferr != nil {
+		return 0, 0, 0, ferr
+	}
+	ctx.Files = files
+
+	rules := filterLintRules(defaultLintRules(), opts)
+	issues := runLintRules(rules, ctx, opts)
+	issues = applyConfigSeverity(issues, opts)
+	applied, reverted, failed = applyAutoFixes(issues, ctx, rules, true)
+	return applied, reverted, failed, nil
 }

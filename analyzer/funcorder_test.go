@@ -380,10 +380,10 @@ func main() {}
 	if structIdx < 0 || ctorIdx < 0 || structExportedIdx < 0 || structUnexpIdx < 0 || helperIdx < 0 || exported2Idx < 0 {
 		t.Fatalf("expected all decls present:\n%s", result)
 	}
-	if !(structIdx < ctorIdx && ctorIdx < structExportedIdx && structExportedIdx < structUnexpIdx) {
+	if structIdx >= ctorIdx || ctorIdx >= structExportedIdx || structExportedIdx >= structUnexpIdx {
 		t.Errorf("struct group not fixed:\n%s", result)
 	}
-	if !(exported2Idx < helperIdx) {
+	if exported2Idx >= helperIdx {
 		t.Errorf("loose function group not fixed:\n%s", result)
 	}
 

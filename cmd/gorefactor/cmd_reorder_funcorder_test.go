@@ -44,7 +44,7 @@ func TestReorderFuncorderFixesOrdering(t *testing.T) {
 	if structIdx < 0 || ctorIdx < 0 || exportedIdx < 0 || unexpIdx < 0 || mainIdx < 0 {
 		t.Fatalf("expected all decls present in output:\n%s", src)
 	}
-	if !(structIdx < ctorIdx && ctorIdx < exportedIdx && exportedIdx < unexpIdx) {
+	if structIdx >= ctorIdx || ctorIdx >= exportedIdx || exportedIdx >= unexpIdx {
 		t.Errorf("expected order struct < ctor < exported < unexported, got:\n%s", src)
 	}
 	// main() is unrelated to the struct group and should stay after it.
@@ -121,10 +121,10 @@ func TestReorderFuncorderFixesLooseFunctionOrdering(t *testing.T) {
 	if initIdx < 0 || helperIdx < 0 || exportedIdx < 0 || mainIdx < 0 {
 		t.Fatalf("expected all decls present in output:\n%s", src)
 	}
-	if !(initIdx < exportedIdx && initIdx < helperIdx) {
+	if initIdx >= exportedIdx || initIdx >= helperIdx {
 		t.Errorf("init() must stay in place (first decl):\n%s", src)
 	}
-	if !(exportedIdx < helperIdx) {
+	if exportedIdx >= helperIdx {
 		t.Errorf("expected Exported() before helper(), got:\n%s", src)
 	}
 }

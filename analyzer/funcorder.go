@@ -10,14 +10,14 @@ import (
 	"sort"
 )
 
-// FuncorderIssue describes a violation of funcorder's declaration-ordering
-// rules: a struct's constructor must be declared immediately after the
-// struct and before any of its methods, and a struct's exported methods
-// must all precede its unexported methods (in file declaration order).
+// FuncorderIssue describes a violation of funcorder's declaration-ordering rules: a struct's
+// constructor must be declared before any of its methods (autofix places it immediately after the
+// struct), a struct's exported methods must all precede its unexported methods, and top-level
+// receiver-less functions (excluding init() and tracked constructors) must have exported ones
+// before unexported ones — all in file declaration order.
 //
-// Detection is file-local: a struct's methods declared in other files of
-// the same package are out of scope, matching how `split` operates
-// file-locally.
+// Detection is file-local: a struct's methods declared in other files of the same package are out
+// of scope, matching how `split` operates file-locally.
 type FuncorderIssue struct {
 	File       string
 	Line       int
@@ -34,8 +34,8 @@ const (
 	funcorderFunctionRuleName     = "funcorder-function"
 )
 
-// FileFuncorderIssues parses file and reports funcorder-constructor and
-// funcorder-struct-method violations.
+// FileFuncorderIssues parses file and reports funcorder-constructor, funcorder-struct-method, and
+// funcorder-function violations.
 func FileFuncorderIssues(file string) ([]FuncorderIssue, error) {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, file, nil, parser.ParseComments)

@@ -88,6 +88,47 @@ func main() {}
 	}
 }
 
+const funcorderLooseFuncCLISrc = `package main
+
+func init() {
+	println("init")
+}
+
+func helper() int {
+	return 1
+}
+
+func Exported() int {
+	return helper()
+}
+
+func main() {}
+`
+
+func TestReorderFuncorderFixesLooseFunctionOrdering(t *testing.T) {
+	writeModule(t, map[string]string{"main.go": funcorderLooseFuncCLISrc})
+	captureStdout(t, func() {
+		if err := reorderFuncorderCommand([]string{"main.go"}); err != nil {
+			t.Fatalf("reorder-funcorder: %v", err)
+		}
+	})
+	src := readFile(t, "main.go")
+
+	initIdx := strings.Index(src, "func init()")
+	helperIdx := strings.Index(src, "func helper()")
+	exportedIdx := strings.Index(src, "func Exported()")
+	mainIdx := strings.Index(src, "func main()")
+	if initIdx < 0 || helperIdx < 0 || exportedIdx < 0 || mainIdx < 0 {
+		t.Fatalf("expected all decls present in output:\n%s", src)
+	}
+	if !(initIdx < exportedIdx && initIdx < helperIdx) {
+		t.Errorf("init() must stay in place (first decl):\n%s", src)
+	}
+	if !(exportedIdx < helperIdx) {
+		t.Errorf("expected Exported() before helper(), got:\n%s", src)
+	}
+}
+
 func TestReorderFuncorderIdempotent(t *testing.T) {
 	writeModule(t, map[string]string{"main.go": funcorderSrc})
 	captureStdout(t, func() {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -26,8 +27,21 @@ func (r golangciLintRule) Run(ctx LintContext) []lintIssue {
 		"./...",
 	)
 	cmd.Dir = ctx.Root
-	out, _ := cmd.Output()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, runErr := cmd.Output()
 	if len(out) == 0 {
+		if runErr != nil {
+			msg := strings.TrimSpace(stderr.String())
+			if msg == "" {
+				msg = runErr.Error()
+			}
+			return []lintIssue{{
+				Rule:     "golangci-lint",
+				Severity: "error",
+				Message:  fmt.Sprintf("golangci-lint failed to run: %s", msg),
+			}}
+		}
 		return nil
 	}
 	var report struct {
@@ -58,6 +72,7 @@ func (r golangciLintRule) Run(ctx LintContext) []lintIssue {
 		})
 	}
 	return issues
+
 }
 
 func golangciLintAvailable(root string) bool {

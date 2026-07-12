@@ -21,6 +21,8 @@ func TestDefaultLintRules_ExpectedSet(t *testing.T) {
 		"wrap-log-return",
 		"wrap-bridge-log-return",
 		"duplicate-bare-sentinel",
+		"funcorder-constructor",
+		"funcorder-struct-method",
 		"god-object",
 		"excessive-params",
 		"excessive-returns",
@@ -85,6 +87,8 @@ func TestFixableRule_ExpectedSet(t *testing.T) {
 		"wrap-log-return":         true,
 		"wrap-bridge-log-return":  true,
 		"duplicate-bare-sentinel": true,
+		"funcorder-constructor":   true,
+		"funcorder-struct-method": true,
 	}
 	got := make(map[string]bool)
 	for _, r := range defaultLintRules() {

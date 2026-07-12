@@ -276,6 +276,7 @@ func defaultLintRules() []LintRule {
 		prematureAbstractionRule{},
 	}
 	rules = append(rules, logPropagationRules()...)
+	rules = append(rules, funcorderRules()...)
 	rules = append(rules, smellRules()...)
 	rules = append(rules,
 		duplicateRule{},

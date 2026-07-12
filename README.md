@@ -77,17 +77,18 @@ gorefactor lint . --fail-only      # Show only blocking (error-severity) issues
 gorefactor doctor                  # Lint + golangci-lint + build + test (final gate)
 ```
 
-The default rule set has 25 rules, grouped by concern:
+The default rule set has 27 rules, grouped by concern:
 
 - **Size & structure**: `file-size` (>500 lines, split hints by receiver/prefix), `long-function`, `deep-nesting`, `complexity` (cyclomatic), `extract-candidate`
 - **Duplication**: `duplicate-block` (>100-line clones with consolidation hints), `duplicate-bare-sentinel`
 - **Design smells**: `god-object`, `large-class`, `fat-interface`, `excessive-params`, `excessive-returns`, `data-clumps`, `type-switch`, `premature-abstraction`, `high-coupling`
 - **Error handling**: `error-not-wrapped` (bare `return err`), `if-err-log-return`, `wrap-log-return`, `wrap-bridge-log-return`
+- **Ordering**: `funcorder-constructor` (constructor must follow the struct, before its methods), `funcorder-struct-method` (exported methods before unexported) — ports golangci-lint's `funcorder` default checks
 - **Coverage**: `untested-function`, `untested-package`
 - **Dead code**: `dead-code` (unused funcs/types across the module)
 Both `go-arch-lint` and `golangci-lint` are deliberately kept out of the `lint` rule set — `doctor` runs each as its own stage (both self-skip when the binary or config is absent), keeping `lint` fast and fully in-process. Run them independently with `go-arch-lint check` / `golangci-lint run`, or together via `gorefactor doctor`.
 
-`--fix` autofixes the rules with a single safe transformation: `file-size` (via `split`), `dead-code` (delete unreferenced decls), `error-not-wrapped` (wrap with `fmt.Errorf(... %w)`), the log-propagation rules (via `remove-log-return` — delete the redundant log next to a propagating return, wrap a bare `return err`), and `duplicate-bare-sentinel` (via `wrap-sentinels`). Add `--verify` to make each fix self-checking: it runs `go build ./...` + `go test ./...` after applying and reverts any fix that fails the gate, keeping the rest — so bulk `--fix` is safe to run unsupervised even where a sensor over-approximates.
+`--fix` autofixes the rules with a single safe transformation: `file-size` (via `split`), `dead-code` (delete unreferenced decls), `error-not-wrapped` (wrap with `fmt.Errorf(... %w)`), the log-propagation rules (via `remove-log-return` — delete the redundant log next to a propagating return, wrap a bare `return err`), `duplicate-bare-sentinel` (via `wrap-sentinels`), and `funcorder-constructor`/`funcorder-struct-method` (via `reorder-funcorder`). Add `--verify` to make each fix self-checking: it runs `go build ./...` + `go test ./...` after applying and reverts any fix that fails the gate, keeping the rest — so bulk `--fix` is safe to run unsupervised even where a sensor over-approximates.
 
 **vs. alternatives:**
 - **gopls**: Great for interactive refactoring in an IDE, slow for CLI (60× slower cold-start)
@@ -209,7 +210,7 @@ Methods use `Receiver:Method` (no `*` on the receiver). Many commands accept `-`
 
 | Command | Purpose |
 |---------|---------|
-| `lint` | 25 structural rules (size, duplication, smells, error handling, coverage, dead-code, arch); skips `vendor`/`.git`/`node_modules` and `*.gen.go`/`_gen.go`. `--fix` autofixes `file-size`, `dead-code`, `error-not-wrapped`, `complexity`, the log-propagation family (add `--verify` to revert any fix that breaks build/test). `--fix-level aggressive` (requires `--fix --verify`) additionally autofixes `long-function`/`extract-candidate` by extraction, lifts return-bearing blocks, fixes non-adjacent log/return pairs, and deletes module-wide unreferenced exported functions. `--fail-only` shows blocking issues only |
+| `lint` | 27 structural rules (size, duplication, smells, error handling, ordering, coverage, dead-code, arch); skips `vendor`/`.git`/`node_modules` and `*.gen.go`/`_gen.go`. `--fix` autofixes `file-size`, `dead-code`, `error-not-wrapped`, `complexity`, the log-propagation family, `funcorder-constructor`/`funcorder-struct-method` (via `reorder-funcorder`) (add `--verify` to revert any fix that breaks build/test). `--fix-level aggressive` (requires `--fix --verify`) additionally autofixes `long-function`/`extract-candidate` by extraction, lifts return-bearing blocks, fixes non-adjacent log/return pairs, and deletes module-wide unreferenced exported functions. `--fail-only` shows blocking issues only |
 | `doctor` | Lint + `go build` + `go test`; non-zero on failure |
 | `txn` | Apply a batch of mutation commands transactionally (all-or-nothing, single undo unit) |
 | `undo` | Undo the most recent journaled mutation (or restore a named plan snapshot) |

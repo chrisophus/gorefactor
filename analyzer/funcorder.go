@@ -96,6 +96,11 @@ func funcorderGroups(f *ast.File) []*funcorderGroup {
 		return nil
 	}
 
+	funcorderAssignMembers(f, byName)
+	return groups
+}
+
+func funcorderAssignMembers(f *ast.File, byName map[string]*funcorderGroup) {
 	for i, decl := range f.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok {
@@ -120,7 +125,6 @@ func funcorderGroups(f *ast.File) []*funcorderGroup {
 			g.unexpIdx = append(g.unexpIdx, i)
 		}
 	}
-	return groups
 }
 
 // funcorderConstructorTarget reports whether fn looks like a constructor
@@ -174,33 +178,15 @@ func (g *funcorderGroup) issues(fset *token.FileSet, filename string) []Funcorde
 
 	// funcorder-constructor: every constructor index must be strictly
 	// between the struct's index and every method's index.
-	minMethodIdx := -1
-	for _, idx := range append(append([]int{}, g.exportedIdx...), g.unexpIdx...) {
-		if minMethodIdx == -1 || idx < minMethodIdx {
-			minMethodIdx = idx
-		}
-	}
-	for _, ci := range g.ctorIdx {
-		ok := ci > g.structIdx
-		if ok && minMethodIdx != -1 && ci > minMethodIdx {
-			ok = false
-		}
-		if !ok {
-			pos := fset.Position(g.structDecl.Pos())
-			out = append(out, FuncorderIssue{
-				File:       filename,
-				Line:       pos.Line,
-				Column:     pos.Column,
-				Rule:       funcorderConstructorRuleName,
-				Message:    fmt.Sprintf("constructor for %s must be declared immediately after the struct and before its methods", g.structName),
-				StructName: g.structName,
-			})
-			break
-		}
-	}
+	out = funcorderConstructorIssue(g, fset, out, filename)
 
 	// funcorder-struct-method: no unexported method index may be less than
 	// any exported method index.
+	out = funcorderStructMethodIssue(g, fset, out, filename)
+	return out
+}
+
+func funcorderStructMethodIssue(g *funcorderGroup, fset *token.FileSet, out []FuncorderIssue, filename string) []FuncorderIssue {
 	if len(g.unexpIdx) > 0 && len(g.exportedIdx) > 0 {
 		maxExported := g.exportedIdx[0]
 		for _, idx := range g.exportedIdx {
@@ -224,6 +210,34 @@ func (g *funcorderGroup) issues(fset *token.FileSet, filename string) []Funcorde
 				Message:    fmt.Sprintf("exported methods of %s must all be declared before its unexported methods", g.structName),
 				StructName: g.structName,
 			})
+		}
+	}
+	return out
+}
+
+func funcorderConstructorIssue(g *funcorderGroup, fset *token.FileSet, out []FuncorderIssue, filename string) []FuncorderIssue {
+	minMethodIdx := -1
+	for _, idx := range append(append([]int{}, g.exportedIdx...), g.unexpIdx...) {
+		if minMethodIdx == -1 || idx < minMethodIdx {
+			minMethodIdx = idx
+		}
+	}
+	for _, ci := range g.ctorIdx {
+		ok := ci > g.structIdx
+		if ok && minMethodIdx != -1 && ci > minMethodIdx {
+			ok = false
+		}
+		if !ok {
+			pos := fset.Position(g.structDecl.Pos())
+			out = append(out, FuncorderIssue{
+				File:       filename,
+				Line:       pos.Line,
+				Column:     pos.Column,
+				Rule:       funcorderConstructorRuleName,
+				Message:    fmt.Sprintf("constructor for %s must be declared before its methods", g.structName),
+				StructName: g.structName,
+			})
+			break
 		}
 	}
 	return out
@@ -263,19 +277,79 @@ func ApplyFuncorderFixes(filename string, src []byte) ([]byte, int, error) {
 
 	// Build the desired index permutation per group; count only groups that
 	// actually need reordering.
+	newOrder, changed := funcorderStructOrder(f, groups)
+
+	// Second pass: reorder loose top-level functions (excluding methods,
+	// init, and tracked constructors — those are covered by the group pass
+	// above) so exported functions precede unexported ones. Only the decl
+	// occupying each loose-function slot in newOrder changes; every other
+	// slot (struct groups, types, vars, imports) keeps its exact position.
+	changed = funcorderReorderLooseFuncs(groups, newOrder, f, changed)
+
+	if changed == 0 {
+		return src, 0, nil
+	}
+
+	buf := funcorderRenderReordered(f, fset, src, newOrder)
+
+	formatted, err := format.Source(buf.Bytes())
+	if err != nil {
+		return nil, 0, fmt.Errorf("internal: funcorder rewrite produced unparsable Go: %w", err)
+	}
+	return formatted, changed, nil
+}
+
+func funcorderRenderReordered(f *ast.File, fset *token.FileSet, src []byte, newOrder []int) bytes.Buffer {
+	spans := buildDeclSpans(f, fset, src)
+	spanByIdx := make(map[int]declSpan, len(spans))
+	for _, s := range spans {
+		spanByIdx[s.origIdx] = s
+	}
+	var buf bytes.Buffer
+	headerEnd := fset.Position(f.Name.End()).Offset
+	buf.Write(src[:headerEnd])
+	buf.WriteString("\n")
+	for i, idx := range newOrder {
+		if i > 0 {
+			buf.WriteString("\n\n")
+		}
+		buf.WriteString(spanByIdx[idx].text)
+	}
+	buf.WriteString("\n")
+	return buf
+}
+
+func funcorderReorderLooseFuncs(groups []*funcorderGroup, newOrder []int, f *ast.File, changed int) int {
+	ctorIdx := funcorderCtorIdxSet(groups)
+	var loosePositions, looseDeclIdx []int
+	for pos, idx := range newOrder {
+		fn, ok := f.Decls[idx].(*ast.FuncDecl)
+		if !ok || (fn.Recv != nil && len(fn.Recv.List) > 0) || fn.Name.Name == "init" || ctorIdx[idx] {
+			continue
+		}
+		loosePositions = append(loosePositions, pos)
+		looseDeclIdx = append(looseDeclIdx, idx)
+	}
+	if len(looseDeclIdx) >= 2 {
+		reordered := funcorderStablePartitionExported(f, looseDeclIdx)
+		if !sameOrder(reordered, looseDeclIdx) {
+			changed++
+			for i, pos := range loosePositions {
+				newOrder[pos] = reordered[i]
+			}
+		}
+	}
+	return changed
+}
+
+func funcorderStructOrder(f *ast.File, groups []*funcorderGroup) ([]int, int) {
 	newOrder := make([]int, 0, len(f.Decls))
 	placed := make(map[int]bool, len(f.Decls))
 	changed := 0
-
-	// Map struct index -> groups at that index. Normally one struct per
-	// GenDecl, but `type ( A struct{...}; B struct{...} )` puts multiple
-	// struct groups at the same Decls index since they share one GenDecl;
-	// handle all of them together when that index is reached.
 	groupsByStructIdx := make(map[int][]*funcorderGroup, len(groups))
 	for _, g := range groups {
 		groupsByStructIdx[g.structIdx] = append(groupsByStructIdx[g.structIdx], g)
 	}
-
 	for i := range f.Decls {
 		if placed[i] {
 			continue
@@ -301,72 +375,13 @@ func ApplyFuncorderFixes(filename string, src []byte) ([]byte, int, error) {
 			}
 		}
 	}
-	// Any remaining decls not covered above (shouldn't normally happen).
 	for i := range f.Decls {
 		if !placed[i] {
 			newOrder = append(newOrder, i)
 			placed[i] = true
 		}
 	}
-
-	// Second pass: reorder loose top-level functions (excluding methods,
-	// init, and tracked constructors — those are covered by the group pass
-	// above) so exported functions precede unexported ones. Only the decl
-	// occupying each loose-function slot in newOrder changes; every other
-	// slot (struct groups, types, vars, imports) keeps its exact position.
-	ctorIdx := funcorderCtorIdxSet(groups)
-	var loosePositions, looseDeclIdx []int
-	for pos, idx := range newOrder {
-		fn, ok := f.Decls[idx].(*ast.FuncDecl)
-		if !ok || (fn.Recv != nil && len(fn.Recv.List) > 0) || fn.Name.Name == "init" || ctorIdx[idx] {
-			continue
-		}
-		loosePositions = append(loosePositions, pos)
-		looseDeclIdx = append(looseDeclIdx, idx)
-	}
-	if len(looseDeclIdx) >= 2 {
-		reordered := funcorderStablePartitionExported(f, looseDeclIdx)
-		if !sameOrder(reordered, looseDeclIdx) {
-			changed++
-			for i, pos := range loosePositions {
-				newOrder[pos] = reordered[i]
-			}
-		}
-	}
-
-	if changed == 0 {
-		return src, 0, nil
-	}
-
-	spans := buildDeclSpans(f, fset, src)
-	spanByIdx := make(map[int]declSpan, len(spans))
-	for _, s := range spans {
-		spanByIdx[s.origIdx] = s
-	}
-
-	var buf bytes.Buffer
-	// Preamble: package clause + any file-level doc/comments before the
-	// first decl that aren't attached to a decl are handled by keeping the
-	// original file header text (package line + imports block) verbatim,
-	// since import decls are themselves top-level Decls and participate in
-	// newOrder like any other unrelated decl.
-	headerEnd := fset.Position(f.Name.End()).Offset
-	buf.Write(src[:headerEnd])
-	buf.WriteString("\n")
-
-	for i, idx := range newOrder {
-		if i > 0 {
-			buf.WriteString("\n\n")
-		}
-		buf.WriteString(spanByIdx[idx].text)
-	}
-	buf.WriteString("\n")
-
-	formatted, err := format.Source(buf.Bytes())
-	if err != nil {
-		return nil, 0, fmt.Errorf("internal: funcorder rewrite produced unparsable Go: %w", err)
-	}
-	return formatted, changed, nil
+	return newOrder, changed
 }
 
 // desiredOrder returns this group's member Decls-indices (struct, then

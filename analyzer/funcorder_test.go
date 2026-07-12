@@ -116,7 +116,7 @@ func TestApplyFuncorderFixes_ReordersDecls(t *testing.T) {
 	if structIdx < 0 || ctorIdx < 0 || exportedIdx < 0 || unexpIdx < 0 || mainIdx < 0 {
 		t.Fatalf("expected all decls present:\n%s", result)
 	}
-	if !(structIdx < ctorIdx && ctorIdx < exportedIdx && exportedIdx < unexpIdx) {
+	if structIdx >= ctorIdx || ctorIdx >= exportedIdx || exportedIdx >= unexpIdx {
 		t.Errorf("wrong order:\n%s", result)
 	}
 	if mainIdx < unexpIdx {
@@ -299,10 +299,10 @@ func TestApplyFuncorderFixes_ReordersLooseFunctions(t *testing.T) {
 	if initIdx < 0 || helperIdx < 0 || exportedIdx < 0 || mainIdx < 0 {
 		t.Fatalf("expected all decls present:\n%s", result)
 	}
-	if !(initIdx < exportedIdx && initIdx < helperIdx) {
+	if initIdx >= exportedIdx || initIdx >= helperIdx {
 		t.Errorf("init() must stay first:\n%s", result)
 	}
-	if !(exportedIdx < helperIdx) {
+	if exportedIdx >= helperIdx {
 		t.Errorf("expected Exported() before helper():\n%s", result)
 	}
 	if mainIdx < helperIdx {

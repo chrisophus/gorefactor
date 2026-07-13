@@ -15,6 +15,13 @@ import (
 // subprocess-backed rule runs as its own stage in `gorefactor doctor` (the aggregate final gate).
 type golangciLintRule struct{}
 
+// golangciToolFailureRule marks an issue that means "golangci-lint could not
+// be run at all" (missing/mismatched binary, config it can't load, ...) —
+// deliberately distinct from the "golangci-lint" rule name used for real
+// findings, so a caller can tell "the checker is broken" apart from "the
+// checker ran and found something" instead of conflating both into a count.
+const golangciToolFailureRule = "golangci-lint-error"
+
 func (golangciLintRule) Name() string { return "golangci-lint" }
 
 func (r golangciLintRule) Run(ctx LintContext) []lintIssue {
@@ -36,8 +43,12 @@ func (r golangciLintRule) Run(ctx LintContext) []lintIssue {
 			if msg == "" {
 				msg = runErr.Error()
 			}
+			// A distinct Rule from real findings: golangci-lint didn't run at
+			// all (bad config, version-skewed binary, ...), which is not the
+			// same thing as "ran and found 1 issue" — callers (doctorGolangciStage)
+			// need to tell the two apart instead of reporting a misleading count.
 			return []lintIssue{{
-				Rule:     "golangci-lint",
+				Rule:     golangciToolFailureRule,
 				Severity: "error",
 				Message:  fmt.Sprintf("golangci-lint failed to run: %s", msg),
 			}}

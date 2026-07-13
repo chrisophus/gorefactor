@@ -57,7 +57,7 @@ func TestTargetNotFoundErrorBuilder(t *testing.T) {
 
 	// Verify first suggestion is most likely
 	if err.Suggestions[0].Likelihood < 0.9 {
-		t.Errorf("Expected first suggestion high likelihood, got %f", err.Suggestions[0].Likelihood)  
+		t.Errorf("Expected first suggestion high likelihood, got %f", err.Suggestions[0].Likelihood)
 	}
 
 	// Verify that we have verify_name, check_file, and list_functions suggestions
@@ -73,7 +73,7 @@ func TestTargetNotFoundErrorBuilder(t *testing.T) {
 		}
 	}
 
-	// Verify list_functions suggestion has command  
+	// Verify list_functions suggestion has command
 	found := false
 	for _, s := range err.Suggestions {
 		if s.Approach == "list_functions" && s.Command != "" {
@@ -123,22 +123,22 @@ func TestImportCycleErrorBuilder(t *testing.T) {
 // TestMoveErrorSuggestions verifies actionable suggestions for move errors
 func TestMoveErrorSuggestions(t *testing.T) {
 	tests := []struct {
-		name         string
-		err          *DetailedError
+		name           string
+		err            *DetailedError
 		minSuggestions int
-		expectedCode ErrorCode
+		expectedCode   ErrorCode
 	}{
 		{
-			name: "target_not_found",
-			err: ExampleTargetNotFoundError("test.go", "Missing"),
+			name:           "target_not_found",
+			err:            ExampleTargetNotFoundError("test.go", "Missing"),
 			minSuggestions: 3,
-			expectedCode: ErrFunctionNotFound,
+			expectedCode:   ErrFunctionNotFound,
 		},
 		{
-			name: "import_cycle",
-			err: ExampleImportCycleError("a.go", "b.go", "Func", []string{"a.go", "b.go"}),
+			name:           "import_cycle",
+			err:            ExampleImportCycleError("a.go", "b.go", "Func", []string{"a.go", "b.go"}),
 			minSuggestions: 3,
-			expectedCode: ErrImportCycle,
+			expectedCode:   ErrImportCycle,
 		},
 	}
 

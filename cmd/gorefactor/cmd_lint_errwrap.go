@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/chrisophus/gorefactor/analyzer"
@@ -43,11 +42,7 @@ func (r errWrapRule) AutoFix(issue lintIssue, _ LintContext) error {
 	if len(parts) < 2 {
 		return fmt.Errorf("invalid autofixCmd: %q", issue.AutoFixCmd)
 	}
-	// parts[0] = "wrap-errors", rest = args for wrap-errors subcommand.
-	args := parts[1:]
-	cmd := exec.Command("gorefactor", append([]string{"wrap-errors"}, args...)...)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("wrap-errors %v: %w\n%s", args, err, strings.TrimSpace(string(out)))
-	}
-	return nil
+	// parts[0] = "wrap-errors", rest = args for the wrap-errors command.
+	return wrapErrorsCommand(parts[1:])
+
 }

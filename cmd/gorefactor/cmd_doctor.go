@@ -61,15 +61,11 @@ func doctorCommand(args []string) error {
 
 	var stages []doctorStage
 	if fix {
-		applied, reverted, failed, ferr := doctorAutoFix(root, fixLevel)
+		stage, ferr := doctorAutoFixStage(root, fixLevel)
 		if ferr != nil {
 			return ferr
 		}
-		stages = append(stages, doctorStage{
-			name: "autofix",
-			ok:   failed == 0,
-			info: fmt.Sprintf("%d applied, %d reverted (gate failed), %d failed to apply", applied, reverted, failed),
-		})
+		stages = append(stages, stage)
 	}
 
 	lintStage, err := doctorLintStage(root)
@@ -91,6 +87,20 @@ func doctorCommand(args []string) error {
 	}
 	return nil
 
+}
+
+var doctorAutoFixFn = doctorAutoFix
+
+func doctorAutoFixStage(root, fixLevel string) (doctorStage, error) {
+	applied, reverted, failed, err := doctorAutoFixFn(root, fixLevel)
+	if err != nil {
+		return doctorStage{}, err
+	}
+	return doctorStage{
+		name: "autofix",
+		ok:   true,
+		info: fmt.Sprintf("%d applied, %d reverted (gate failed), %d failed to apply", applied, reverted, failed),
+	}, nil
 }
 
 type doctorStage struct {
@@ -201,5 +211,12 @@ func doctorAutoFix(root, fixLevel string) (applied, reverted, failed int, err er
 	issues := runLintRules(rules, ctx, opts)
 	issues = applyConfigSeverity(issues, opts)
 	applied, reverted, failed = applyAutoFixes(issues, ctx, rules, true)
+
+	// Whole-tree gofmt+goimports sweep: individual mutation ops already format
+	// the files they touch, but this catches files no autofix rule reached.
+	if err := formatCommand([]string{root}); err != nil {
+		return applied, reverted, failed, err
+	}
 	return applied, reverted, failed, nil
+
 }

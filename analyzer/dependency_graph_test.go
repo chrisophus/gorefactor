@@ -7,45 +7,6 @@ import (
 	"testing"
 )
 
-// buildDepTestDir creates a minimal two-package directory structure:
-//
-//	rootDir/
-//	  main.go   (package main, imports "sub")
-//	  sub/
-//	    helper.go  (package sub, imports "fmt")
-//
-// Using the bare import path "sub" (not a real module path) is sufficient
-// because PackageGraph only string-matches import paths, never loads them.
-func buildDepTestDir(t *testing.T) string {
-	t.Helper()
-	root := t.TempDir()
-
-	mainSrc := `package main
-
-import "sub"
-
-func main() { _ = sub.Help() }
-`
-	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte(mainSrc), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	subDir := filepath.Join(root, "sub")
-	if err := os.MkdirAll(subDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	helperSrc := `package sub
-
-import "fmt"
-
-func Help() string { return fmt.Sprintf("help") }
-`
-	if err := os.WriteFile(filepath.Join(subDir, "helper.go"), []byte(helperSrc), 0644); err != nil {
-		t.Fatal(err)
-	}
-	return root
-}
-
 func TestNewPackageGraph_BuildsGraph(t *testing.T) {
 	t.Parallel()
 	root := buildDepTestDir(t)
@@ -306,4 +267,43 @@ func TestPackageGraph_SkipsVendorAndHiddenDirs(t *testing.T) {
 			t.Errorf("vendor/.git package should be excluded, but found: %+v", pkg)
 		}
 	}
+}
+
+// buildDepTestDir creates a minimal two-package directory structure:
+//
+//	rootDir/
+//	  main.go   (package main, imports "sub")
+//	  sub/
+//	    helper.go  (package sub, imports "fmt")
+//
+// Using the bare import path "sub" (not a real module path) is sufficient
+// because PackageGraph only string-matches import paths, never loads them.
+func buildDepTestDir(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+
+	mainSrc := `package main
+
+import "sub"
+
+func main() { _ = sub.Help() }
+`
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte(mainSrc), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	subDir := filepath.Join(root, "sub")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	helperSrc := `package sub
+
+import "fmt"
+
+func Help() string { return fmt.Sprintf("help") }
+`
+	if err := os.WriteFile(filepath.Join(subDir, "helper.go"), []byte(helperSrc), 0644); err != nil {
+		t.Fatal(err)
+	}
+	return root
 }

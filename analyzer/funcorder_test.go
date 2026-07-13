@@ -7,14 +7,27 @@ import (
 	"testing"
 )
 
-func writeTempGoFile(t *testing.T, src string) string {
-	t.Helper()
-	dir := t.TempDir()
-	path := filepath.Join(dir, "main.go")
-	if err := os.WriteFile(path, []byte(src), 0644); err != nil {
+func TestFileFuncorderIssues_DetectsBothViolations(t *testing.T) {
+	path := writeTempGoFile(t, funcorderMisorderedSrc)
+	issues, err := FileFuncorderIssues(path)
+	if err != nil {
 		t.Fatal(err)
 	}
-	return path
+	var haveCtor, haveMethod bool
+	for _, iss := range issues {
+		switch iss.Rule {
+		case funcorderConstructorRuleName:
+			haveCtor = true
+		case funcorderStructMethodRuleName:
+			haveMethod = true
+		}
+	}
+	if !haveCtor {
+		t.Errorf("expected funcorder-constructor issue, got: %+v", issues)
+	}
+	if !haveMethod {
+		t.Errorf("expected funcorder-struct-method issue, got: %+v", issues)
+	}
 }
 
 const funcorderMisorderedSrc = `package main
@@ -58,29 +71,6 @@ func (w *Widget) unexported() string {
 
 func main() {}
 `
-
-func TestFileFuncorderIssues_DetectsBothViolations(t *testing.T) {
-	path := writeTempGoFile(t, funcorderMisorderedSrc)
-	issues, err := FileFuncorderIssues(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var haveCtor, haveMethod bool
-	for _, iss := range issues {
-		switch iss.Rule {
-		case funcorderConstructorRuleName:
-			haveCtor = true
-		case funcorderStructMethodRuleName:
-			haveMethod = true
-		}
-	}
-	if !haveCtor {
-		t.Errorf("expected funcorder-constructor issue, got: %+v", issues)
-	}
-	if !haveMethod {
-		t.Errorf("expected funcorder-struct-method issue, got: %+v", issues)
-	}
-}
 
 func TestFileFuncorderIssues_CleanFileHasNoIssues(t *testing.T) {
 	path := writeTempGoFile(t, funcorderCleanSrc)
@@ -176,6 +166,26 @@ func TestApplyFuncorderFixes_Idempotent(t *testing.T) {
 	}
 }
 
+func TestFileFuncorderIssues_DetectsLooseFunctionViolation(t *testing.T) {
+	path := writeTempGoFile(t, funcorderLooseFuncSrc)
+	issues, err := FileFuncorderIssues(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, iss := range issues {
+		if iss.Rule == funcorderFunctionRuleName {
+			found = true
+			if iss.FuncName != "helper" {
+				t.Errorf("expected FuncName=helper, got %q", iss.FuncName)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("expected funcorder-function issue, got: %+v", issues)
+	}
+}
+
 const funcorderLooseFuncSrc = `package main
 
 func init() {
@@ -228,26 +238,6 @@ func (w *Widget) Exported() string {
 	return w.name
 }
 `
-
-func TestFileFuncorderIssues_DetectsLooseFunctionViolation(t *testing.T) {
-	path := writeTempGoFile(t, funcorderLooseFuncSrc)
-	issues, err := FileFuncorderIssues(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var found bool
-	for _, iss := range issues {
-		if iss.Rule == funcorderFunctionRuleName {
-			found = true
-			if iss.FuncName != "helper" {
-				t.Errorf("expected FuncName=helper, got %q", iss.FuncName)
-			}
-		}
-	}
-	if !found {
-		t.Errorf("expected funcorder-function issue, got: %+v", issues)
-	}
-}
 
 func TestFileFuncorderIssues_NoFalsePositiveForCtorAndInit(t *testing.T) {
 	path := writeTempGoFile(t, funcorderOnlyCtorAndInitSrc)
@@ -449,4 +439,14 @@ func Unrelated() {
 	if !strings.Contains(result, `import "fmt"`) {
 		t.Errorf("import decl must be preserved:\n%s", result)
 	}
+}
+
+func writeTempGoFile(t *testing.T, src string) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "main.go")
+	if err := os.WriteFile(path, []byte(src), 0644); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }

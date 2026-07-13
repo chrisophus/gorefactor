@@ -39,15 +39,6 @@ type command struct {
 func addCommand(c command) {}
 `
 
-func writeMatchFixture(t *testing.T) string {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "main.go")
-	if err := os.WriteFile(path, []byte(nestedMatchSrc), 0644); err != nil {
-		t.Fatal(err)
-	}
-	return path
-}
-
 // TestReplaceCodeBlockNestedStatement locks in that a complete statement
 // nested inside a loop is replaced in place — not its enclosing loop. The
 // old substring matcher replaced the whole top-level statement containing
@@ -116,4 +107,13 @@ func TestRemoveCodeBlockNestedStatement(t *testing.T) {
 	if !strings.Contains(src, `fmt.Println("processing", item)`) || !strings.Contains(src, "for _, item := range items {") {
 		t.Errorf("surrounding loop must survive:\n%s", src)
 	}
+}
+
+func writeMatchFixture(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "main.go")
+	if err := os.WriteFile(path, []byte(nestedMatchSrc), 0644); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }

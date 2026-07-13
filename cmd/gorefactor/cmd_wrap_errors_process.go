@@ -22,23 +22,23 @@ func processWrapErrorsInFunc(fset *token.FileSet, fn *ast.FuncDecl, file string,
 // awareness so that the statement preceding an if-block can be used to
 // derive wrapping context (e.g. from an assignment RHS).
 func processStmtList(fset *token.FileSet, fn *ast.FuncDecl, stmts []ast.Stmt, file string, result *wrapErrorResult) {
+	extractBlockL25(stmts, fset, fn, file, result)
+}
+
+func extractBlockL25(stmts []ast.Stmt, fset *token.FileSet, fn *ast.FuncDecl, file string, result *wrapErrorResult) {
 	for i, stmt := range stmts {
 		ifStmt, ok := stmt.(*ast.IfStmt)
 		if !ok {
-			// Recurse into nested blocks (for/range/select/switch/etc.).
+
 			recurseIntoStmt(fset, fn, stmt, file, result)
 			continue
 		}
-		// Must be `if err != nil`.
+
 		if !isErrNotNil(ifStmt) {
 			recurseIntoStmt(fset, fn, ifStmt, file, result)
 			continue
 		}
 
-		// Find the bare `return ..., err` in the body.
-		// findBareErrReturn tolerates leading sentinel branches (e.g.
-		// errors.Is checks that return a translated error) before the
-		// final bare `return ..., err`.
 		retStmt, ok := findBareErrReturn(ifStmt.Body)
 		if !ok {
 			line := fset.Position(ifStmt.Pos()).Line
@@ -52,21 +52,17 @@ func processStmtList(fset *token.FileSet, fn *ast.FuncDecl, stmts []ast.Stmt, fi
 			continue
 		}
 
-		// Derive context: from init statement or from preceding assignment.
 		context := wrapContextFromIfInit(fset, ifStmt)
 		if context == "" && i > 0 {
 			context = wrapContextFromPrecedingStmt(fset, stmts[i-1])
 		}
 		if context == "" {
-			// Fall back to enclosing function name.
+
 			context = camelToContext(fn.Name.Name)
 		}
 
 		line := fset.Position(retStmt.Pos()).Line
 
-		// Build the new return expression.
-		// Pass the original err ident's position so the printer anchors
-		// the replacement at the correct source location (Bug 2 fix).
 		errIdent, _ := retStmt.Results[len(retStmt.Results)-1].(*ast.Ident)
 		var errPos token.Pos
 		if errIdent != nil {
@@ -74,7 +70,6 @@ func processStmtList(fset *token.FileSet, fn *ast.FuncDecl, stmts []ast.Stmt, fi
 		}
 		newErrExpr := buildErrfExpr(context, errPos)
 
-		// Replace the err ident in retStmt.Results with the new call.
 		replaced := replaceErrInReturn(retStmt, newErrExpr)
 		if !replaced {
 			result.Skipped++

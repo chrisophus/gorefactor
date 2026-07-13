@@ -8,23 +8,6 @@ import (
 	"testing"
 )
 
-// writeAffectedFixture builds a tiny module: root imports lib, util is isolated.
-func writeAffectedFixture(t *testing.T) {
-	t.Helper()
-	if err := os.WriteFile("go.mod", []byte("module fixture\n\ngo 1.21\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	for _, d := range []string{"lib", "util"} {
-		if err := os.MkdirAll(d, 0755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	writeTempGo(t, "lib", "lib.go", "package lib\n\nfunc Answer() int { return 42 }\n")
-	writeTempGo(t, "lib", "lib_test.go", "package lib\n\nimport \"testing\"\n\nfunc TestAnswer(t *testing.T) {\n\tif Answer() != 42 {\n\t\tt.Fatal(\"wrong\")\n\t}\n}\n")
-	writeTempGo(t, "util", "util.go", "package util\n\nfunc Other() int { return 1 }\n")
-	writeTempGo(t, ".", "root.go", "package main\n\nimport \"fixture/lib\"\n\nfunc main() { _ = lib.Answer() }\n")
-}
-
 func TestAffectedExpandsReverseImports(t *testing.T) {
 	t.Chdir(t.TempDir())
 	writeAffectedFixture(t)
@@ -119,4 +102,21 @@ func TestAffectedRunPassing(t *testing.T) {
 		t.Fatalf("expected passing run: %+v", res)
 	}
 	_ = filepath.Join // keep import if fixture changes
+}
+
+// writeAffectedFixture builds a tiny module: root imports lib, util is isolated.
+func writeAffectedFixture(t *testing.T) {
+	t.Helper()
+	if err := os.WriteFile("go.mod", []byte("module fixture\n\ngo 1.21\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range []string{"lib", "util"} {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeTempGo(t, "lib", "lib.go", "package lib\n\nfunc Answer() int { return 42 }\n")
+	writeTempGo(t, "lib", "lib_test.go", "package lib\n\nimport \"testing\"\n\nfunc TestAnswer(t *testing.T) {\n\tif Answer() != 42 {\n\t\tt.Fatal(\"wrong\")\n\t}\n}\n")
+	writeTempGo(t, "util", "util.go", "package util\n\nfunc Other() int { return 1 }\n")
+	writeTempGo(t, ".", "root.go", "package main\n\nimport \"fixture/lib\"\n\nfunc main() { _ = lib.Answer() }\n")
 }

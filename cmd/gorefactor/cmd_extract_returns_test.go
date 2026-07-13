@@ -6,14 +6,16 @@ import (
 	"testing"
 )
 
-// readBack returns the rewritten file content, failing the test on error.
-func readBack(t *testing.T, path string) string {
-	t.Helper()
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
+// Without --allow-returns a return-bearing block is refused, exactly as before.
+func TestExtract_ReturnsRefusedWithoutFlag(t *testing.T) {
+	path := writeComplexityModule(t, liftableSrc)
+	err := extractCommand([]string{path, "6", "11", "validateItems"})
+	if err == nil {
+		t.Fatal("expected refusal for return-bearing block without --allow-returns")
 	}
-	return string(b)
+	if !strings.Contains(err.Error(), "return statement") {
+		t.Fatalf("expected return-statement refusal, got: %v", err)
+	}
 }
 
 const liftableSrc = `package cxmod
@@ -34,18 +36,6 @@ func Process(items []string) (int, error) {
 	return count, nil
 }
 `
-
-// Without --allow-returns a return-bearing block is refused, exactly as before.
-func TestExtract_ReturnsRefusedWithoutFlag(t *testing.T) {
-	path := writeComplexityModule(t, liftableSrc)
-	err := extractCommand([]string{path, "6", "11", "validateItems"})
-	if err == nil {
-		t.Fatal("expected refusal for return-bearing block without --allow-returns")
-	}
-	if !strings.Contains(err.Error(), "return statement") {
-		t.Fatalf("expected return-statement refusal, got: %v", err)
-	}
-}
 
 // With --allow-returns the returns are lifted into a (results..., done bool)
 // helper and the call site propagates a taken return.
@@ -158,4 +148,14 @@ func Order(xs []int) {
 	if strings.Contains(got, "done bool") {
 		t.Errorf("closure return was wrongly lifted\n---\n%s", got)
 	}
+}
+
+// readBack returns the rewritten file content, failing the test on error.
+func readBack(t *testing.T, path string) string {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }

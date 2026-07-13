@@ -8,24 +8,6 @@ import (
 	"testing"
 )
 
-// parseFuncBody parses src (a full Go file) and returns the fset plus the
-// statements of the named function's body.
-func parseFuncBody(t *testing.T, src, fn string) (*token.FileSet, *ast.FuncDecl) {
-	t.Helper()
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, "x.go", src, 0)
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-	for _, d := range f.Decls {
-		if fd, ok := d.(*ast.FuncDecl); ok && fd.Name.Name == fn {
-			return fset, fd
-		}
-	}
-	t.Fatalf("func %s not found", fn)
-	return nil, nil
-}
-
 func TestFindJumpBarriers(t *testing.T) {
 	const src = `package p
 func run(items []int) int {
@@ -100,4 +82,22 @@ func run() {
 	if w := smallExtractionWarning(fset, "helper", fd.Body.List, 3, 4); w != "" {
 		t.Fatalf("expected no warning, got %q", w)
 	}
+}
+
+// parseFuncBody parses src (a full Go file) and returns the fset plus the
+// statements of the named function's body.
+func parseFuncBody(t *testing.T, src, fn string) (*token.FileSet, *ast.FuncDecl) {
+	t.Helper()
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "x.go", src, 0)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	for _, d := range f.Decls {
+		if fd, ok := d.(*ast.FuncDecl); ok && fd.Name.Name == fn {
+			return fset, fd
+		}
+	}
+	t.Fatalf("func %s not found", fn)
+	return nil, nil
 }

@@ -83,26 +83,7 @@ func inlineCommand(args []string) error {
 
 	// Build per-file edit lists.
 	edits := map[string][]inlineTextEdit{}
-	for _, s := range sites {
-		argTexts := make([]string, len(s.call.Args))
-		for i := range s.call.Args {
-			argTexts[i] = string(s.src[s.argStart[i]:s.argEnd[i]])
-		}
-		text := tmpl.substitute(argTexts)
-		start, end := s.start, s.end
-		if tmpl.exprMode {
-			if s.stmtStart >= 0 {
-				// Result discarded at a statement position: keep evaluation.
-				start, end = s.stmtStart, s.stmtEnd
-				text = "_ = " + text
-			} else if !isSimpleExprText(tmpl.returnExpr) {
-				text = "(" + text + ")"
-			}
-		} else {
-			start, end = s.stmtStart, s.stmtEnd
-		}
-		edits[s.file] = append(edits[s.file], inlineTextEdit{start: start, end: end, text: text})
-	}
+	extractBlockL86(sites, tmpl, edits)
 
 	// Delete the declaration (including its doc comment).
 	delStart := buildInlineEdits(fset, target)
@@ -117,19 +98,8 @@ func inlineCommand(args []string) error {
 
 	// Apply edits in memory, parse-verify every file, then write.
 	results := map[string][]byte{}
-	for f, list := range edits {
-		src, err := os.ReadFile(f)
-		if err != nil {
-			return m.fail(err)
-		}
-		out, err := applyInlineEdits(src, list)
-		if err != nil {
-			return m.fail(err)
-		}
-		if _, perr := goparser.ParseFile(token.NewFileSet(), f, out, 0); perr != nil {
-			return m.fail(parseErrorf("inlining %s would produce a malformed file %s: %v", funcName, f, perr))
-		}
-		results[f] = out
+	if r0, done := extractBlockL120(edits, m, funcName, results); done {
+		return r0
 	}
 
 	return m.run(func() (string, error) {
@@ -143,6 +113,47 @@ func inlineCommand(args []string) error {
 		}
 		return fmt.Sprintf("Inlined %s into %d call site(s) and deleted it from %s", funcName, len(sites), file), nil
 	})
+}
+
+func extractBlockL86(sites []inlineCallSite, tmpl *inlineTemplate, edits map[string][]inlineTextEdit) {
+	for _, s := range sites {
+		argTexts := make([]string, len(s.call.Args))
+		for i := range s.call.Args {
+			argTexts[i] = string(s.src[s.argStart[i]:s.argEnd[i]])
+		}
+		text := tmpl.substitute(argTexts)
+		start, end := s.start, s.end
+		if tmpl.exprMode {
+			if s.stmtStart >= 0 {
+
+				start, end = s.stmtStart, s.stmtEnd
+				text = "_ = " + text
+			} else if !isSimpleExprText(tmpl.returnExpr) {
+				text = "(" + text + ")"
+			}
+		} else {
+			start, end = s.stmtStart, s.stmtEnd
+		}
+		edits[s.file] = append(edits[s.file], inlineTextEdit{start: start, end: end, text: text})
+	}
+}
+
+func extractBlockL120(edits map[string][]inlineTextEdit, m *mutation, funcName string, results map[string][]byte) (r0 error, done bool) {
+	for f, list := range edits {
+		src, err := os.ReadFile(f)
+		if err != nil {
+			return m.fail(err), true
+		}
+		out, err := applyInlineEdits(src, list)
+		if err != nil {
+			return m.fail(err), true
+		}
+		if _, perr := goparser.ParseFile(token.NewFileSet(), f, out, 0); perr != nil {
+			return m.fail(parseErrorf("inlining %s would produce a malformed file %s: %v", funcName, f, perr)), true
+		}
+		results[f] = out
+	}
+	return
 }
 
 func buildInlineEdits(fset *token.FileSet, target *ast.FuncDecl) int {

@@ -15,14 +15,6 @@ type ImportResolver struct {
 	fset *token.FileSet
 }
 
-// ImportChange represents a needed import addition or removal
-type ImportChange struct {
-	Type       string // "add" or "remove"
-	ImportPath string
-	File       string
-	Reason     string
-}
-
 // NewImportResolver creates a new import resolver
 func NewImportResolver() *ImportResolver {
 	return &ImportResolver{
@@ -62,6 +54,65 @@ func (ir *ImportResolver) ResolveImportsForMove(
 	}
 
 	return changes, nil
+}
+
+// NeedToRemoveImport checks if an import is no longer needed in a file
+func (ir *ImportResolver) NeedToRemoveImport(filePath, impPath string) (bool, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return false, fmt.Errorf("read file: %w", err)
+	}
+
+	pkg, err := parser.ParseFile(ir.fset, filePath, content, parser.AllErrors)
+	if err != nil {
+		return false, fmt.Errorf(
+
+			// Extract package name from import path
+			"parse file: %w", err)
+	}
+
+	pkgName := filepath.Base(impPath)
+	for _, imp := range pkg.Imports {
+		if strings.Trim(imp.Path.Value, "\"") == impPath {
+			if imp.Name != nil {
+				pkgName = imp.Name.Name
+			}
+			break
+		}
+	}
+
+	// Check if this package name is used anywhere in the file
+	isUsed := false
+	ast.Inspect(pkg, func(node ast.Node) bool {
+		if ident, ok := node.(*ast.Ident); ok {
+			if ident.Name == pkgName {
+				isUsed = true
+				return false
+			}
+		}
+		return true
+	})
+
+	return !isUsed, nil
+}
+
+// ApplyImportChanges applies a list of import changes to files
+func (ir *ImportResolver) ApplyImportChanges(changes []ImportChange) error {
+	for _, change := range changes {
+		switch change.Type {
+		case "add":
+			if err := ir.addImport(change.File, change.ImportPath); err != nil {
+				return fmt.Errorf("failed to add import %s to %s: %w",
+					change.ImportPath, change.File, err)
+			}
+		case "remove":
+			if err := ir.removeImport(change.File, change.ImportPath); err != nil {
+				return fmt.Errorf("failed to remove import %s from %s: %w",
+					change.ImportPath, change.File, err)
+			}
+		}
+	}
+	return nil
 }
 
 // findFunctionInFile locates a function in a source file
@@ -150,65 +201,6 @@ func (ir *ImportResolver) findImportsUsedInFunc(pkg *ast.File, fn *ast.FuncDecl)
 	return used
 }
 
-// NeedToRemoveImport checks if an import is no longer needed in a file
-func (ir *ImportResolver) NeedToRemoveImport(filePath, impPath string) (bool, error) {
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return false, fmt.Errorf("read file: %w", err)
-	}
-
-	pkg, err := parser.ParseFile(ir.fset, filePath, content, parser.AllErrors)
-	if err != nil {
-		return false, fmt.Errorf(
-
-			// Extract package name from import path
-			"parse file: %w", err)
-	}
-
-	pkgName := filepath.Base(impPath)
-	for _, imp := range pkg.Imports {
-		if strings.Trim(imp.Path.Value, "\"") == impPath {
-			if imp.Name != nil {
-				pkgName = imp.Name.Name
-			}
-			break
-		}
-	}
-
-	// Check if this package name is used anywhere in the file
-	isUsed := false
-	ast.Inspect(pkg, func(node ast.Node) bool {
-		if ident, ok := node.(*ast.Ident); ok {
-			if ident.Name == pkgName {
-				isUsed = true
-				return false
-			}
-		}
-		return true
-	})
-
-	return !isUsed, nil
-}
-
-// ApplyImportChanges applies a list of import changes to files
-func (ir *ImportResolver) ApplyImportChanges(changes []ImportChange) error {
-	for _, change := range changes {
-		switch change.Type {
-		case "add":
-			if err := ir.addImport(change.File, change.ImportPath); err != nil {
-				return fmt.Errorf("failed to add import %s to %s: %w",
-					change.ImportPath, change.File, err)
-			}
-		case "remove":
-			if err := ir.removeImport(change.File, change.ImportPath); err != nil {
-				return fmt.Errorf("failed to remove import %s from %s: %w",
-					change.ImportPath, change.File, err)
-			}
-		}
-	}
-	return nil
-}
-
 // addImport adds an import to a file
 func (ir *ImportResolver) addImport(filePath, impPath string) error {
 	// This would typically use go/ast and go/format to properly add the import
@@ -221,4 +213,12 @@ func (ir *ImportResolver) removeImport(filePath, impPath string) error {
 	// This would typically use go/ast and go/format to properly remove the import
 	// For now, this is a placeholder that indicates where the logic would go
 	return nil
+}
+
+// ImportChange represents a needed import addition or removal
+type ImportChange struct {
+	Type       string // "add" or "remove"
+	ImportPath string
+	File       string
+	Reason     string
 }

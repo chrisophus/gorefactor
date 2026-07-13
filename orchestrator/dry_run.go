@@ -13,6 +13,21 @@ type DryRunResult struct {
 	Summary    string
 }
 
+// DiffPaths returns affected file paths from a dry-run result
+func (d *DryRunResult) DiffPaths() []string {
+	seen := make(map[string]bool)
+	var paths []string
+	for _, op := range d.Operations {
+		for _, diff := range op.Changes {
+			if !seen[diff.File] {
+				seen[diff.File] = true
+				paths = append(paths, diff.File)
+			}
+		}
+	}
+	return paths
+}
+
 // DryRunOperationResult shows what would change for a single operation
 type DryRunOperationResult struct {
 	Operation *RefactoringOperation
@@ -29,6 +44,66 @@ type FileDiff struct {
 	StartLine int
 	EndLine   int
 	Summary   string
+}
+
+// FormatDryRunDiff returns a colorized diff representation
+func FormatDryRunDiff(diff *FileDiff) string {
+	var output strings.Builder
+	fmt.Fprintf(&output, "\n--- %s\n", diff.File)
+	fmt.Fprintf(&output, "+++ %s\n", diff.File)
+
+	oldLines := strings.Split(diff.OldCode, "\n")
+	newLines := strings.Split(diff.NewCode, "\n")
+
+	// Simple line-by-line diff (naive implementation)
+	maxLines := len(oldLines)
+	if len(newLines) > maxLines {
+		maxLines = len(newLines)
+	}
+
+	for i := 0; i < maxLines; i++ {
+		oldLine := ""
+		newLine := ""
+
+		if i < len(oldLines) {
+			oldLine = oldLines[i]
+		}
+		if i < len(newLines) {
+			newLine = newLines[i]
+		}
+
+		if oldLine != newLine {
+			if oldLine != "" {
+				fmt.Fprintf(&output, "- %s\n", oldLine)
+			}
+			if newLine != "" {
+				fmt.Fprintf(&output, "+ %s\n", newLine)
+			}
+		} else {
+			fmt.Fprintf(&output, "  %s\n", oldLine)
+		}
+	}
+
+	return output.String()
+}
+
+// SaveDryRunReport saves a dry-run report to a file
+func SaveDryRunReport(result *DryRunResult, outputPath string) error {
+	var report strings.Builder
+	report.WriteString(result.Summary)
+	report.WriteString("\n\n=== Changes Preview ===\n")
+
+	for _, op := range result.Operations {
+		if !op.Success {
+			fmt.Fprintf(&report, "\n[FAILED] %s: %s\n", op.Operation.Type, op.Error)
+			continue
+		}
+		for _, diff := range op.Changes {
+			report.WriteString(FormatDryRunDiff(diff))
+		}
+	}
+
+	return os.WriteFile(outputPath, []byte(report.String()), 0644)
 }
 
 // dryRunAffectedFiles returns all files an operation may read or write,
@@ -78,79 +153,4 @@ func cloneOperationWithPaths(op *RefactoringOperation, pathMap map[string]string
 		cloned.Parameters = newParams
 	}
 	return &cloned
-}
-
-// FormatDryRunDiff returns a colorized diff representation
-func FormatDryRunDiff(diff *FileDiff) string {
-	var output strings.Builder
-	fmt.Fprintf(&output, "\n--- %s\n", diff.File)
-	fmt.Fprintf(&output, "+++ %s\n", diff.File)
-
-	oldLines := strings.Split(diff.OldCode, "\n")
-	newLines := strings.Split(diff.NewCode, "\n")
-
-	// Simple line-by-line diff (naive implementation)
-	maxLines := len(oldLines)
-	if len(newLines) > maxLines {
-		maxLines = len(newLines)
-	}
-
-	for i := 0; i < maxLines; i++ {
-		oldLine := ""
-		newLine := ""
-
-		if i < len(oldLines) {
-			oldLine = oldLines[i]
-		}
-		if i < len(newLines) {
-			newLine = newLines[i]
-		}
-
-		if oldLine != newLine {
-			if oldLine != "" {
-				fmt.Fprintf(&output, "- %s\n", oldLine)
-			}
-			if newLine != "" {
-				fmt.Fprintf(&output, "+ %s\n", newLine)
-			}
-		} else {
-			fmt.Fprintf(&output, "  %s\n", oldLine)
-		}
-	}
-
-	return output.String()
-}
-
-// DiffPaths returns affected file paths from a dry-run result
-func (d *DryRunResult) DiffPaths() []string {
-	seen := make(map[string]bool)
-	var paths []string
-	for _, op := range d.Operations {
-		for _, diff := range op.Changes {
-			if !seen[diff.File] {
-				seen[diff.File] = true
-				paths = append(paths, diff.File)
-			}
-		}
-	}
-	return paths
-}
-
-// SaveDryRunReport saves a dry-run report to a file
-func SaveDryRunReport(result *DryRunResult, outputPath string) error {
-	var report strings.Builder
-	report.WriteString(result.Summary)
-	report.WriteString("\n\n=== Changes Preview ===\n")
-
-	for _, op := range result.Operations {
-		if !op.Success {
-			fmt.Fprintf(&report, "\n[FAILED] %s: %s\n", op.Operation.Type, op.Error)
-			continue
-		}
-		for _, diff := range op.Changes {
-			report.WriteString(FormatDryRunDiff(diff))
-		}
-	}
-
-	return os.WriteFile(outputPath, []byte(report.String()), 0644)
 }

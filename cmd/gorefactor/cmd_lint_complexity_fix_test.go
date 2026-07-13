@@ -20,21 +20,6 @@ func TestParseComplexityAutoFixCmd(t *testing.T) {
 	}
 }
 
-// writeComplexityModule drops a single-file module in a temp dir and returns the
-// file path.
-func writeComplexityModule(t *testing.T, src string) string {
-	t.Helper()
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module cxmod\n\ngo 1.24\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(dir, "big.go")
-	if err := os.WriteFile(path, []byte(src), 0644); err != nil {
-		t.Fatal(err)
-	}
-	return path
-}
-
 // TestReduceComplexityByExtraction_ExtractsPureBlock verifies the autofix lifts
 // an over-threshold function's highest-contribution non-return block and that
 // the result still parses.
@@ -195,4 +180,19 @@ func Guard(n int) (int, error) {
 	if string(before) != string(after) {
 		t.Errorf("file was mutated despite zero successful extractions")
 	}
+}
+
+// writeComplexityModule drops a single-file module in a temp dir and returns the
+// file path.
+func writeComplexityModule(t *testing.T, src string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module cxmod\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "big.go")
+	if err := os.WriteFile(path, []byte(src), 0644); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }

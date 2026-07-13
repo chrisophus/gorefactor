@@ -14,16 +14,11 @@ type fakeFixRule struct {
 	fixFn func(iss lintIssue, ctx LintContext) error
 }
 
-func (f fakeFixRule) Name() string                                 { return f.name }
-func (f fakeFixRule) Run(LintContext) []lintIssue                  { return nil }
-func (f fakeFixRule) AutoFix(iss lintIssue, ctx LintContext) error { return f.fixFn(iss, ctx) }
+func (f fakeFixRule) Name() string { return f.name }
 
-func writeFileT(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		t.Fatalf("write %s: %v", path, err)
-	}
-}
+func (f fakeFixRule) Run(LintContext) []lintIssue { return nil }
+
+func (f fakeFixRule) AutoFix(iss lintIssue, ctx LintContext) error { return f.fixFn(iss, ctx) }
 
 func TestDirSnapshotRestore(t *testing.T) {
 	dir := t.TempDir()
@@ -173,6 +168,13 @@ func TestApplyAutoFixesVerifyKeepsGoodRevertsBad(t *testing.T) {
 	}
 	if got := readFile(t, badFile); got != badOrig {
 		t.Fatalf("bad fix should be reverted: %q", got)
+	}
+}
+
+func writeFileT(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
 	}
 }
 

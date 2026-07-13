@@ -27,14 +27,6 @@ type JournalEntry struct {
 	Files     []JournalFile `json:"files"`
 }
 
-func journalFilePath() string {
-	return filepath.Join(".gorefactor", "journal.json")
-}
-
-func entrySnapshotDir(id string) string {
-	return filepath.Join(".gorefactor", "snapshots", id)
-}
-
 // LoadJournal returns all journaled operations, oldest first.
 func LoadJournal() ([]JournalEntry, error) {
 	data, err := os.ReadFile(journalFilePath())
@@ -50,19 +42,6 @@ func LoadJournal() ([]JournalEntry, error) {
 	}
 	return entries, nil
 }
-
-func saveJournal(entries []JournalEntry) error {
-	if err := os.MkdirAll(filepath.Dir(journalFilePath()), 0755); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(entries, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(journalFilePath(), data, 0644)
-}
-
-var journalSeq int
 
 // RecordOperation snapshots the pre-mutation content of changed files and
 // appends an entry to the journal. before maps path -> content as it was
@@ -161,4 +140,25 @@ func DropJournalEntry(id string) error {
 		out = append(out, e)
 	}
 	return saveJournal(out)
+}
+
+var journalSeq int
+
+func journalFilePath() string {
+	return filepath.Join(".gorefactor", "journal.json")
+}
+
+func entrySnapshotDir(id string) string {
+	return filepath.Join(".gorefactor", "snapshots", id)
+}
+
+func saveJournal(entries []JournalEntry) error {
+	if err := os.MkdirAll(filepath.Dir(journalFilePath()), 0755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(journalFilePath(), data, 0644)
 }

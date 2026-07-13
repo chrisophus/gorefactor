@@ -83,22 +83,6 @@ func ShouldSkipFile(path string, opts WalkOptions) bool {
 	return false
 }
 
-func isGeneratedGoFilename(path string) bool {
-	return strings.HasSuffix(path, ".gen.go") || strings.HasSuffix(path, "_gen.go")
-}
-
-// pathHasDirSegment reports whether seg appears as a directory segment in p.
-func pathHasDirSegment(p, seg string) bool {
-	seg = filepath.ToSlash(seg)
-	if p == seg {
-		return true
-	}
-	if strings.HasPrefix(p, seg+"/") {
-		return true
-	}
-	return strings.Contains(p, "/"+seg+"/")
-}
-
 // WalkGoFiles walks root and returns non-skipped .go file paths.
 func WalkGoFiles(root string, opts WalkOptions) ([]string, error) {
 	var files []string
@@ -132,6 +116,22 @@ func GroupFilesByDir(files []string) map[string][]string {
 		out[dir] = append(out[dir], f)
 	}
 	return out
+}
+
+func isGeneratedGoFilename(path string) bool {
+	return strings.HasSuffix(path, ".gen.go") || strings.HasSuffix(path, "_gen.go")
+}
+
+// pathHasDirSegment reports whether seg appears as a directory segment in p.
+func pathHasDirSegment(p, seg string) bool {
+	seg = filepath.ToSlash(seg)
+	if p == seg {
+		return true
+	}
+	if strings.HasPrefix(p, seg+"/") {
+		return true
+	}
+	return strings.Contains(p, "/"+seg+"/")
 }
 
 // findGoFiles recursively finds Go files under dirPath using DefaultWalkOptions.

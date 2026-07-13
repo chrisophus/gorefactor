@@ -184,27 +184,6 @@ func TestSpecFromLintIssue_EmptyAutofixCmd(t *testing.T) {
 	}
 }
 
-// --- enumerateFindingsViaLint -----------------------------------------------
-
-// withFakeGorefactor writes a fake gorefactor script to a temp dir and
-// prepends that dir to PATH so gorefactorBin() resolves to it.
-func withFakeGorefactor(t *testing.T, jsonOut string) string {
-	t.Helper()
-	dir := t.TempDir()
-	jsonPath := filepath.Join(dir, "lint_output.json")
-	if err := os.WriteFile(jsonPath, []byte(jsonOut), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	// The script cats the pre-baked JSON file regardless of its arguments.
-	script := fmt.Sprintf("#!/bin/sh\ncat %s\n", jsonPath)
-	binPath := filepath.Join(dir, "gorefactor")
-	if err := os.WriteFile(binPath, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
-	return dir
-}
-
 func TestEnumerateFindingsViaLint_ParsesJSON(t *testing.T) {
 	withFakeGorefactor(t, `{
 		"issues": [
@@ -370,8 +349,6 @@ func TestRunLintAdvisory_TruncatesLongList(t *testing.T) {
 	}
 }
 
-// --- dispatch new tool routing ----------------------------------------------
-
 // TestDispatch_NewToolsReturnContinue verifies every new tool name added in
 // Phase 3 is recognized by dispatchTool (returns stContinue, not "unknown tool").
 func TestDispatch_NewToolsReturnContinue(t *testing.T) {
@@ -433,4 +410,23 @@ func TestDispatch_FinishGreenGate(t *testing.T) {
 	if !strings.Contains(result, "gate green") {
 		t.Errorf("finish result should confirm gate green: %q", result)
 	}
+}
+
+// withFakeGorefactor writes a fake gorefactor script to a temp dir and
+// prepends that dir to PATH so gorefactorBin() resolves to it.
+func withFakeGorefactor(t *testing.T, jsonOut string) string {
+	t.Helper()
+	dir := t.TempDir()
+	jsonPath := filepath.Join(dir, "lint_output.json")
+	if err := os.WriteFile(jsonPath, []byte(jsonOut), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// The script cats the pre-baked JSON file regardless of its arguments.
+	script := fmt.Sprintf("#!/bin/sh\ncat %s\n", jsonPath)
+	binPath := filepath.Join(dir, "gorefactor")
+	if err := os.WriteFile(binPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+	return dir
 }

@@ -13,23 +13,7 @@ func main() {
 	scenarioFlag := flag.String("scenario", "", "Run a specific scenario by name")
 	verboseFlag := flag.Bool("v", false, "Verbose output")
 
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, `Phase 4 Pi Integration Testing
-
-Usage:
-  gorefactor-test [options]
-
-Options:
-  -list              List all scenarios
-  -scenario <name>   Run a specific scenario
-  -v                 Verbose output
-
-Examples:
-  gorefactor-test -list
-  gorefactor-test -scenario "Move Command - Target Not Found"
-  gorefactor-test                  # Run all scenarios
-`)
-	}
+	extractBlockL16()
 
 	flag.Parse()
 
@@ -95,6 +79,26 @@ Examples:
 	}
 }
 
+func extractBlockL16() {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Phase 4 Pi Integration Testing
+
+Usage:
+  gorefactor-test [options]
+
+Options:
+  -list              List all scenarios
+  -scenario <name>   Run a specific scenario
+  -v                 Verbose output
+
+Examples:
+  gorefactor-test -list
+  gorefactor-test -scenario "Move Command - Target Not Found"
+  gorefactor-test                  # Run all scenarios
+`)
+	}
+}
+
 // runScenarios executes all scenarios and collects results
 func runScenarios(scenarios []TestScenario, verbose bool) []TestResult {
 	var results []TestResult
@@ -150,8 +154,8 @@ func ensureGorefactorBinary() (string, error) {
 
 	// Check local paths
 	localPaths := []string{
-		"./gorefactor",                    // Current dir
-		"./cmd/gorefactor/gorefactor",    // Relative to repo root
+		"./gorefactor",                // Current dir
+		"./cmd/gorefactor/gorefactor", // Relative to repo root
 	}
 
 	for _, path := range localPaths {

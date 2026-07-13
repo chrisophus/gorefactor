@@ -11,33 +11,6 @@ import (
 	"testing"
 )
 
-// readFriction parses every line of the friction corpus under dir.
-func readFriction(t *testing.T, dir string) []FrictionReport {
-	t.Helper()
-	f, err := os.Open(filepath.Join(dir, frictionRelPath))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		t.Fatal(err)
-	}
-	defer f.Close()
-	var out []FrictionReport
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" {
-			continue
-		}
-		var r FrictionReport
-		if err := json.Unmarshal([]byte(line), &r); err != nil {
-			t.Fatalf("friction line not JSON: %v (%q)", err, line)
-		}
-		out = append(out, r)
-	}
-	return out
-}
-
 // TestFrictionRoundTrip: a friction call on a completed task records a row
 // in .gorefactor/friction.jsonl, emits a <<<FRICTION_REPORT>>> block, does
 // not terminate the run, and the run still ends green via finish.
@@ -155,4 +128,31 @@ func TestJudgementPuntHasNoGap(t *testing.T) {
 	if strings.Contains(log.String(), `"capability_gap"`) {
 		t.Fatalf("capability_gap key should be omitted from a judgement punt block")
 	}
+}
+
+// readFriction parses every line of the friction corpus under dir.
+func readFriction(t *testing.T, dir string) []FrictionReport {
+	t.Helper()
+	f, err := os.Open(filepath.Join(dir, frictionRelPath))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		t.Fatal(err)
+	}
+	defer f.Close()
+	var out []FrictionReport
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" {
+			continue
+		}
+		var r FrictionReport
+		if err := json.Unmarshal([]byte(line), &r); err != nil {
+			t.Fatalf("friction line not JSON: %v (%q)", err, line)
+		}
+		out = append(out, r)
+	}
+	return out
 }

@@ -36,12 +36,6 @@ func TestValidate(t *testing.T) {
 }
 `
 
-func writeContextFixture(t *testing.T) {
-	t.Helper()
-	writeTempGo(t, ".", "order.go", contextTestMain)
-	writeTempGo(t, ".", "order_test.go", contextTestTests)
-}
-
 func TestContextPackSections(t *testing.T) {
 	t.Chdir(t.TempDir())
 	writeContextFixture(t)
@@ -146,4 +140,10 @@ func TestContextNotFound(t *testing.T) {
 	writeContextFixture(t)
 	err := contextCommand([]string{"Missing"})
 	assertExitCode(t, err, exitNotFound)
+}
+
+func writeContextFixture(t *testing.T) {
+	t.Helper()
+	writeTempGo(t, ".", "order.go", contextTestMain)
+	writeTempGo(t, ".", "order_test.go", contextTestTests)
 }

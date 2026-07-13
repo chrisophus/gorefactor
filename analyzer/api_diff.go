@@ -93,6 +93,31 @@ func ComputeAPIDiff(dir, ref string) (*APIDiffResult, error) {
 	return res, nil
 }
 
+// FuncReceiverName returns the (unqualified) receiver type name of a method decl,
+// stripping a leading pointer and any generic type parameters.
+func FuncReceiverName(fn *ast.FuncDecl) string {
+	if fn.Recv == nil || len(fn.Recv.List) == 0 {
+		return ""
+	}
+	t := fn.Recv.List[0].Type
+	if star, ok := t.(*ast.StarExpr); ok {
+		t = star.X
+	}
+	switch tt := t.(type) {
+	case *ast.Ident:
+		return tt.Name
+	case *ast.IndexExpr:
+		if id, ok := tt.X.(*ast.Ident); ok {
+			return id.Name
+		}
+	case *ast.IndexListExpr:
+		if id, ok := tt.X.(*ast.Ident); ok {
+			return id.Name
+		}
+	}
+	return ""
+}
+
 func gitShowPrefix(dir string) (string, error) {
 	cmd := exec.Command("git", "rev-parse", "--show-prefix")
 	cmd.Dir = dir
@@ -239,29 +264,4 @@ func collectTypeAPI(s *ast.TypeSpec, qualifier string, render func(ast.Node) str
 	default:
 		api[name] = render(s.Type)
 	}
-}
-
-// FuncReceiverName returns the (unqualified) receiver type name of a method decl,
-// stripping a leading pointer and any generic type parameters.
-func FuncReceiverName(fn *ast.FuncDecl) string {
-	if fn.Recv == nil || len(fn.Recv.List) == 0 {
-		return ""
-	}
-	t := fn.Recv.List[0].Type
-	if star, ok := t.(*ast.StarExpr); ok {
-		t = star.X
-	}
-	switch tt := t.(type) {
-	case *ast.Ident:
-		return tt.Name
-	case *ast.IndexExpr:
-		if id, ok := tt.X.(*ast.Ident); ok {
-			return id.Name
-		}
-	case *ast.IndexListExpr:
-		if id, ok := tt.X.(*ast.Ident); ok {
-			return id.Name
-		}
-	}
-	return ""
 }

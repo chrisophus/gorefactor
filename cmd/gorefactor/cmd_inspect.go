@@ -20,16 +20,7 @@ func inspectCommand(args []string) error {
 	}
 	file := args[0]
 	maxSize := defaultSplitMaxLines
-	for i := 1; i < len(args); i++ {
-		if args[i] == "--max" && i+1 < len(args) {
-			var n int
-			_, _ = fmt.Sscanf(args[i+1], "%d", &n)
-			if n > 0 {
-				maxSize = n
-			}
-			i++
-		}
-	}
+	maxSize = extractBlockL23(args, maxSize)
 
 	info, err := parser.ParseFile(file)
 	if err != nil {
@@ -85,6 +76,11 @@ func inspectCommand(args []string) error {
 		fmt.Printf("  [%s] %s: %s\n", iss.Severity, iss.Rule, iss.Message)
 	}
 
+	extractBlockL79(file, maxSize)
+	return nil
+}
+
+func extractBlockL79(file string, maxSize int) {
 	if issue, err := analyzer.AnalyzeFileSize(file, maxSize); err == nil && len(issue.ExtractionHints) > 0 {
 		shown := 0
 		fmt.Println("\nTop extraction candidates:")
@@ -97,5 +93,18 @@ func inspectCommand(args []string) error {
 			shown++
 		}
 	}
-	return nil
+}
+
+func extractBlockL23(args []string, maxSize int) int {
+	for i := 1; i < len(args); i++ {
+		if args[i] == "--max" && i+1 < len(args) {
+			var n int
+			_, _ = fmt.Sscanf(args[i+1], "%d", &n)
+			if n > 0 {
+				maxSize = n
+			}
+			i++
+		}
+	}
+	return maxSize
 }

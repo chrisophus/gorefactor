@@ -9,27 +9,6 @@ import (
 	"testing"
 )
 
-// seedCorpus writes the given entries as JSONL under dir's failure-corpus
-// path, returning dir. Hermetic: no network, temp dir only.
-func seedCorpus(t *testing.T, entries []minedFailure) string {
-	t.Helper()
-	dir := t.TempDir()
-	path := filepath.Join(dir, failureCorpusRelPath)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	var b bytes.Buffer
-	for _, e := range entries {
-		raw, _ := json.Marshal(e)
-		b.Write(raw)
-		b.WriteByte('\n')
-	}
-	if err := os.WriteFile(path, b.Bytes(), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return dir
-}
-
 func TestNormalizeReasonClustersVariants(t *testing.T) {
 	// Same defect, different symbol/file/line → identical normalized key.
 	a := normalizeReason(`ERROR: symbol "Foo" not found in bar/baz.go:42`)
@@ -121,4 +100,25 @@ func TestRunMineFailuresMissingCorpus(t *testing.T) {
 	if n != 0 || !strings.Contains(out.String(), "nothing to mine") {
 		t.Errorf("expected graceful no-op, got n=%d out=%q", n, out.String())
 	}
+}
+
+// seedCorpus writes the given entries as JSONL under dir's failure-corpus
+// path, returning dir. Hermetic: no network, temp dir only.
+func seedCorpus(t *testing.T, entries []minedFailure) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, failureCorpusRelPath)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var b bytes.Buffer
+	for _, e := range entries {
+		raw, _ := json.Marshal(e)
+		b.Write(raw)
+		b.WriteByte('\n')
+	}
+	if err := os.WriteFile(path, b.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
 }

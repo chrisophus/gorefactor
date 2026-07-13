@@ -84,6 +84,18 @@ type DetailedError struct {
 	RelatedCode map[string]string `json:"relatedCode,omitempty"`
 }
 
+// NewDetailedError creates a DetailedError with sensible defaults
+func NewDetailedError(code ErrorCode, message string) *DetailedError {
+	return &DetailedError{
+		Code:        code,
+		Message:     message,
+		Details:     make(map[string]interface{}),
+		RootCauses:  []string{},
+		Suggestions: []RecoverySuggestion{},
+		RelatedCode: make(map[string]string),
+	}
+}
+
 // MarshalJSON implements json.Marshaler
 func (de *DetailedError) MarshalJSON() ([]byte, error) {
 	type Alias DetailedError
@@ -99,18 +111,6 @@ func (de *DetailedError) MarshalJSON() ([]byte, error) {
 // Error implements the error interface
 func (de *DetailedError) Error() string {
 	return de.Message
-}
-
-// NewDetailedError creates a DetailedError with sensible defaults
-func NewDetailedError(code ErrorCode, message string) *DetailedError {
-	return &DetailedError{
-		Code:        code,
-		Message:     message,
-		Details:     make(map[string]interface{}),
-		RootCauses:  []string{},
-		Suggestions: []RecoverySuggestion{},
-		RelatedCode: make(map[string]string),
-	}
 }
 
 // WithContext adds location information

@@ -16,59 +16,7 @@ func applyOp(kind string, a map[string]any, cfg Config) string {
 	tgt := &orchestrator.TargetSpecification{}
 	params := map[string]any{}
 
-	switch kind {
-	case "rename_declaration":
-		if fn := str("function"); fn != "" {
-			tgt.FunctionName = fn
-		}
-		if m := str("method"); m != "" {
-			tgt.MethodName = m
-		}
-		if t := str("type"); t != "" {
-			tgt.TypeName = t
-		}
-		op.Target = tgt
-		params["newName"] = str("new_name")
-	case "replace_code":
-		params["location"] = map[string]any{"functionName": str("function")}
-		params["codePattern"] = str("code_pattern")
-		params["replacementCode"] = str("replacement_code")
-	case "insert_code":
-		loc := map[string]any{"type": str("location_type")}
-		if anc := str("anchor_function"); anc != "" {
-			loc["functionName"] = anc
-		}
-		params["location"] = loc
-		params["codeSnippet"] = str("code_snippet")
-	case "create_file":
-		params["codeSnippet"] = str("code_snippet")
-	case "move_function":
-		tgt.FunctionName = str("function")
-		op.Target = tgt
-		params["newFile"] = str("new_file")
-		op.Type = "move_method" // orchestrator handles both via same executor
-	case "move_method":
-		tgt.MethodName = str("method")
-		tgt.ReceiverType = str("receiver_type")
-		op.Target = tgt
-		params["newFile"] = str("new_file")
-	case "delete_declaration":
-		if fn := str("function"); fn != "" {
-			tgt.FunctionName = fn
-		}
-		if m := str("method"); m != "" {
-			tgt.MethodName = m
-		}
-		if t := str("type"); t != "" {
-			tgt.TypeName = t
-		}
-		op.Target = tgt
-	case "remove_code_block":
-		if fn := str("function"); fn != "" {
-			params["location"] = map[string]any{"functionName": fn}
-		}
-		params["codePattern"] = str("code_pattern")
-	}
+	extractBlockL19(kind, str, tgt, op, params)
 	if len(params) > 0 {
 		op.Parameters = params
 	}
@@ -114,4 +62,60 @@ func applyOp(kind string, a map[string]any, cfg Config) string {
 		return msg
 	}
 	return fmt.Sprintf("applied %s on %s", kind, op.File)
+}
+
+func extractBlockL19(kind string, str func(k string) string, tgt *orchestrator.TargetSpecification, op *orchestrator.RefactoringOperation, params map[string]any) {
+	switch kind {
+	case "rename_declaration":
+		if fn := str("function"); fn != "" {
+			tgt.FunctionName = fn
+		}
+		if m := str("method"); m != "" {
+			tgt.MethodName = m
+		}
+		if t := str("type"); t != "" {
+			tgt.TypeName = t
+		}
+		op.Target = tgt
+		params["newName"] = str("new_name")
+	case "replace_code":
+		params["location"] = map[string]any{"functionName": str("function")}
+		params["codePattern"] = str("code_pattern")
+		params["replacementCode"] = str("replacement_code")
+	case "insert_code":
+		loc := map[string]any{"type": str("location_type")}
+		if anc := str("anchor_function"); anc != "" {
+			loc["functionName"] = anc
+		}
+		params["location"] = loc
+		params["codeSnippet"] = str("code_snippet")
+	case "create_file":
+		params["codeSnippet"] = str("code_snippet")
+	case "move_function":
+		tgt.FunctionName = str("function")
+		op.Target = tgt
+		params["newFile"] = str("new_file")
+		op.Type = "move_method"
+	case "move_method":
+		tgt.MethodName = str("method")
+		tgt.ReceiverType = str("receiver_type")
+		op.Target = tgt
+		params["newFile"] = str("new_file")
+	case "delete_declaration":
+		if fn := str("function"); fn != "" {
+			tgt.FunctionName = fn
+		}
+		if m := str("method"); m != "" {
+			tgt.MethodName = m
+		}
+		if t := str("type"); t != "" {
+			tgt.TypeName = t
+		}
+		op.Target = tgt
+	case "remove_code_block":
+		if fn := str("function"); fn != "" {
+			params["location"] = map[string]any{"functionName": fn}
+		}
+		params["codePattern"] = str("code_pattern")
+	}
 }

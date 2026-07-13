@@ -55,38 +55,6 @@ const goodPlan = `{
   ]
 }`
 
-func newSampleRepo(t *testing.T) string {
-	t.Helper()
-	dir := t.TempDir()
-	write := func(name, body string) {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write("go.mod", "module sample\n\ngo 1.21\n")
-	write("sample.go", sampleGo)
-	write("sample_test.go", sampleTestGo)
-	// Mirror the real repo: .gorefactor/ is gitignored, so the agent's
-	// rollback (git clean -fd, no -x) preserves the persistent notes and
-	// failure corpus across attempts.
-	write(".gitignore", ".gorefactor/\n")
-
-	for _, args := range [][]string{
-		{"init", "-q"},
-		{"config", "user.email", "t@example.com"},
-		{"config", "user.name", "t"},
-		{"config", "commit.gpgsign", "false"},
-		{"add", "-A"},
-		{"commit", "-q", "-m", "init"},
-	} {
-		c := exec.Command("git", append([]string{"-C", dir}, args...)...)
-		if out, err := c.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-	return dir
-}
-
 func TestDriver_AppliesAndGatesPassingRefactor(t *testing.T) {
 	dir := newSampleRepo(t)
 
@@ -126,23 +94,6 @@ func TestDriver_RecoversFromBadFirstResponse(t *testing.T) {
 	}
 }
 
-// additive: create a brand-new file in the module.
-const createFilePlan = `{
-  "version": "1.0",
-  "name": "add-mathx",
-  "description": "add mathx.go with Double",
-  "operations": [
-    {
-      "type": "create_file",
-      "description": "new file",
-      "file": "mathx.go",
-      "parameters": {
-        "codeSnippet": "package sample\n\nfunc Double(n int) int { return n * 2 }\n"
-      }
-    }
-  ]
-}`
-
 func TestDriver_CreatesNewFile(t *testing.T) {
 	dir := newSampleRepo(t)
 
@@ -162,19 +113,18 @@ func TestDriver_CreatesNewFile(t *testing.T) {
 	}
 }
 
-// additive: insert a new top-level function after an existing one.
-const insertFuncPlan = `{
+// additive: create a brand-new file in the module.
+const createFilePlan = `{
   "version": "1.0",
-  "name": "add-triple",
-  "description": "insert Triple after Sum",
+  "name": "add-mathx",
+  "description": "add mathx.go with Double",
   "operations": [
     {
-      "type": "insert_code",
-      "description": "new function",
-      "file": "sample.go",
+      "type": "create_file",
+      "description": "new file",
+      "file": "mathx.go",
       "parameters": {
-        "codeSnippet": "func Triple(n int) int { return n * 3 }",
-        "location": { "type": "after_function", "functionName": "Sum" }
+        "codeSnippet": "package sample\n\nfunc Double(n int) int { return n * 2 }\n"
       }
     }
   ]
@@ -199,6 +149,24 @@ func TestDriver_InsertsNewFunction(t *testing.T) {
 	}
 }
 
+// additive: insert a new top-level function after an existing one.
+const insertFuncPlan = `{
+  "version": "1.0",
+  "name": "add-triple",
+  "description": "insert Triple after Sum",
+  "operations": [
+    {
+      "type": "insert_code",
+      "description": "new function",
+      "file": "sample.go",
+      "parameters": {
+        "codeSnippet": "func Triple(n int) int { return n * 3 }",
+        "location": { "type": "after_function", "functionName": "Sum" }
+      }
+    }
+  ]
+}`
+
 func TestDriver_DryRunDoesNotModify(t *testing.T) {
 	dir := newSampleRepo(t)
 	before, _ := os.ReadFile(filepath.Join(dir, "sample.go"))
@@ -214,4 +182,36 @@ func TestDriver_DryRunDoesNotModify(t *testing.T) {
 	if string(before) != string(after) {
 		t.Fatalf("dry-run modified the file")
 	}
+}
+
+func newSampleRepo(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	write := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("go.mod", "module sample\n\ngo 1.21\n")
+	write("sample.go", sampleGo)
+	write("sample_test.go", sampleTestGo)
+	// Mirror the real repo: .gorefactor/ is gitignored, so the agent's
+	// rollback (git clean -fd, no -x) preserves the persistent notes and
+	// failure corpus across attempts.
+	write(".gitignore", ".gorefactor/\n")
+
+	for _, args := range [][]string{
+		{"init", "-q"},
+		{"config", "user.email", "t@example.com"},
+		{"config", "user.name", "t"},
+		{"config", "commit.gpgsign", "false"},
+		{"add", "-A"},
+		{"commit", "-q", "-m", "init"},
+	} {
+		c := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		if out, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	return dir
 }

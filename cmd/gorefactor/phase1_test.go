@@ -12,32 +12,6 @@ import (
 	"github.com/chrisophus/gorefactor/orchestrator"
 )
 
-func captureStdout(t *testing.T, fn func()) string {
-	t.Helper()
-	old := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stdout = w
-	defer func() { os.Stdout = old }()
-	fn()
-	_ = w.Close()
-	b, _ := io.ReadAll(r)
-	os.Stdout = old
-	return string(b)
-}
-
-func assertExitCode(t *testing.T, err error, want int) {
-	t.Helper()
-	if err == nil {
-		t.Fatalf("expected error with exit code %d, got nil", want)
-	}
-	if got := exitCodeFor(err); got != want {
-		t.Fatalf("exit code = %d, want %d (err: %v)", got, want, err)
-	}
-}
-
 func TestDeleteCommandMissingTarget(t *testing.T) {
 	t.Chdir(t.TempDir())
 	path := writeTempGo(t, ".", "f.go", "package x\n\nfunc Keep() {}\n\nfunc Other() {}\n")
@@ -424,5 +398,31 @@ func TestMoveMissingTargetListsCandidates(t *testing.T) {
 	}
 	if _, serr := os.Stat("dst.go"); !os.IsNotExist(serr) {
 		t.Fatal("failed move must not create the destination file")
+	}
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	defer func() { os.Stdout = old }()
+	fn()
+	_ = w.Close()
+	b, _ := io.ReadAll(r)
+	os.Stdout = old
+	return string(b)
+}
+
+func assertExitCode(t *testing.T, err error, want int) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("expected error with exit code %d, got nil", want)
+	}
+	if got := exitCodeFor(err); got != want {
+		t.Fatalf("exit code = %d, want %d (err: %v)", got, want, err)
 	}
 }

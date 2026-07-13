@@ -7,49 +7,6 @@ import (
 	"testing"
 )
 
-func writeConditionsFixture(t *testing.T) string {
-	t.Helper()
-	testFile := filepath.Join(t.TempDir(), "fixture.go")
-	code := `package main
-
-import "fmt"
-
-func simpleFunc() {
-	fmt.Println("simple")
-}
-
-func complexFunc(items []int) (int, error) {
-	total := 0
-	for _, item := range items {
-		if item < 0 {
-			return 0, fmt.Errorf("negative item")
-		}
-		if item > 0 && item < 100 {
-			total += item
-		}
-	}
-	if err := validate(total); err != nil {
-		return 0, err
-	}
-	return total, nil
-}
-
-func validate(n int) error {
-	return nil
-}
-
-type Thing struct{}
-
-func (t *Thing) Process() {
-	fmt.Println("process")
-}
-`
-	if err := os.WriteFile(testFile, []byte(code), 0644); err != nil {
-		t.Fatalf("write fixture: %v", err)
-	}
-	return testFile
-}
-
 func TestEvaluateCondition_Complexity(t *testing.T) {
 	orch := NewOrchestrator()
 	testFile := writeConditionsFixture(t)
@@ -292,4 +249,47 @@ func TestExecuteOperation_UnmetConditionSkips(t *testing.T) {
 	if result.Applied {
 		t.Error("operation must not be applied when conditions are unmet")
 	}
+}
+
+func writeConditionsFixture(t *testing.T) string {
+	t.Helper()
+	testFile := filepath.Join(t.TempDir(), "fixture.go")
+	code := `package main
+
+import "fmt"
+
+func simpleFunc() {
+	fmt.Println("simple")
+}
+
+func complexFunc(items []int) (int, error) {
+	total := 0
+	for _, item := range items {
+		if item < 0 {
+			return 0, fmt.Errorf("negative item")
+		}
+		if item > 0 && item < 100 {
+			total += item
+		}
+	}
+	if err := validate(total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func validate(n int) error {
+	return nil
+}
+
+type Thing struct{}
+
+func (t *Thing) Process() {
+	fmt.Println("process")
+}
+`
+	if err := os.WriteFile(testFile, []byte(code), 0644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	return testFile
 }

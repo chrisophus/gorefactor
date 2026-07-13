@@ -22,26 +22,6 @@ func Middle() {
 func Leaf() {}
 `
 
-// connectTestClient wires an SDK client to the gorefactor server over an
-// in-memory transport and returns the connected client session. allowWrite
-// selects whether the mutation guides are registered (Phase 3).
-func connectTestClient(t *testing.T, allowWrite bool) *mcp.ClientSession {
-	t.Helper()
-	ctx := context.Background()
-	server := newMCPServer(getCommands(), allowWrite)
-	clientT, serverT := mcp.NewInMemoryTransports()
-	if _, err := server.Connect(ctx, serverT, nil); err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
-	cs, err := client.Connect(ctx, clientT, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() { _ = cs.Close() })
-	return cs
-}
-
 func TestMCPInitializeServerInfo(t *testing.T) {
 	cs := connectTestClient(t, false)
 	got := cs.InitializeResult()
@@ -115,34 +95,6 @@ func TestMCPToolsListSchema(t *testing.T) {
 	}
 }
 
-// schemaProperties decodes a tool's inputSchema (delivered to the client as a
-// map[string]any) into a properties map keyed by property name.
-func schemaProperties(t *testing.T, schema any) map[string]map[string]interface{} {
-	t.Helper()
-	b, err := json.Marshal(schema)
-	if err != nil {
-		t.Fatalf("marshal schema: %v", err)
-	}
-	var decoded struct {
-		Properties map[string]map[string]interface{} `json:"properties"`
-	}
-	if err := json.Unmarshal(b, &decoded); err != nil {
-		t.Fatalf("unmarshal schema: %v", err)
-	}
-	if decoded.Properties == nil {
-		return map[string]map[string]interface{}{}
-	}
-	return decoded.Properties
-}
-
-func keysOf(m map[string]map[string]interface{}) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	return out
-}
-
 func TestMCPCallToolCallgraph(t *testing.T) {
 	t.Chdir(t.TempDir())
 	writeTempGo(t, ".", "x.go", mcpTestSrc)
@@ -200,6 +152,54 @@ func TestMCPCallUnknownTool(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected protocol error for unknown tool")
 	}
+}
+
+// connectTestClient wires an SDK client to the gorefactor server over an
+// in-memory transport and returns the connected client session. allowWrite
+// selects whether the mutation guides are registered (Phase 3).
+func connectTestClient(t *testing.T, allowWrite bool) *mcp.ClientSession {
+	t.Helper()
+	ctx := context.Background()
+	server := newMCPServer(getCommands(), allowWrite)
+	clientT, serverT := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(ctx, serverT, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	cs, err := client.Connect(ctx, clientT, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = cs.Close() })
+	return cs
+}
+
+// schemaProperties decodes a tool's inputSchema (delivered to the client as a
+// map[string]any) into a properties map keyed by property name.
+func schemaProperties(t *testing.T, schema any) map[string]map[string]interface{} {
+	t.Helper()
+	b, err := json.Marshal(schema)
+	if err != nil {
+		t.Fatalf("marshal schema: %v", err)
+	}
+	var decoded struct {
+		Properties map[string]map[string]interface{} `json:"properties"`
+	}
+	if err := json.Unmarshal(b, &decoded); err != nil {
+		t.Fatalf("unmarshal schema: %v", err)
+	}
+	if decoded.Properties == nil {
+		return map[string]map[string]interface{}{}
+	}
+	return decoded.Properties
+}
+
+func keysOf(m map[string]map[string]interface{}) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
 }
 
 func toolText(t *testing.T, res *mcp.CallToolResult) string {

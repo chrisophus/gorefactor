@@ -103,6 +103,12 @@ func canonicalizePlanJSON(js string) (string, error) {
 		return "", err
 	}
 	ops, _ := plan["operations"].([]any)
+	extractBlockL106(ops)
+	out, err := json.Marshal(plan)
+	return string(out), err
+}
+
+func extractBlockL106(ops []any) {
 	for _, o := range ops {
 		op, ok := o.(map[string]any)
 		if !ok {
@@ -124,7 +130,7 @@ func canonicalizePlanJSON(js string) (string, error) {
 		if params == nil {
 			params = map[string]any{}
 		}
-		// content-ish synonyms -> parameters.codeSnippet
+
 		for _, k := range []string{"content", "code", "codeSnippet", "snippet", "body", "fileContent"} {
 			if v, ok := op[k]; ok {
 				if _, exists := params["codeSnippet"]; !exists {
@@ -133,7 +139,7 @@ func canonicalizePlanJSON(js string) (string, error) {
 				delete(op, k)
 			}
 		}
-		// known params placed at op top level -> parameters
+
 		for _, k := range []string{"newName", "replacementCode", "codePattern", "newFile", "location"} {
 			if v, ok := op[k]; ok {
 				if _, exists := params[k]; !exists {
@@ -146,6 +152,4 @@ func canonicalizePlanJSON(js string) (string, error) {
 			op["parameters"] = params
 		}
 	}
-	out, err := json.Marshal(plan)
-	return string(out), err
 }

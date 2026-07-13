@@ -79,6 +79,16 @@ func buildTestScaffold(pkg *packages.Package, fn *ast.FuncDecl, recv, target str
 		callExpr = fmt.Sprintf("(%s{}).%s(%s)", recv, fn.Name.Name, strings.Join(callArgs, ", "))
 	}
 
+	extractBlockL82(results, buf, callExpr)
+
+	fmt.Fprintf(&buf, "\t\t})\n")
+	fmt.Fprintf(&buf, "\t}\n")
+	fmt.Fprintf(&buf, "}\n")
+
+	return buf.String(), testName, nil
+}
+
+func extractBlockL82(results []fieldInfo, buf bytes.Buffer, callExpr string) {
 	if len(results) == 0 {
 		fmt.Fprintf(&buf, "\t\t\t%s\n", callExpr)
 	} else if len(results) == 1 && results[0].typStr == "error" {
@@ -87,7 +97,7 @@ func buildTestScaffold(pkg *packages.Package, fn *ast.FuncDecl, recv, target str
 		fmt.Fprintf(&buf, "\t\t\t\tt.Errorf(\"got err %%v, wantErr %%v\", err, tc.wantErr)\n")
 		fmt.Fprintf(&buf, "\t\t\t}\n")
 	} else {
-		// Multi-return.
+
 		retVars := make([]string, len(results))
 		for i, r := range results {
 			if r.typStr == "error" {
@@ -117,10 +127,4 @@ func buildTestScaffold(pkg *packages.Package, fn *ast.FuncDecl, recv, target str
 			}
 		}
 	}
-
-	fmt.Fprintf(&buf, "\t\t})\n")
-	fmt.Fprintf(&buf, "\t}\n")
-	fmt.Fprintf(&buf, "}\n")
-
-	return buf.String(), testName, nil
 }

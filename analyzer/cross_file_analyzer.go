@@ -118,6 +118,23 @@ type BlockMetadata struct {
 	Complexity     int
 }
 
+// FindDuplicateBlocksInDir walks dirPath with walk options, then finds duplicate
+// function-body blocks. Prefer this over AnalyzeCrossFile when you only need
+// duplicates and want generated/vendor trees skipped (same as lint).
+func FindDuplicateBlocksInDir(dirPath string, walk WalkOptions) ([]DuplicateBlock, error) {
+	files, err := WalkGoFiles(dirPath, walk)
+	if err != nil {
+		return nil, fmt.Errorf("walk go files: %w", err)
+	}
+	return FindDuplicateBlocks(files)
+}
+
+// AnalyzeCrossFile performs a complete cross-file analysis on a directory.
+// Generated *.gen.go / *_gen.go files and standard vendor/.git trees are skipped.
+func AnalyzeCrossFile(dirPath string) (*CrossFileAnalysis, error) {
+	return analyzeCrossFile(dirPath, DefaultWalkOptions())
+}
+
 // extractBlocksFromFunc extracts code blocks from a function body
 func extractBlocksFromFunc(fn *ast.FuncDecl, filePath string, fset *token.FileSet, fileContent string, codeMap map[string][]Location, codeBlocks map[string]string, blockMetadata map[string]BlockMetadata) {
 	if fn.Body == nil {
@@ -186,23 +203,6 @@ func extractBlocksFromFunc(fn *ast.FuncDecl, filePath string, fset *token.FileSe
 		}
 		return true
 	})
-}
-
-// FindDuplicateBlocksInDir walks dirPath with walk options, then finds duplicate
-// function-body blocks. Prefer this over AnalyzeCrossFile when you only need
-// duplicates and want generated/vendor trees skipped (same as lint).
-func FindDuplicateBlocksInDir(dirPath string, walk WalkOptions) ([]DuplicateBlock, error) {
-	files, err := WalkGoFiles(dirPath, walk)
-	if err != nil {
-		return nil, fmt.Errorf("walk go files: %w", err)
-	}
-	return FindDuplicateBlocks(files)
-}
-
-// AnalyzeCrossFile performs a complete cross-file analysis on a directory.
-// Generated *.gen.go / *_gen.go files and standard vendor/.git trees are skipped.
-func AnalyzeCrossFile(dirPath string) (*CrossFileAnalysis, error) {
-	return analyzeCrossFile(dirPath, DefaultWalkOptions())
 }
 
 func analyzeCrossFile(dirPath string, walk WalkOptions) (*CrossFileAnalysis, error) {

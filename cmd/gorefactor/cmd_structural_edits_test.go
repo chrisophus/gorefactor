@@ -7,14 +7,6 @@ import (
 	"testing"
 )
 
-// mustParse fails the test if src at path is not valid Go.
-func mustParse(t *testing.T, path string) {
-	t.Helper()
-	if _, err := goparser.ParseFile(token.NewFileSet(), path, nil, 0); err != nil {
-		t.Fatalf("result does not parse: %v", err)
-	}
-}
-
 func TestInsertSwitchCase(t *testing.T) {
 	t.Chdir(t.TempDir())
 	const src = `package x
@@ -165,5 +157,13 @@ func TestEndOfFlagsSeparator(t *testing.T) {
 	cmd := Command{Name: "replace-in-literal", MinArgs: 3, MaxArgs: 3, Flags: spec}
 	if err := checkCommandArgs(cmd, []string{"f.go", "--", "-old", "-new"}); err != nil {
 		t.Fatalf("checkCommandArgs with -- should accept dash-leading positionals: %v", err)
+	}
+}
+
+// mustParse fails the test if src at path is not valid Go.
+func mustParse(t *testing.T, path string) {
+	t.Helper()
+	if _, err := goparser.ParseFile(token.NewFileSet(), path, nil, 0); err != nil {
+		t.Fatalf("result does not parse: %v", err)
 	}
 }

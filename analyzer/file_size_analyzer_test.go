@@ -10,15 +10,6 @@ import (
 	"testing"
 )
 
-func getTempFile(t *testing.T, suffix string) string {
-	tmpDir := os.TempDir()
-	tmpFile := filepath.Join(tmpDir, "size_analyzer_test_"+t.Name()+"_"+suffix+".go")
-	t.Cleanup(func() {
-		_ = os.Remove(tmpFile)
-	})
-	return tmpFile
-}
-
 func TestAnalyzeFileSize_SmallFile(t *testing.T) {
 	content := `package main
 
@@ -240,4 +231,13 @@ func TestCalculateExtractionPriority(t *testing.T) {
 				tc.lineCount, tc.complexity, priority)
 		}
 	}
+}
+
+func getTempFile(t *testing.T, suffix string) string {
+	tmpDir := os.TempDir()
+	tmpFile := filepath.Join(tmpDir, "size_analyzer_test_"+t.Name()+"_"+suffix+".go")
+	t.Cleanup(func() {
+		_ = os.Remove(tmpFile)
+	})
+	return tmpFile
 }

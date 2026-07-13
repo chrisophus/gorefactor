@@ -10,17 +10,40 @@ import (
 	"github.com/chrisophus/gorefactor/analyzer"
 )
 
-// initGitFixture turns the current directory into a git repo with one commit.
-func initGitFixture(t *testing.T) {
-	t.Helper()
-	for _, args := range [][]string{
-		{"init", "-q"}, {"config", "user.email", "t@e.com"},
-		{"config", "user.name", "t"}, {"config", "commit.gpgsign", "false"},
-		{"add", "-A"}, {"commit", "-q", "-m", "init"},
-	} {
-		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
+func TestAPIDiffDetectsChanges(t *testing.T) {
+	t.Chdir(t.TempDir())
+	writeTempGo(t, ".", "api.go", apiDiffV1)
+	initGitFixture(t)
+	writeTempGo(t, ".", "api.go", apiDiffV2)
+
+	out := captureStdout(t, func() {
+		if err := apiDiffCommand([]string{"--json"}); err != nil {
+			t.Errorf("api-diff: %v", err)
 		}
+	})
+	var res analyzer.APIDiffResult
+	if err := json.Unmarshal([]byte(out), &res); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	if res.Ref != "HEAD" || !res.Breaking {
+		t.Fatalf("expected breaking diff vs HEAD: %+v", res)
+	}
+	joined := strings.Join(res.Added, "\n")
+	if !strings.Contains(joined, "api.Fresh") || !strings.Contains(joined, "api.Cfg.Extra") {
+		t.Fatalf("added should list Fresh and Cfg.Extra: %v", res.Added)
+	}
+	if strings.Contains(joined, "unexported") {
+		t.Fatalf("unexported symbols must not appear: %v", res.Added)
+	}
+	removed := strings.Join(res.Removed, "\n")
+	if !strings.Contains(removed, "api.Gone") || !strings.Contains(removed, "api.Cfg.Old") {
+		t.Fatalf("removed should list Gone and Cfg.Old: %v", res.Removed)
+	}
+	if len(res.Changed) != 1 || res.Changed[0].Symbol != "api.Sig" {
+		t.Fatalf("changed should be exactly api.Sig: %+v", res.Changed)
+	}
+	if !strings.Contains(res.Changed[0].New, "b string") {
+		t.Fatalf("changed entry should carry new signature: %+v", res.Changed[0])
 	}
 }
 
@@ -63,43 +86,6 @@ const Limit = 5
 
 func unexported() {} // never part of the API surface
 `
-
-func TestAPIDiffDetectsChanges(t *testing.T) {
-	t.Chdir(t.TempDir())
-	writeTempGo(t, ".", "api.go", apiDiffV1)
-	initGitFixture(t)
-	writeTempGo(t, ".", "api.go", apiDiffV2)
-
-	out := captureStdout(t, func() {
-		if err := apiDiffCommand([]string{"--json"}); err != nil {
-			t.Errorf("api-diff: %v", err)
-		}
-	})
-	var res analyzer.APIDiffResult
-	if err := json.Unmarshal([]byte(out), &res); err != nil {
-		t.Fatalf("invalid JSON: %v\n%s", err, out)
-	}
-	if res.Ref != "HEAD" || !res.Breaking {
-		t.Fatalf("expected breaking diff vs HEAD: %+v", res)
-	}
-	joined := strings.Join(res.Added, "\n")
-	if !strings.Contains(joined, "api.Fresh") || !strings.Contains(joined, "api.Cfg.Extra") {
-		t.Fatalf("added should list Fresh and Cfg.Extra: %v", res.Added)
-	}
-	if strings.Contains(joined, "unexported") {
-		t.Fatalf("unexported symbols must not appear: %v", res.Added)
-	}
-	removed := strings.Join(res.Removed, "\n")
-	if !strings.Contains(removed, "api.Gone") || !strings.Contains(removed, "api.Cfg.Old") {
-		t.Fatalf("removed should list Gone and Cfg.Old: %v", res.Removed)
-	}
-	if len(res.Changed) != 1 || res.Changed[0].Symbol != "api.Sig" {
-		t.Fatalf("changed should be exactly api.Sig: %+v", res.Changed)
-	}
-	if !strings.Contains(res.Changed[0].New, "b string") {
-		t.Fatalf("changed entry should carry new signature: %+v", res.Changed[0])
-	}
-}
 
 func TestAPIDiffCleanTreeNotBreaking(t *testing.T) {
 	t.Chdir(t.TempDir())
@@ -148,4 +134,18 @@ func TestAPIDiffOutsideGitRepo(t *testing.T) {
 		t.Fatal("expected error outside a git repository")
 	}
 	_ = os.Remove("api.go")
+}
+
+// initGitFixture turns the current directory into a git repo with one commit.
+func initGitFixture(t *testing.T) {
+	t.Helper()
+	for _, args := range [][]string{
+		{"init", "-q"}, {"config", "user.email", "t@e.com"},
+		{"config", "user.name", "t"}, {"config", "commit.gpgsign", "false"},
+		{"add", "-A"}, {"commit", "-q", "-m", "init"},
+	} {
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
 }

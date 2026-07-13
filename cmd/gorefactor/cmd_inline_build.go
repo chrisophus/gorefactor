@@ -74,23 +74,7 @@ func buildInlineTemplate(fset *token.FileSet, src []byte, fd *ast.FuncDecl) (*in
 	if walkErr != nil {
 		return nil, walkErr
 	}
-	ast.Inspect(regionAST(fd, tmpl.exprMode), func(n ast.Node) bool {
-		id, ok := n.(*ast.Ident)
-		if !ok || skip[id] {
-			return true
-		}
-		idx, isParam := paramSet[id.Name]
-		if !isParam {
-			return true
-		}
-		counts[idx]++
-		tmpl.uses = append(tmpl.uses, paramUse{
-			start: fset.Position(id.Pos()).Offset - regStart,
-			end:   fset.Position(id.End()).Offset - regStart,
-			param: idx,
-		})
-		return true
-	})
+	extractBlockL77(fd, tmpl, skip, paramSet, counts, fset, regStart)
 	for i, c := range counts {
 		if c > 1 {
 			return nil, parseErrorf("cannot inline %s: parameter %q is used %d times; temp vars are out of scope — refusing", name, params[i], c)
@@ -114,4 +98,24 @@ func buildInlineTemplate(fset *token.FileSet, src []byte, fd *ast.FuncDecl) (*in
 	}
 	sort.Slice(tmpl.uses, func(i, j int) bool { return tmpl.uses[i].start < tmpl.uses[j].start })
 	return tmpl, nil
+}
+
+func extractBlockL77(fd *ast.FuncDecl, tmpl *inlineTemplate, skip map[*ast.Ident]bool, paramSet map[string]int, counts []int, fset *token.FileSet, regStart int) {
+	ast.Inspect(regionAST(fd, tmpl.exprMode), func(n ast.Node) bool {
+		id, ok := n.(*ast.Ident)
+		if !ok || skip[id] {
+			return true
+		}
+		idx, isParam := paramSet[id.Name]
+		if !isParam {
+			return true
+		}
+		counts[idx]++
+		tmpl.uses = append(tmpl.uses, paramUse{
+			start: fset.Position(id.Pos()).Offset - regStart,
+			end:   fset.Position(id.End()).Offset - regStart,
+			param: idx,
+		})
+		return true
+	})
 }

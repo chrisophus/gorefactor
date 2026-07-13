@@ -32,18 +32,7 @@ func orchestrateRefactoring(args []string) error {
 	runTests := false
 
 	// Parse arguments
-	for i := 1; i < len(args); i++ {
-		switch args[i] {
-		case "--dry-run":
-			dryRun = true
-		case "--test":
-			runTests = true
-		default:
-			if outputFile == "" {
-				outputFile = args[i]
-			}
-		}
-	}
+	outputFile, dryRun, runTests = extractBlockL35(args, dryRun, runTests, outputFile)
 
 	// Create orchestrator
 	orch := orchestrator.NewOrchestrator()
@@ -58,37 +47,8 @@ func orchestrateRefactoring(args []string) error {
 	fmt.Printf("Description: %s\n", plan.Description)
 	fmt.Printf("Operations: %d\n", len(plan.Operations))
 
-	if dryRun {
-		fmt.Printf("\n[DRY-RUN MODE] No files will be modified\n")
-		dryRunResult, err := orch.ExecutePlanDryRun(plan.Name)
-		if err != nil {
-			return fmt.Errorf("failed to execute dry-run: %w", err)
-		}
-
-		fmt.Println(dryRunResult.Summary)
-
-		for i, op := range dryRunResult.Operations {
-			fmt.Printf("\nOperation %d: %s\n", i+1, op.Operation.Type)
-			if op.Success {
-				fmt.Printf("  Status: SUCCESS\n")
-				fmt.Printf("  Changes: %d file(s)\n", len(op.Changes))
-				for _, change := range op.Changes {
-					fmt.Printf("    - %s\n", change.File)
-				}
-			} else {
-				fmt.Printf("  Status: FAILED\n")
-				fmt.Printf("  Error: %s\n", op.Error)
-			}
-		}
-
-		if outputFile != "" {
-			if err := orchestrator.SaveDryRunReport(dryRunResult, outputFile); err != nil {
-				return fmt.Errorf("failed to save dry-run report: %w", err)
-			}
-			fmt.Printf("\nDry-run report saved to: %s\n", outputFile)
-		}
-
-		return nil
+	if r0, done := extractBlockL61(dryRun, orch, plan, outputFile); done {
+		return r0
 	}
 
 	// Capture pre-execution content of every file the plan may touch so the
@@ -114,19 +74,8 @@ func orchestrateRefactoring(args []string) error {
 	printExecutionResult(result)
 
 	// --test: run go test for affected packages; on failure restore snapshot and exit 4.
-	if runTests {
-		if testErr := runAffectedTests(plan, planFiles); testErr != nil {
-			fmt.Fprintf(os.Stderr, "\n[--test] Tests failed after plan execution:\n%v\n", testErr)
-			fmt.Fprintf(os.Stderr, "[--test] Restoring snapshot for plan %q ...\n", plan.Name)
-			snapDir := orchestrator.SnapshotDir(plan.Name)
-			if n, restoreErr := orchestrator.RestoreSnapshot(snapDir); restoreErr != nil {
-				fmt.Fprintf(os.Stderr, "[--test] Snapshot restore failed: %v\n", restoreErr)
-			} else {
-				fmt.Fprintf(os.Stderr, "[--test] Restored %d file(s) from snapshot.\n", n)
-			}
-			return gateErrorf("tests failed after plan execution; snapshot restored")
-		}
-		fmt.Printf("\n[--test] All tests passed.\n")
+	if r0, done := extractBlockL88(runTests, plan, planFiles); done {
+		return r0
 	}
 
 	// Save result to file if specified
@@ -143,6 +92,76 @@ func orchestrateRefactoring(args []string) error {
 	}
 
 	return nil
+}
+
+func extractBlockL35(args []string, dryRun bool, runTests bool, outputFile string) (string, bool, bool) {
+	for i := 1; i < len(args); i++ {
+		switch args[i] {
+		case "--dry-run":
+			dryRun = true
+		case "--test":
+			runTests = true
+		default:
+			if outputFile == "" {
+				outputFile = args[i]
+			}
+		}
+	}
+	return outputFile, dryRun, runTests
+}
+
+func extractBlockL88(runTests bool, plan *orchestrator.RefactoringPlan, planFiles []string) (r0 error, done bool) {
+	if runTests {
+		if testErr := runAffectedTests(plan, planFiles); testErr != nil {
+			fmt.Fprintf(os.Stderr, "\n[--test] Tests failed after plan execution:\n%v\n", testErr)
+			fmt.Fprintf(os.Stderr, "[--test] Restoring snapshot for plan %q ...\n", plan.Name)
+			snapDir := orchestrator.SnapshotDir(plan.Name)
+			if n, restoreErr := orchestrator.RestoreSnapshot(snapDir); restoreErr != nil {
+				fmt.Fprintf(os.Stderr, "[--test] Snapshot restore failed: %v\n", restoreErr)
+			} else {
+				fmt.Fprintf(os.Stderr, "[--test] Restored %d file(s) from snapshot.\n", n)
+			}
+			return gateErrorf("tests failed after plan execution; snapshot restored"), true
+		}
+		fmt.Printf("\n[--test] All tests passed.\n")
+	}
+	return
+}
+
+func extractBlockL61(dryRun bool, orch *orchestrator.Orchestrator, plan *orchestrator.RefactoringPlan, outputFile string) (r0 error, done bool) {
+	if dryRun {
+		fmt.Printf("\n[DRY-RUN MODE] No files will be modified\n")
+		dryRunResult, err := orch.ExecutePlanDryRun(plan.Name)
+		if err != nil {
+			return fmt.Errorf("failed to execute dry-run: %w", err), true
+		}
+
+		fmt.Println(dryRunResult.Summary)
+
+		for i, op := range dryRunResult.Operations {
+			fmt.Printf("\nOperation %d: %s\n", i+1, op.Operation.Type)
+			if op.Success {
+				fmt.Printf("  Status: SUCCESS\n")
+				fmt.Printf("  Changes: %d file(s)\n", len(op.Changes))
+				for _, change := range op.Changes {
+					fmt.Printf("    - %s\n", change.File)
+				}
+			} else {
+				fmt.Printf("  Status: FAILED\n")
+				fmt.Printf("  Error: %s\n", op.Error)
+			}
+		}
+
+		if outputFile != "" {
+			if err := orchestrator.SaveDryRunReport(dryRunResult, outputFile); err != nil {
+				return fmt.Errorf("failed to save dry-run report: %w", err), true
+			}
+			fmt.Printf("\nDry-run report saved to: %s\n", outputFile)
+		}
+
+		return nil, true
+	}
+	return
 }
 
 func printExecutionResult(result *orchestrator.ExecutionResult) {

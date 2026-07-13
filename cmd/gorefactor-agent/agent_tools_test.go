@@ -11,53 +11,6 @@ import (
 	"testing"
 )
 
-// extractPuntReport pulls and parses the JSON the loop emits between
-// the <<<PUNT_REPORT ... PUNT_REPORT>>> markers in the run log.
-func extractPuntReport(t *testing.T, log string) puntReport {
-	t.Helper()
-	a := strings.Index(log, "<<<PUNT_REPORT")
-	b := strings.Index(log, "PUNT_REPORT>>>")
-	if a < 0 || b < 0 || b < a {
-		t.Fatalf("no PUNT_REPORT block in log:\n%s", log)
-	}
-	body := strings.TrimSpace(log[a+len("<<<PUNT_REPORT") : b])
-	var rep puntReport
-	if err := json.Unmarshal([]byte(body), &rep); err != nil {
-		t.Fatalf("punt report not valid JSON: %v\n%s", err, body)
-	}
-	return rep
-}
-
-// mockToolProvider scripts assistant turns for the agentic loop. If
-// repeatLast is set, the final scripted turn repeats forever (used to
-// drive the budget-exhaustion / autopunt path deterministically).
-type mockToolProvider struct {
-	script     []chatMessage
-	repeatLast bool
-	calls      int
-}
-
-func (m *mockToolProvider) ChatTools(_ context.Context, _ []chatMessage, _ []toolDef) (chatMessage, error) {
-	i := m.calls
-	m.calls++
-	if i < len(m.script) {
-		return m.script[i], nil
-	}
-	if m.repeatLast && len(m.script) > 0 {
-		return m.script[len(m.script)-1], nil
-	}
-	return chatMessage{Role: "assistant", Content: "(no more script)"}, nil
-}
-
-func asstCall(name, argsJSON string) chatMessage {
-	var c toolCall
-	c.ID = "call_" + name
-	c.Type = "function"
-	c.Function.Name = name
-	c.Function.Arguments = argsJSON
-	return chatMessage{Role: "assistant", ToolCalls: []toolCall{c}}
-}
-
 func TestCompactMessages(t *testing.T) {
 	msgs := []chatMessage{{Role: "system"}, {Role: "user", Content: "task"}}
 	for i := 0; i < 20; i++ { // 20 (assistant,tool) pairs
@@ -83,6 +36,27 @@ func TestCompactMessages(t *testing.T) {
 	if len(compactMessages(small, 12)) != len(small) {
 		t.Fatalf("small history should be untouched")
 	}
+}
+
+// mockToolProvider scripts assistant turns for the agentic loop. If
+// repeatLast is set, the final scripted turn repeats forever (used to
+// drive the budget-exhaustion / autopunt path deterministically).
+type mockToolProvider struct {
+	script     []chatMessage
+	repeatLast bool
+	calls      int
+}
+
+func (m *mockToolProvider) ChatTools(_ context.Context, _ []chatMessage, _ []toolDef) (chatMessage, error) {
+	i := m.calls
+	m.calls++
+	if i < len(m.script) {
+		return m.script[i], nil
+	}
+	if m.repeatLast && len(m.script) > 0 {
+		return m.script[len(m.script)-1], nil
+	}
+	return chatMessage{Role: "assistant", Content: "(no more script)"}, nil
 }
 
 func TestAgentic_AppliesAndGates(t *testing.T) {
@@ -170,4 +144,30 @@ func TestAgentic_BudgetExhaustionAutopunts(t *testing.T) {
 	if rep.Kind != "autopunt:budget" || !rep.RepoClean {
 		t.Fatalf("expected clean autopunt:budget report, got %+v", rep)
 	}
+}
+
+// extractPuntReport pulls and parses the JSON the loop emits between
+// the <<<PUNT_REPORT ... PUNT_REPORT>>> markers in the run log.
+func extractPuntReport(t *testing.T, log string) puntReport {
+	t.Helper()
+	a := strings.Index(log, "<<<PUNT_REPORT")
+	b := strings.Index(log, "PUNT_REPORT>>>")
+	if a < 0 || b < 0 || b < a {
+		t.Fatalf("no PUNT_REPORT block in log:\n%s", log)
+	}
+	body := strings.TrimSpace(log[a+len("<<<PUNT_REPORT") : b])
+	var rep puntReport
+	if err := json.Unmarshal([]byte(body), &rep); err != nil {
+		t.Fatalf("punt report not valid JSON: %v\n%s", err, body)
+	}
+	return rep
+}
+
+func asstCall(name, argsJSON string) chatMessage {
+	var c toolCall
+	c.ID = "call_" + name
+	c.Type = "function"
+	c.Function.Name = name
+	c.Function.Arguments = argsJSON
+	return chatMessage{Role: "assistant", ToolCalls: []toolCall{c}}
 }

@@ -6,46 +6,6 @@ import (
 	"testing"
 )
 
-// newFixture writes files to a temp dir and git-inits+commits them, returning
-// the dir. This is the fixture's "initial state" (HEAD) that api/files oracles
-// diff against. Hermetic: no network, local git only.
-func newFixture(t *testing.T, files map[string]string) string {
-	t.Helper()
-	dir, err := os.MkdirTemp("", "oracle-test-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
-	if err := materializeFixture(dir, files); err != nil {
-		t.Fatal(err)
-	}
-	if err := gitInitCommit(dir); err != nil {
-		t.Fatal(err)
-	}
-	return dir
-}
-
-func writeFile(t *testing.T, dir, name, content string) {
-	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func mustPass(t *testing.T, dir string, c oracleCheck) {
-	t.Helper()
-	if ok, msg := evalOne(dir, c); !ok {
-		t.Errorf("expected %s to pass, failed: %s", c.Kind, msg)
-	}
-}
-
-func mustFail(t *testing.T, dir string, c oracleCheck) {
-	t.Helper()
-	if ok, _ := evalOne(dir, c); ok {
-		t.Errorf("expected %s to fail, but it passed", c.Kind)
-	}
-}
-
 func TestOracleDeclaredAbsent(t *testing.T) {
 	dir := newFixture(t, map[string]string{
 		"go.mod": gomod,
@@ -153,5 +113,45 @@ func TestOracleRejectsNoOp(t *testing.T) {
 				t.Errorf("task %q oracle passed on an unchanged fixture — asserts do not require the transform", task.ID)
 			}
 		})
+	}
+}
+
+// newFixture writes files to a temp dir and git-inits+commits them, returning
+// the dir. This is the fixture's "initial state" (HEAD) that api/files oracles
+// diff against. Hermetic: no network, local git only.
+func newFixture(t *testing.T, files map[string]string) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "oracle-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	if err := materializeFixture(dir, files); err != nil {
+		t.Fatal(err)
+	}
+	if err := gitInitCommit(dir); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func writeFile(t *testing.T, dir, name, content string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func mustPass(t *testing.T, dir string, c oracleCheck) {
+	t.Helper()
+	if ok, msg := evalOne(dir, c); !ok {
+		t.Errorf("expected %s to pass, failed: %s", c.Kind, msg)
+	}
+}
+
+func mustFail(t *testing.T, dir string, c oracleCheck) {
+	t.Helper()
+	if ok, _ := evalOne(dir, c); ok {
+		t.Errorf("expected %s to fail, but it passed", c.Kind)
 	}
 }

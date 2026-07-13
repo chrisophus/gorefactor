@@ -7,33 +7,6 @@ import (
 	"testing"
 )
 
-func writeAmbiguityFixture(t *testing.T) string {
-	t.Helper()
-	testFile := filepath.Join(t.TempDir(), "ambiguous.go")
-	code := `package main
-
-type Server struct{}
-
-type Client struct{}
-
-func Process() {
-	println("free function")
-}
-
-func (s *Server) Process() {
-	println("server method")
-}
-
-func (c Client) Process() {
-	println("client method")
-}
-`
-	if err := os.WriteFile(testFile, []byte(code), 0644); err != nil {
-		t.Fatalf("write fixture: %v", err)
-	}
-	return testFile
-}
-
 func TestFindTargetBySemantics_AmbiguousTie(t *testing.T) {
 	orch := NewOrchestrator()
 	testFile := writeAmbiguityFixture(t)
@@ -127,4 +100,31 @@ func TestFindTargetBySemantics_ReceiverMismatchNotFound(t *testing.T) {
 	if !strings.Contains(err.Error(), "no suitable target") {
 		t.Errorf("expected no-suitable-target error, got: %v", err)
 	}
+}
+
+func writeAmbiguityFixture(t *testing.T) string {
+	t.Helper()
+	testFile := filepath.Join(t.TempDir(), "ambiguous.go")
+	code := `package main
+
+type Server struct{}
+
+type Client struct{}
+
+func Process() {
+	println("free function")
+}
+
+func (s *Server) Process() {
+	println("server method")
+}
+
+func (c Client) Process() {
+	println("client method")
+}
+`
+	if err := os.WriteFile(testFile, []byte(code), 0644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	return testFile
 }

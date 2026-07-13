@@ -10,42 +10,6 @@ import (
 	"github.com/chrisophus/gorefactor/analyzer"
 )
 
-// cgIndexEdges renders an index's call edges as sorted "caller->callee" keys,
-// a representation that is independent of map order and pointer identity so two
-// indexes built different ways can be compared directly.
-func cgIndexEdges(idx *cgIndex) []string {
-	var out []string
-	for caller, callees := range idx.callees {
-		for _, c := range callees {
-			out = append(out, caller+"->"+c.key())
-		}
-	}
-	sort.Strings(out)
-	return out
-}
-
-// cgIndexDefs renders an index's definitions as sorted "key@file:line" entries.
-func cgIndexDefs(idx *cgIndex) []string {
-	var out []string
-	for k, d := range idx.defs {
-		out = append(out, fmt.Sprintf("%s@%s:%d", k, d.file, d.line))
-	}
-	sort.Strings(out)
-	return out
-}
-
-func eqStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
 // TestCallIndexCacheMatchesUncached is the core equivalence guarantee: the
 // cached builder must produce exactly the same defs and edges as a cold,
 // throwaway build over a real, multi-file package.
@@ -170,26 +134,6 @@ func TestCallIndexCacheWarmSkipsExtraction(t *testing.T) {
 	}
 }
 
-func contains(xs []string, want string) bool {
-	for _, x := range xs {
-		if x == want {
-			return true
-		}
-	}
-	return false
-}
-
-// --- Benchmarks: validate the cache actually saves work in server mode. ---
-
-func benchFiles(b *testing.B, root string) []string {
-	b.Helper()
-	files, err := collectGoFiles(root, analyzer.DefaultWalkOptions())
-	if err != nil || len(files) == 0 {
-		b.Skipf("no files under %s: %v", root, err)
-	}
-	return files
-}
-
 // BenchmarkBuildCallIndexCold rebuilds the index from scratch every iteration
 // (fresh caches) — the per-invocation cost a long-lived server pays without
 // Phase 2.
@@ -252,4 +196,60 @@ func BenchmarkFindCallersWarm(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
+}
+
+// cgIndexEdges renders an index's call edges as sorted "caller->callee" keys,
+// a representation that is independent of map order and pointer identity so two
+// indexes built different ways can be compared directly.
+func cgIndexEdges(idx *cgIndex) []string {
+	var out []string
+	for caller, callees := range idx.callees {
+		for _, c := range callees {
+			out = append(out, caller+"->"+c.key())
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// cgIndexDefs renders an index's definitions as sorted "key@file:line" entries.
+func cgIndexDefs(idx *cgIndex) []string {
+	var out []string
+	for k, d := range idx.defs {
+		out = append(out, fmt.Sprintf("%s@%s:%d", k, d.file, d.line))
+	}
+	sort.Strings(out)
+	return out
+}
+
+func eqStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func contains(xs []string, want string) bool {
+	for _, x := range xs {
+		if x == want {
+			return true
+		}
+	}
+	return false
+}
+
+// --- Benchmarks: validate the cache actually saves work in server mode. ---
+
+func benchFiles(b *testing.B, root string) []string {
+	b.Helper()
+	files, err := collectGoFiles(root, analyzer.DefaultWalkOptions())
+	if err != nil || len(files) == 0 {
+		b.Skipf("no files under %s: %v", root, err)
+	}
+	return files
 }

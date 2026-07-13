@@ -97,6 +97,71 @@ func RunScenario(scenario TestScenario, testDir string) TestResult {
 	return result
 }
 
+// PrintResult formats a test result for display
+func PrintResult(result TestResult) {
+	status := "❌"
+	if result.Success {
+		status = "✅"
+	}
+
+	fmt.Printf("%s %s\n", status, result.ScenarioName)
+	if result.ErrorCode != "" {
+		fmt.Printf("   Error Code: %s\n", result.ErrorCode)
+	}
+	if len(result.Suggestions) > 0 {
+		fmt.Printf("   Suggestions: %s\n", strings.Join(result.Suggestions, ", "))
+	}
+	if result.RecoveryAttempt > 0 {
+		fmt.Printf("   Recovery Attempts: %d/%d\n", result.RecoveryAttempt, len(result.Suggestions))
+	}
+	if result.ErrorMessage != "" {
+		fmt.Printf("   Error: %s\n", result.ErrorMessage)
+	}
+}
+
+// CreateTestDir creates a temporary directory for tests
+func CreateTestDir() (string, error) {
+	dir, err := os.MkdirTemp("", "gorefactor-test-*")
+	if err != nil {
+		return "", fmt.Errorf(
+
+			// Initialize go.mod
+			"mkdir temp: %w", err)
+	}
+
+	modPath := filepath.Join(dir, "go.mod")
+	content := "module test\n\ngo 1.24\n"
+	if err := os.WriteFile(modPath, []byte(content), 0644); err != nil {
+		return "", fmt.Errorf("write file: %w", err)
+	}
+
+	return dir, nil
+}
+
+// WriteGoFile writes a Go file to the test directory
+func WriteGoFile(testDir, filename, content string) (string, error) {
+	path := filepath.Join(testDir, filename)
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		return "", fmt.Errorf("write file: %w", err)
+	}
+	return path, nil
+}
+
+// FileExists checks if a file exists
+func FileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// FileContains checks if a file contains a substring
+func FileContains(path, substr string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(data), substr)
+}
+
 // executeCommand runs a command and returns error if it fails
 func executeCommand(testDir string, args []string) error {
 	if len(args) == 0 {
@@ -174,69 +239,4 @@ func parseJSONError(output string) (string, []string) {
 	}
 
 	return "", nil
-}
-
-// PrintResult formats a test result for display
-func PrintResult(result TestResult) {
-	status := "❌"
-	if result.Success {
-		status = "✅"
-	}
-
-	fmt.Printf("%s %s\n", status, result.ScenarioName)
-	if result.ErrorCode != "" {
-		fmt.Printf("   Error Code: %s\n", result.ErrorCode)
-	}
-	if len(result.Suggestions) > 0 {
-		fmt.Printf("   Suggestions: %s\n", strings.Join(result.Suggestions, ", "))
-	}
-	if result.RecoveryAttempt > 0 {
-		fmt.Printf("   Recovery Attempts: %d/%d\n", result.RecoveryAttempt, len(result.Suggestions))
-	}
-	if result.ErrorMessage != "" {
-		fmt.Printf("   Error: %s\n", result.ErrorMessage)
-	}
-}
-
-// CreateTestDir creates a temporary directory for tests
-func CreateTestDir() (string, error) {
-	dir, err := os.MkdirTemp("", "gorefactor-test-*")
-	if err != nil {
-		return "", fmt.Errorf(
-
-			// Initialize go.mod
-			"mkdir temp: %w", err)
-	}
-
-	modPath := filepath.Join(dir, "go.mod")
-	content := "module test\n\ngo 1.24\n"
-	if err := os.WriteFile(modPath, []byte(content), 0644); err != nil {
-		return "", fmt.Errorf("write file: %w", err)
-	}
-
-	return dir, nil
-}
-
-// WriteGoFile writes a Go file to the test directory
-func WriteGoFile(testDir, filename, content string) (string, error) {
-	path := filepath.Join(testDir, filename)
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		return "", fmt.Errorf("write file: %w", err)
-	}
-	return path, nil
-}
-
-// FileExists checks if a file exists
-func FileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
-// FileContains checks if a file contains a substring
-func FileContains(path, substr string) bool {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return false
-	}
-	return strings.Contains(string(data), substr)
 }

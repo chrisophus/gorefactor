@@ -62,6 +62,27 @@ func AnalyzeFileSize(filePath string, maxSize int) (*FileSizeIssue, error) {
 	return issue, nil
 }
 
+func FileFunctionComplexities(file string) ([]FunctionComplexity, error) {
+	fset := token.NewFileSet()
+	astFile, err := parser.ParseFile(fset, file, nil, 0)
+	if err != nil {
+		return nil, fmt.Errorf("parse file: %w", err)
+	}
+	var out []FunctionComplexity
+	for _, decl := range astFile.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Body == nil {
+			continue
+		}
+		out = append(out, FunctionComplexity{
+			Name:       fn.Name.Name,
+			Line:       fset.Position(fn.Pos()).Line,
+			Complexity: calculateFunctionComplexity(fn),
+		})
+	}
+	return out, nil
+}
+
 // countLines counts the number of lines in a file
 func countLines(filePath string) (int, error) {
 	file, err := os.Open(filePath)
@@ -191,6 +212,12 @@ func countComplexity(node ast.Node, count *int) {
 	}
 }
 
+type FunctionComplexity struct {
+	Name       string
+	Line       int
+	Complexity int
+}
+
 // calculateExtractionPriority determines how important it is to extract a function
 // Returns 1-10 scale where 10 is highest priority
 func calculateExtractionPriority(lineCount int, complexity int) int {
@@ -224,31 +251,4 @@ func calculateExtractionPriority(lineCount int, complexity int) int {
 	}
 
 	return priority
-}
-
-type FunctionComplexity struct {
-	Name       string
-	Line       int
-	Complexity int
-}
-
-func FileFunctionComplexities(file string) ([]FunctionComplexity, error) {
-	fset := token.NewFileSet()
-	astFile, err := parser.ParseFile(fset, file, nil, 0)
-	if err != nil {
-		return nil, fmt.Errorf("parse file: %w", err)
-	}
-	var out []FunctionComplexity
-	for _, decl := range astFile.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Body == nil {
-			continue
-		}
-		out = append(out, FunctionComplexity{
-			Name:       fn.Name.Name,
-			Line:       fset.Position(fn.Pos()).Line,
-			Complexity: calculateFunctionComplexity(fn),
-		})
-	}
-	return out, nil
 }

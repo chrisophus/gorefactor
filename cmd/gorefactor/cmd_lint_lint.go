@@ -69,6 +69,19 @@ func lintCommand(args []string) error {
 		}
 		return nil
 	}
+	extractBlockL72(displayIssues, opts, shouldFail, outputIssues, issues, ctx, rules)
+	if shouldFail {
+		return fmt.Errorf(
+			"lint: %d issue(s) at or above %s severity (%d total issue(s))",
+			failingIssueCount(issues, opts.failOn),
+			opts.failOn,
+			len(issues),
+		)
+	}
+	return nil
+}
+
+func extractBlockL72(displayIssues []lintIssue, opts lintOptions, shouldFail bool, outputIssues []lintIssue, issues []lintIssue, ctx LintContext, rules []LintRule) {
 	if len(displayIssues) > 0 && (!opts.quiet || shouldFail) {
 		byRule := map[string]int{}
 		for _, iss := range displayIssues {
@@ -99,13 +112,4 @@ func lintCommand(args []string) error {
 			}
 		}
 	}
-	if shouldFail {
-		return fmt.Errorf(
-			"lint: %d issue(s) at or above %s severity (%d total issue(s))",
-			failingIssueCount(issues, opts.failOn),
-			opts.failOn,
-			len(issues),
-		)
-	}
-	return nil
 }

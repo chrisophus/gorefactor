@@ -8,26 +8,6 @@ import (
 	"strings"
 )
 
-// parseNonTestFiles parses every non-test file in files, silently skipping unparsable ones, and
-// returns the survivors with their paths.
-func parseNonTestFiles(files []string) (*token.FileSet, []*ast.File, []string) {
-	fset := token.NewFileSet()
-	var astFiles []*ast.File
-	var paths []string
-	for _, path := range files {
-		if strings.HasSuffix(path, "_test.go") {
-			continue
-		}
-		f, err := parser.ParseFile(fset, path, nil, 0)
-		if err != nil {
-			continue
-		}
-		astFiles = append(astFiles, f)
-		paths = append(paths, path)
-	}
-	return fset, astFiles, paths
-}
-
 // PackageErrorSentinels reports the package-level `errors.New` sentinel var names declared across
 // files (test files excluded), keyed by name.
 func PackageErrorSentinels(files []string) (map[string]bool, error) {
@@ -77,4 +57,24 @@ func ApplySentinelWrapFixes(filename string, src []byte, sentinel string) ([]byt
 		return nil, 0, nil
 	}
 	return applySrcEdits(src, edits), len(edits), nil
+}
+
+// parseNonTestFiles parses every non-test file in files, silently skipping unparsable ones, and
+// returns the survivors with their paths.
+func parseNonTestFiles(files []string) (*token.FileSet, []*ast.File, []string) {
+	fset := token.NewFileSet()
+	var astFiles []*ast.File
+	var paths []string
+	for _, path := range files {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			continue
+		}
+		astFiles = append(astFiles, f)
+		paths = append(paths, path)
+	}
+	return fset, astFiles, paths
 }

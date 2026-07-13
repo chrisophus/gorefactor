@@ -95,18 +95,8 @@ func txnCommand(args []string) error {
 		ops = append(ops, op)
 	}
 
-	for _, f := range collector.touched() {
-		if !strings.HasSuffix(f, ".go") {
-			continue
-		}
-		if _, err := os.Stat(f); err != nil {
-			continue
-		}
-		if _, perr := goparser.ParseFile(token.NewFileSet(), f, nil, 0); perr != nil {
-			collector.restore()
-			return txnFail(jsonOut, ops, collector,
-				parseErrorf("txn: parse gate failed on %s: %v — all changes rolled back", f, perr))
-		}
+	if r0, done := extractBlockL98(collector, jsonOut, ops); done {
+		return r0
 	}
 	if gate {
 		if out, err := exec.Command("go", "build", "./...").CombinedOutput(); err != nil {
@@ -117,20 +107,7 @@ func txnCommand(args []string) error {
 	}
 
 	undoToken := ""
-	if len(collector.seen) > 0 {
-		var created []string
-		for p := range collector.created {
-			created = append(created, p)
-		}
-		sort.Strings(created)
-		detail := fmt.Sprintf("txn: %d operation(s), %d file(s)", len(ops), len(collector.seen))
-		entry, jerr := orchestrator.RecordOperation("txn", detail, collector.before, created)
-		if jerr != nil {
-			fmt.Fprintf(os.Stderr, "warning: journal write failed: %v\n", jerr)
-		} else {
-			undoToken = entry.ID
-		}
-	}
+	undoToken = extractBlockL110(collector, ops, undoToken)
 
 	if jsonOut {
 		emitJSON(txnResult{
@@ -154,4 +131,39 @@ func txnCommand(args []string) error {
 		fmt.Printf("files: %s\n", strings.Join(collector.touched(), ", "))
 	}
 	return nil
+}
+
+func extractBlockL110(collector *txnCollector, ops []txnOpResult, undoToken string) string {
+	if len(collector.seen) > 0 {
+		var created []string
+		for p := range collector.created {
+			created = append(created, p)
+		}
+		sort.Strings(created)
+		detail := fmt.Sprintf("txn: %d operation(s), %d file(s)", len(ops), len(collector.seen))
+		entry, jerr := orchestrator.RecordOperation("txn", detail, collector.before, created)
+		if jerr != nil {
+			fmt.Fprintf(os.Stderr, "warning: journal write failed: %v\n", jerr)
+		} else {
+			undoToken = entry.ID
+		}
+	}
+	return undoToken
+}
+
+func extractBlockL98(collector *txnCollector, jsonOut bool, ops []txnOpResult) (r0 error, done bool) {
+	for _, f := range collector.touched() {
+		if !strings.HasSuffix(f, ".go") {
+			continue
+		}
+		if _, err := os.Stat(f); err != nil {
+			continue
+		}
+		if _, perr := goparser.ParseFile(token.NewFileSet(), f, nil, 0); perr != nil {
+			collector.restore()
+			return txnFail(jsonOut, ops, collector,
+				parseErrorf("txn: parse gate failed on %s: %v — all changes rolled back", f, perr)), true
+		}
+	}
+	return
 }

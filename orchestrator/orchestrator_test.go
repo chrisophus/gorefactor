@@ -7,16 +7,6 @@ import (
 	"testing"
 )
 
-// getTempTestFile returns a unique temporary file path for testing
-func getTempTestFile(t *testing.T, suffix string) string {
-	tmpDir := os.TempDir()
-	tmpFile := filepath.Join(tmpDir, "gorefactor_test_"+t.Name()+"_"+suffix)
-	t.Cleanup(func() {
-		os.Remove(tmpFile)
-	})
-	return tmpFile
-}
-
 func TestNewOrchestrator(t *testing.T) {
 	orch := NewOrchestrator()
 	if orch == nil {
@@ -232,10 +222,6 @@ func TestFindDefaultTarget_FileNotFound(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// Tests for GOREFACTOR_IMPROVEMENTS.md recommendations
-// ============================================================================
-
 // Test validation allows optional target for insert_code and create_file
 func TestValidateOperation_OptionalTarget(t *testing.T) {
 	orch := NewOrchestrator()
@@ -272,4 +258,14 @@ func TestValidateOperation_OptionalTarget(t *testing.T) {
 				tc.operationType, tc.hasTarget, tc.shouldBeValid, isValid)
 		}
 	}
+}
+
+// getTempTestFile returns a unique temporary file path for testing
+func getTempTestFile(t *testing.T, suffix string) string {
+	tmpDir := os.TempDir()
+	tmpFile := filepath.Join(tmpDir, "gorefactor_test_"+t.Name()+"_"+suffix)
+	t.Cleanup(func() {
+		os.Remove(tmpFile)
+	})
+	return tmpFile
 }

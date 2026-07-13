@@ -22,25 +22,6 @@ type PrematureAbstractionIssue struct {
 	Message   string
 }
 
-// FindPrematureAbstractionsInDir scans dir as a single package, finds
-// every interface declared locally, then flags functions returning one
-// whose interface has exactly one implementation in the same package.
-// Implementation count uses a method-name overlap heuristic — fast
-// enough to run per-file and accurate enough to suppress noise from
-// interfaces with multiple real impls (e.g. Provider with mock/openai/
-// anthropic backends).
-func FindPrematureAbstractionsInDir(dir string) ([]PrematureAbstractionIssue, error) {
-	cfg := &packages.Config{
-		Mode: packages.NeedSyntax | packages.NeedFiles,
-		Dir:  dir,
-	}
-	pkgs, err := packages.Load(cfg, ".")
-	if err != nil {
-		return nil, fmt.Errorf("load: %w", err)
-	}
-	return findPrematureAbstractions(pkgs), nil
-}
-
 // FindPrematureAbstractionsInDirs scans every directory in one packages.Load
 // call instead of one toolchain invocation per directory. Passing the explicit
 // directory list as patterns (rather than "./...") keeps the scanned set

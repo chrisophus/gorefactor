@@ -5,12 +5,6 @@ import (
 	"testing"
 )
 
-// writePlanSuggesterFile writes Go source to a temp file and returns the path.
-func writePlanSuggesterFile(t *testing.T, src string) string {
-	t.Helper()
-	return writeTempGo(t, src)
-}
-
 // ---- NewPlanSuggester ----
 
 func TestNewPlanSuggester_ValidFile(t *testing.T) {
@@ -375,4 +369,10 @@ func TestHasPrivatePrefix(t *testing.T) {
 			t.Errorf("hasPrivatePrefix(%q) = %v, want %v", c.name, got, c.want)
 		}
 	}
+}
+
+// writePlanSuggesterFile writes Go source to a temp file and returns the path.
+func writePlanSuggesterFile(t *testing.T, src string) string {
+	t.Helper()
+	return writeTempGo(t, src)
 }

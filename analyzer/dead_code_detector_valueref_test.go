@@ -6,31 +6,6 @@ import (
 	"testing"
 )
 
-// writeTempPkg writes the given files into a temp dir and returns their paths.
-func writeTempPkg(t *testing.T, files map[string]string) []string {
-	t.Helper()
-	dir := t.TempDir()
-	var paths []string
-	for name, src := range files {
-		p := filepath.Join(dir, name)
-		if err := os.WriteFile(p, []byte(src), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		paths = append(paths, p)
-	}
-	return paths
-}
-
-func deadNames(t *testing.T, files map[string]string) map[string]bool {
-	t.Helper()
-	paths := writeTempPkg(t, files)
-	got := map[string]bool{}
-	for _, iss := range NewDeadCodeDetector(paths).DetectDeadFunctions() {
-		got[iss.Name] = true
-	}
-	return got
-}
-
 // A function referenced only as a value (stored in a struct literal, never
 // called) must NOT be reported dead. This is the regression: FindCallers and
 // FindAllUses both miss value references, which let the autofix delete live
@@ -74,4 +49,29 @@ func Live() {}
 	if !dead["orphan"] {
 		t.Errorf("orphan is never referenced; expected it to be flagged dead")
 	}
+}
+
+// writeTempPkg writes the given files into a temp dir and returns their paths.
+func writeTempPkg(t *testing.T, files map[string]string) []string {
+	t.Helper()
+	dir := t.TempDir()
+	var paths []string
+	for name, src := range files {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		paths = append(paths, p)
+	}
+	return paths
+}
+
+func deadNames(t *testing.T, files map[string]string) map[string]bool {
+	t.Helper()
+	paths := writeTempPkg(t, files)
+	got := map[string]bool{}
+	for _, iss := range NewDeadCodeDetector(paths).DetectDeadFunctions() {
+		got[iss.Name] = true
+	}
+	return got
 }

@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-func approx(a, b float64) bool { return math.Abs(a-b) < 1e-9 }
-
 func TestLookupPricingLongestPrefix(t *testing.T) {
 	// "claude-opus-4-8" must resolve to the opus rate, not a shorter match.
 	p, ok := lookupPricing("claude-opus-4-8")
@@ -122,3 +120,5 @@ func TestCellSummaryUnpricedModel(t *testing.T) {
 		t.Error("tok/pass should be available regardless of pricing")
 	}
 }
+
+func approx(a, b float64) bool { return math.Abs(a-b) < 1e-9 }

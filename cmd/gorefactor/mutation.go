@@ -15,18 +15,18 @@ import (
 
 // mutationResult is the shared --json result shape for mutation commands.
 type mutationResult struct {
-	Success      bool            `json:"success"`
-	Operation    string          `json:"operation"`
-	File         string          `json:"file,omitempty"`
-	Detail       string          `json:"detail,omitempty"`
-	FilesChanged []string        `json:"filesChanged,omitempty"`
-	LinesChanged int             `json:"linesChanged"`
-	UndoToken    string          `json:"undoToken,omitempty"`
-	DryRun       bool            `json:"dryRun,omitempty"`
-	Diff         string          `json:"diff,omitempty"`
-	Error        string          `json:"error,omitempty"`
-	ErrorDetails *DetailedError  `json:"errorDetails,omitempty"`
-	Candidates   []string        `json:"candidates,omitempty"`
+	Success      bool           `json:"success"`
+	Operation    string         `json:"operation"`
+	File         string         `json:"file,omitempty"`
+	Detail       string         `json:"detail,omitempty"`
+	FilesChanged []string       `json:"filesChanged,omitempty"`
+	LinesChanged int            `json:"linesChanged"`
+	UndoToken    string         `json:"undoToken,omitempty"`
+	DryRun       bool           `json:"dryRun,omitempty"`
+	Diff         string         `json:"diff,omitempty"`
+	Error        string         `json:"error,omitempty"`
+	ErrorDetails *DetailedError `json:"errorDetails,omitempty"`
+	Candidates   []string       `json:"candidates,omitempty"`
 }
 
 func emitJSON(v interface{}) {
@@ -64,12 +64,12 @@ func (m *mutation) fail(err error) error {
 			Error:      err.Error(),
 			Candidates: errCandidates(err),
 		}
-		
+
 		// Extract DetailedError if present
 		if de, ok := err.(*DetailedError); ok {
 			result.ErrorDetails = de
 		}
-		
+
 		emitJSON(result)
 	}
 	return err
@@ -147,29 +147,7 @@ func (m *mutation) run(apply func() (string, error)) error {
 	}
 
 	undoToken := ""
-	if len(changed) > 0 {
-		beforeChanged := map[string][]byte{}
-		var createdOnly []string
-		for _, f := range changed {
-			if b, ok := before[f]; ok {
-				beforeChanged[f] = b
-			} else {
-				createdOnly = append(createdOnly, f)
-			}
-		}
-		if activeTxn != nil {
-			// Inside a transaction the txn command journals once for the
-			// whole batch; individual operations only feed the collector.
-			activeTxn.record(beforeChanged, createdOnly)
-		} else {
-			entry, jerr := orchestrator.RecordOperation(m.op, detail, beforeChanged, createdOnly)
-			if jerr != nil {
-				fmt.Fprintf(os.Stderr, "warning: journal write failed: %v\n", jerr)
-			} else {
-				undoToken = entry.ID
-			}
-		}
-	}
+	undoToken = extractBlockL150(changed, before, m, detail, undoToken)
 
 	if m.gate && len(changed) > 0 {
 		if gerr := buildAffectedPackages(changed); gerr != nil {
@@ -195,6 +173,32 @@ func (m *mutation) run(apply func() (string, error)) error {
 		fmt.Println(detail)
 	}
 	return nil
+}
+
+func extractBlockL150(changed []string, before map[string][]byte, m *mutation, detail string, undoToken string) string {
+	if len(changed) > 0 {
+		beforeChanged := map[string][]byte{}
+		var createdOnly []string
+		for _, f := range changed {
+			if b, ok := before[f]; ok {
+				beforeChanged[f] = b
+			} else {
+				createdOnly = append(createdOnly, f)
+			}
+		}
+		if activeTxn != nil {
+
+			activeTxn.record(beforeChanged, createdOnly)
+		} else {
+			entry, jerr := orchestrator.RecordOperation(m.op, detail, beforeChanged, createdOnly)
+			if jerr != nil {
+				fmt.Fprintf(os.Stderr, "warning: journal write failed: %v\n", jerr)
+			} else {
+				undoToken = entry.ID
+			}
+		}
+	}
+	return undoToken
 }
 
 // restore puts files back to their captured pre-mutation state, removing

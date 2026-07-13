@@ -12,27 +12,6 @@ type TestRunner struct {
 	workDir string
 }
 
-// TestResult represents test execution results
-type TestResult struct {
-	Success      bool
-	Output       string
-	ErrorOutput  string
-	ExitCode     int
-	TestsPassed  int
-	TestsFailed  int
-	Duration     string
-	PackageTests map[string]PackageTestResult
-}
-
-// PackageTestResult represents test results for a package
-type PackageTestResult struct {
-	Package  string
-	Passed   bool
-	Tests    int
-	Failures int
-	Duration string
-}
-
 // NewTestRunner creates a new test runner
 func NewTestRunner(workDir string) *TestRunner {
 	if workDir == "" {
@@ -101,33 +80,6 @@ func (tr *TestRunner) RunTestsForPackage(pkgPath string) *TestResult {
 	return result
 }
 
-// parseTestOutput extracts test metrics from test output
-func (tr *TestRunner) parseTestOutput(result *TestResult) {
-	lines := strings.Split(result.Output, "\n")
-
-	for _, line := range lines {
-		// Look for test result lines
-		if strings.Contains(line, "PASS") {
-			result.TestsPassed++
-		} else if strings.Contains(line, "FAIL") {
-			result.TestsFailed++
-		}
-
-		// Parse package-level results
-		if strings.Contains(line, "ok") || strings.Contains(line, "FAIL") {
-			parts := strings.Fields(line)
-			if len(parts) >= 2 {
-				pkgName := parts[1]
-				pkgResult := PackageTestResult{
-					Package: pkgName,
-					Passed:  strings.Contains(line, "ok"),
-				}
-				result.PackageTests[pkgName] = pkgResult
-			}
-		}
-	}
-}
-
 // CanTestAll checks if tests can be run for the working directory
 func (tr *TestRunner) CanTestAll() bool {
 	// Check if working directory has any Go test files
@@ -156,6 +108,45 @@ func (tr *TestRunner) CanTestAll() bool {
 	return false
 }
 
+// parseTestOutput extracts test metrics from test output
+func (tr *TestRunner) parseTestOutput(result *TestResult) {
+	lines := strings.Split(result.Output, "\n")
+
+	for _, line := range lines {
+		// Look for test result lines
+		if strings.Contains(line, "PASS") {
+			result.TestsPassed++
+		} else if strings.Contains(line, "FAIL") {
+			result.TestsFailed++
+		}
+
+		// Parse package-level results
+		if strings.Contains(line, "ok") || strings.Contains(line, "FAIL") {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				pkgName := parts[1]
+				pkgResult := PackageTestResult{
+					Package: pkgName,
+					Passed:  strings.Contains(line, "ok"),
+				}
+				result.PackageTests[pkgName] = pkgResult
+			}
+		}
+	}
+}
+
+// TestResult represents test execution results
+type TestResult struct {
+	Success      bool
+	Output       string
+	ErrorOutput  string
+	ExitCode     int
+	TestsPassed  int
+	TestsFailed  int
+	Duration     string
+	PackageTests map[string]PackageTestResult
+}
+
 // Summary returns a string summary of test results
 func (r *TestResult) Summary() string {
 	var sb strings.Builder
@@ -182,4 +173,13 @@ func (r *TestResult) Summary() string {
 // OutputLines returns test output as individual lines
 func (r *TestResult) OutputLines() []string {
 	return strings.Split(r.Output, "\n")
+}
+
+// PackageTestResult represents test results for a package
+type PackageTestResult struct {
+	Package  string
+	Passed   bool
+	Tests    int
+	Failures int
+	Duration string
 }

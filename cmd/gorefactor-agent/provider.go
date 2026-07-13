@@ -53,121 +53,8 @@ type openAIProvider struct {
 	promptToks, completionToks int
 }
 
-// tokenStater exposes cumulative model token usage for metrics.
-type tokenStater interface {
-	Tokens() (prompt, completion int)
-}
-
-// usageEnvelope is the OpenAI/Ollama `usage` block (best-effort).
-type usageEnvelope struct {
-	Usage struct {
-		PromptTokens     int `json:"prompt_tokens"`
-		CompletionTokens int `json:"completion_tokens"`
-	} `json:"usage"`
-}
-
-func newOpenAIProvider(baseURL, apiKey, model string) *openAIProvider {
-	if baseURL == "" {
-		baseURL = "https://api.openai.com/v1"
-	}
-	return &openAIProvider{
-		baseURL: strings.TrimRight(baseURL, "/"),
-		apiKey:  apiKey,
-		model:   model,
-		client:  &http.Client{Timeout: 120 * time.Second},
-	}
-}
-
-// schemaCompleter is implemented by providers that can enforce a JSON
-// schema at decode time. The loop type-asserts for it and falls back
-// to plain Complete (mock, Anthropic) when absent.
-type schemaCompleter interface {
-	CompleteSchema(ctx context.Context, system, user, schema string) (string, error)
-}
-
 func (p *openAIProvider) Complete(ctx context.Context, system, user string) (string, error) {
 	return p.complete(ctx, system, user, "")
-}
-
-// --- Tool-calling surface (Arm D) -----------------------------------
-//
-// The agentic loop needs multi-turn function calling, not single-shot
-// completion. These types mirror the OpenAI /chat/completions tool
-// protocol, which Ollama (qwen2.5-coder) honors.
-
-type chatMessage struct {
-	Role       string     `json:"role"`
-	Content    string     `json:"content,omitempty"`
-	ToolCalls  []toolCall `json:"tool_calls,omitempty"`
-	ToolCallID string     `json:"tool_call_id,omitempty"`
-}
-
-type toolCall struct {
-	ID       string `json:"id"`
-	Type     string `json:"type"`
-	Function struct {
-		Name      string `json:"name"`
-		Arguments string `json:"arguments"`
-	} `json:"function"`
-}
-
-type toolDef struct {
-	Type     string          `json:"type"`
-	Function toolDefFunction `json:"function"`
-}
-
-type toolDefFunction struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	Parameters  map[string]any `json:"parameters"`
-}
-
-// toolChatter is the agentic provider surface: one round trip given the
-// conversation so far + the tool catalog, returning the assistant turn
-// (content and/or tool calls). The loop owns iteration & tool exec.
-type toolChatter interface {
-	ChatTools(ctx context.Context, messages []chatMessage, tools []toolDef) (chatMessage, error)
-}
-
-// doWithRetry posts buf to endpoint with exponential-backoff retry on
-// 429 / 5xx responses — mirrors anthropicProvider.doWithRetry.
-func (p *openAIProvider) doWithRetry(ctx context.Context, endpoint string, buf []byte) (int, []byte, error) {
-	const maxAttempts = 5
-	var lastErr error
-	var prevResp *http.Response
-	for attempt := 0; attempt < maxAttempts; attempt++ {
-		if attempt > 0 {
-			delay := retryDelay(attempt, prevResp)
-			provDebugf("openai retry %d/%d after %s backoff (last: %v)",
-				attempt+1, maxAttempts, delay, lastErr)
-			if err := retrySleep(ctx, delay); err != nil {
-				return 0, nil, err
-			}
-		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(buf))
-		if err != nil {
-			return 0, nil, err
-		}
-		req.Header.Set("Content-Type", "application/json")
-		if p.apiKey != "" {
-			req.Header.Set("Authorization", "Bearer "+p.apiKey)
-		}
-		resp, err := p.client.Do(req)
-		if err != nil {
-			lastErr = err
-			prevResp = nil
-			continue
-		}
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
-			lastErr = fmt.Errorf("openai HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-			prevResp = resp
-			continue
-		}
-		return resp.StatusCode, body, nil
-	}
-	return 0, nil, fmt.Errorf("openai request failed after %d attempts: %w", maxAttempts, lastErr)
 }
 
 // ChatTools implements toolChatter for any OpenAI-compatible endpoint.
@@ -232,6 +119,119 @@ func (p *openAIProvider) ChatTools(ctx context.Context, messages []chatMessage, 
 		elapsed, len(body), p.promptToks-ptBefore, p.completionToks-ctBefore,
 		len(msg.ToolCalls), recovered, len(msg.Content))
 	return msg, nil
+}
+
+// doWithRetry posts buf to endpoint with exponential-backoff retry on
+// 429 / 5xx responses — mirrors anthropicProvider.doWithRetry.
+func (p *openAIProvider) doWithRetry(ctx context.Context, endpoint string, buf []byte) (int, []byte, error) {
+	const maxAttempts = 5
+	var lastErr error
+	var prevResp *http.Response
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if attempt > 0 {
+			delay := retryDelay(attempt, prevResp)
+			provDebugf("openai retry %d/%d after %s backoff (last: %v)",
+				attempt+1, maxAttempts, delay, lastErr)
+			if err := retrySleep(ctx, delay); err != nil {
+				return 0, nil, err
+			}
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(buf))
+		if err != nil {
+			return 0, nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if p.apiKey != "" {
+			req.Header.Set("Authorization", "Bearer "+p.apiKey)
+		}
+		resp, err := p.client.Do(req)
+		if err != nil {
+			lastErr = err
+			prevResp = nil
+			continue
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			lastErr = fmt.Errorf("openai HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+			prevResp = resp
+			continue
+		}
+		return resp.StatusCode, body, nil
+	}
+	return 0, nil, fmt.Errorf("openai request failed after %d attempts: %w", maxAttempts, lastErr)
+}
+
+// tokenStater exposes cumulative model token usage for metrics.
+type tokenStater interface {
+	Tokens() (prompt, completion int)
+}
+
+// usageEnvelope is the OpenAI/Ollama `usage` block (best-effort).
+type usageEnvelope struct {
+	Usage struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+	} `json:"usage"`
+}
+
+func newOpenAIProvider(baseURL, apiKey, model string) *openAIProvider {
+	if baseURL == "" {
+		baseURL = "https://api.openai.com/v1"
+	}
+	return &openAIProvider{
+		baseURL: strings.TrimRight(baseURL, "/"),
+		apiKey:  apiKey,
+		model:   model,
+		client:  &http.Client{Timeout: 120 * time.Second},
+	}
+}
+
+// schemaCompleter is implemented by providers that can enforce a JSON
+// schema at decode time. The loop type-asserts for it and falls back
+// to plain Complete (mock, Anthropic) when absent.
+type schemaCompleter interface {
+	CompleteSchema(ctx context.Context, system, user, schema string) (string, error)
+}
+
+// --- Tool-calling surface (Arm D) -----------------------------------
+//
+// The agentic loop needs multi-turn function calling, not single-shot
+// completion. These types mirror the OpenAI /chat/completions tool
+// protocol, which Ollama (qwen2.5-coder) honors.
+
+type chatMessage struct {
+	Role       string     `json:"role"`
+	Content    string     `json:"content,omitempty"`
+	ToolCalls  []toolCall `json:"tool_calls,omitempty"`
+	ToolCallID string     `json:"tool_call_id,omitempty"`
+}
+
+type toolCall struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
+}
+
+type toolDef struct {
+	Type     string          `json:"type"`
+	Function toolDefFunction `json:"function"`
+}
+
+type toolDefFunction struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Parameters  map[string]any `json:"parameters"`
+}
+
+// toolChatter is the agentic provider surface: one round trip given the
+// conversation so far + the tool catalog, returning the assistant turn
+// (content and/or tool calls). The loop owns iteration & tool exec.
+type toolChatter interface {
+	ChatTools(ctx context.Context, messages []chatMessage, tools []toolDef) (chatMessage, error)
 }
 
 // providerFromFlags builds the real provider from CLI/env config.

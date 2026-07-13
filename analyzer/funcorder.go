@@ -45,16 +45,53 @@ func FileFuncorderIssues(file string) ([]FuncorderIssue, error) {
 	return funcorderIssuesForFile(f, fset, file), nil
 }
 
-func funcorderIssuesForFile(f *ast.File, fset *token.FileSet, filename string) []FuncorderIssue {
+// ApplyFuncorderFixes rewrites the top-level declaration order of file to
+// satisfy funcorder's constructor, struct-method, and loose-function
+// placement rules:
+//
+//	struct type decl -> constructor(s) (original relative order) ->
+//	exported methods (original relative order) -> unexported methods
+//	(original relative order)
+//
+// and, independently, top-level functions that aren't methods, `init()`, or
+// a tracked constructor are reordered so exported ones precede unexported
+// ones (each subgroup keeping its original relative order).
+//
+// Declarations unrelated to any struct group or loose-function slot keep
+// their original relative order and position untouched. Returns the
+// rewritten, gofmt'd source and the number of fixes actually applied
+// (struct groups reordered, plus 1 if the loose-function pass changed
+// anything).
+func ApplyFuncorderFixes(filename string, src []byte) ([]byte, int, error) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, filename, src, parser.ParseComments)
+	if err != nil {
+		return nil, 0, fmt.Errorf("parse %s: %w", filename, err)
+	}
 	groups := funcorderGroups(f)
-	var out []FuncorderIssue
-	for _, g := range groups {
-		out = append(out, g.issues(fset, filename)...)
+
+	// Build the desired index permutation per group; count only groups that
+	// actually need reordering.
+	newOrder, changed := funcorderStructOrder(f, groups)
+
+	// Second pass: reorder loose top-level functions (excluding methods,
+	// init, and tracked constructors — those are covered by the group pass
+	// above) so exported functions precede unexported ones. Only the decl
+	// occupying each loose-function slot in newOrder changes; every other
+	// slot (struct groups, types, vars, imports) keeps its exact position.
+	changed = funcorderReorderLooseFuncs(groups, newOrder, f, changed)
+
+	if changed == 0 {
+		return src, 0, nil
 	}
-	if iss, ok := funcorderFunctionIssue(f, fset, filename, groups); ok {
-		out = append(out, iss)
+
+	buf := funcorderRenderReordered(f, fset, src, newOrder)
+
+	formatted, err := format.Source(buf.Bytes())
+	if err != nil {
+		return nil, 0, fmt.Errorf("internal: funcorder rewrite produced unparsable Go: %w", err)
 	}
-	return out
+	return formatted, changed, nil
 }
 
 // funcorderGroup captures one struct's constructor(s) and methods, along
@@ -66,6 +103,56 @@ type funcorderGroup struct {
 	ctorIdx     []int // Decls indices of constructor FuncDecls, in decl order
 	exportedIdx []int // Decls indices of exported methods, in decl order
 	unexpIdx    []int // Decls indices of unexported methods, in decl order
+}
+
+// issues computes the violations for this group.
+func (g *funcorderGroup) issues(fset *token.FileSet, filename string) []FuncorderIssue {
+	var out []FuncorderIssue
+
+	// funcorder-constructor: every constructor index must be strictly
+	// between the struct's index and every method's index.
+	out = funcorderConstructorIssue(g, fset, out, filename)
+
+	// funcorder-struct-method: no unexported method index may be less than
+	// any exported method index.
+	out = funcorderStructMethodIssue(g, fset, out, filename)
+	return out
+}
+
+// desiredOrder returns this group's member Decls-indices (struct, then
+// constructors, then exported methods, then unexported methods) in the
+// order they should appear.
+func (g *funcorderGroup) desiredOrder() []int {
+	out := make([]int, 0, 1+len(g.ctorIdx)+len(g.exportedIdx)+len(g.unexpIdx))
+	out = append(out, g.structIdx)
+	out = append(out, sortedCopy(g.ctorIdx)...)
+	out = append(out, sortedCopy(g.exportedIdx)...)
+	out = append(out, sortedCopy(g.unexpIdx)...)
+	return out
+}
+
+// allMemberIdx returns this group's member indices in their *original*
+// file order, for comparison against desiredOrder.
+func (g *funcorderGroup) allMemberIdx() []int {
+	out := make([]int, 0, 1+len(g.ctorIdx)+len(g.exportedIdx)+len(g.unexpIdx))
+	out = append(out, g.structIdx)
+	out = append(out, g.ctorIdx...)
+	out = append(out, g.exportedIdx...)
+	out = append(out, g.unexpIdx...)
+	sort.Ints(out)
+	return out
+}
+
+func funcorderIssuesForFile(f *ast.File, fset *token.FileSet, filename string) []FuncorderIssue {
+	groups := funcorderGroups(f)
+	var out []FuncorderIssue
+	for _, g := range groups {
+		out = append(out, g.issues(fset, filename)...)
+	}
+	if iss, ok := funcorderFunctionIssue(f, fset, filename, groups); ok {
+		out = append(out, iss)
+	}
+	return out
 }
 
 // funcorderGroups finds every top-level struct declared in f and collects
@@ -172,20 +259,6 @@ func funcorderReceiverTypeName(e ast.Expr) string {
 	return funcorderTypeName(e)
 }
 
-// issues computes the violations for this group.
-func (g *funcorderGroup) issues(fset *token.FileSet, filename string) []FuncorderIssue {
-	var out []FuncorderIssue
-
-	// funcorder-constructor: every constructor index must be strictly
-	// between the struct's index and every method's index.
-	out = funcorderConstructorIssue(g, fset, out, filename)
-
-	// funcorder-struct-method: no unexported method index may be less than
-	// any exported method index.
-	out = funcorderStructMethodIssue(g, fset, out, filename)
-	return out
-}
-
 func funcorderStructMethodIssue(g *funcorderGroup, fset *token.FileSet, out []FuncorderIssue, filename string) []FuncorderIssue {
 	if len(g.unexpIdx) > 0 && len(g.exportedIdx) > 0 {
 		maxExported := g.exportedIdx[0]
@@ -215,6 +288,13 @@ func funcorderStructMethodIssue(g *funcorderGroup, fset *token.FileSet, out []Fu
 	return out
 }
 
+// declSpan holds the source text (including any owning doc comment) for one
+// top-level declaration, keyed by its original Decls index.
+type declSpan struct {
+	origIdx int
+	text    string
+}
+
 func funcorderConstructorIssue(g *funcorderGroup, fset *token.FileSet, out []FuncorderIssue, filename string) []FuncorderIssue {
 	minMethodIdx := -1
 	for _, idx := range append(append([]int{}, g.exportedIdx...), g.unexpIdx...) {
@@ -241,62 +321,6 @@ func funcorderConstructorIssue(g *funcorderGroup, fset *token.FileSet, out []Fun
 		}
 	}
 	return out
-}
-
-// declSpan holds the source text (including any owning doc comment) for one
-// top-level declaration, keyed by its original Decls index.
-type declSpan struct {
-	origIdx int
-	text    string
-}
-
-// ApplyFuncorderFixes rewrites the top-level declaration order of file to
-// satisfy funcorder's constructor, struct-method, and loose-function
-// placement rules:
-//
-//	struct type decl -> constructor(s) (original relative order) ->
-//	exported methods (original relative order) -> unexported methods
-//	(original relative order)
-//
-// and, independently, top-level functions that aren't methods, `init()`, or
-// a tracked constructor are reordered so exported ones precede unexported
-// ones (each subgroup keeping its original relative order).
-//
-// Declarations unrelated to any struct group or loose-function slot keep
-// their original relative order and position untouched. Returns the
-// rewritten, gofmt'd source and the number of fixes actually applied
-// (struct groups reordered, plus 1 if the loose-function pass changed
-// anything).
-func ApplyFuncorderFixes(filename string, src []byte) ([]byte, int, error) {
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, filename, src, parser.ParseComments)
-	if err != nil {
-		return nil, 0, fmt.Errorf("parse %s: %w", filename, err)
-	}
-	groups := funcorderGroups(f)
-
-	// Build the desired index permutation per group; count only groups that
-	// actually need reordering.
-	newOrder, changed := funcorderStructOrder(f, groups)
-
-	// Second pass: reorder loose top-level functions (excluding methods,
-	// init, and tracked constructors — those are covered by the group pass
-	// above) so exported functions precede unexported ones. Only the decl
-	// occupying each loose-function slot in newOrder changes; every other
-	// slot (struct groups, types, vars, imports) keeps its exact position.
-	changed = funcorderReorderLooseFuncs(groups, newOrder, f, changed)
-
-	if changed == 0 {
-		return src, 0, nil
-	}
-
-	buf := funcorderRenderReordered(f, fset, src, newOrder)
-
-	formatted, err := format.Source(buf.Bytes())
-	if err != nil {
-		return nil, 0, fmt.Errorf("internal: funcorder rewrite produced unparsable Go: %w", err)
-	}
-	return formatted, changed, nil
 }
 
 func funcorderRenderReordered(f *ast.File, fset *token.FileSet, src []byte, newOrder []int) bytes.Buffer {
@@ -382,30 +406,6 @@ func funcorderStructOrder(f *ast.File, groups []*funcorderGroup) ([]int, int) {
 		}
 	}
 	return newOrder, changed
-}
-
-// desiredOrder returns this group's member Decls-indices (struct, then
-// constructors, then exported methods, then unexported methods) in the
-// order they should appear.
-func (g *funcorderGroup) desiredOrder() []int {
-	out := make([]int, 0, 1+len(g.ctorIdx)+len(g.exportedIdx)+len(g.unexpIdx))
-	out = append(out, g.structIdx)
-	out = append(out, sortedCopy(g.ctorIdx)...)
-	out = append(out, sortedCopy(g.exportedIdx)...)
-	out = append(out, sortedCopy(g.unexpIdx)...)
-	return out
-}
-
-// allMemberIdx returns this group's member indices in their *original*
-// file order, for comparison against desiredOrder.
-func (g *funcorderGroup) allMemberIdx() []int {
-	out := make([]int, 0, 1+len(g.ctorIdx)+len(g.exportedIdx)+len(g.unexpIdx))
-	out = append(out, g.structIdx)
-	out = append(out, g.ctorIdx...)
-	out = append(out, g.exportedIdx...)
-	out = append(out, g.unexpIdx...)
-	sort.Ints(out)
-	return out
 }
 
 func sortedCopy(idx []int) []int {

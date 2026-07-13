@@ -14,15 +14,6 @@ func TestNewImportResolver_CreatesInstance(t *testing.T) {
 	}
 }
 
-func writeGoFile(t *testing.T, dir, name, content string) string {
-	t.Helper()
-	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		t.Fatal(err)
-	}
-	return path
-}
-
 func TestResolveImportsForMove_FunctionUsesFmt(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -252,4 +243,13 @@ func TestGetExistingImports_MissingFile(t *testing.T) {
 	if len(imports) != 0 {
 		t.Errorf("expected empty imports for missing file, got %v", imports)
 	}
+}
+
+func writeGoFile(t *testing.T, dir, name, content string) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }

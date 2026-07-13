@@ -6,19 +6,6 @@ import (
 	"testing"
 )
 
-// Helper to create temporary test files
-func createTestFile(t *testing.T, content string) string {
-	tmpDir := os.TempDir()
-	tmpFile := filepath.Join(tmpDir, "parser_test_"+t.Name()+".go")
-	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Remove(tmpFile)
-	})
-	return tmpFile
-}
-
 func TestParseFile_SimpleFunction(t *testing.T) {
 	content := `package main
 
@@ -197,4 +184,17 @@ func writeData(w io.Writer) {
 	if info.Functions[0].Results[0].Type != "error" {
 		t.Errorf("Expected return type 'error', got '%s'", info.Functions[0].Results[0].Type)
 	}
+}
+
+// Helper to create temporary test files
+func createTestFile(t *testing.T, content string) string {
+	tmpDir := os.TempDir()
+	tmpFile := filepath.Join(tmpDir, "parser_test_"+t.Name()+".go")
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Remove(tmpFile)
+	})
+	return tmpFile
 }

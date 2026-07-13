@@ -7,25 +7,25 @@ import (
 	"testing"
 )
 
-// writeModule writes a go.mod plus the given files into a fresh temp dir,
-// chdirs into it, and returns the dir.
-func writeModule(t *testing.T, files map[string]string) string {
-	t.Helper()
-	dir := t.TempDir()
-	t.Chdir(dir)
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module sigmod\n\ngo 1.24\n"), 0644); err != nil {
-		t.Fatal(err)
+func TestChangeSignatureAddParamUpdatesAllCallSites(t *testing.T) {
+	writeModule(t, map[string]string{
+		"main.go":      sigGreetSrc,
+		"main_test.go": sigGreetTestSrc,
+	})
+	if err := changeSignatureCommand([]string{"main.go", "Greet", "--add-param", "count int"}); err != nil {
+		t.Fatalf("add-param: %v", err)
 	}
-	for name, content := range files {
-		path := filepath.Join(dir, name)
-		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-			t.Fatal(err)
-		}
+	src := readFile(t, "main.go")
+	if !strings.Contains(src, "func Greet(name string, loud bool, count int) string") {
+		t.Fatalf("signature not updated:\n%s", src)
 	}
-	return dir
+	if !strings.Contains(src, `Greet("bob", false, 0)`) {
+		t.Fatalf("call site not updated:\n%s", src)
+	}
+	testSrc := readFile(t, "main_test.go")
+	if !strings.Contains(testSrc, `Greet("x", true, 0)`) {
+		t.Fatalf("_test.go call site not updated:\n%s", testSrc)
+	}
 }
 
 const sigGreetSrc = `package main
@@ -52,27 +52,6 @@ func TestGreet(t *testing.T) {
 	}
 }
 `
-
-func TestChangeSignatureAddParamUpdatesAllCallSites(t *testing.T) {
-	writeModule(t, map[string]string{
-		"main.go":      sigGreetSrc,
-		"main_test.go": sigGreetTestSrc,
-	})
-	if err := changeSignatureCommand([]string{"main.go", "Greet", "--add-param", "count int"}); err != nil {
-		t.Fatalf("add-param: %v", err)
-	}
-	src := readFile(t, "main.go")
-	if !strings.Contains(src, "func Greet(name string, loud bool, count int) string") {
-		t.Fatalf("signature not updated:\n%s", src)
-	}
-	if !strings.Contains(src, `Greet("bob", false, 0)`) {
-		t.Fatalf("call site not updated:\n%s", src)
-	}
-	testSrc := readFile(t, "main_test.go")
-	if !strings.Contains(testSrc, `Greet("x", true, 0)`) {
-		t.Fatalf("_test.go call site not updated:\n%s", testSrc)
-	}
-}
 
 func TestChangeSignatureAddContextParam(t *testing.T) {
 	writeModule(t, map[string]string{"main.go": sigGreetSrc})
@@ -285,4 +264,25 @@ func TestChangeSignatureDryRunDoesNotWrite(t *testing.T) {
 	if !strings.Contains(out, "+func Greet(name string, loud bool, n int) string") {
 		t.Fatalf("dry-run should print the diff, got:\n%s", out)
 	}
+}
+
+// writeModule writes a go.mod plus the given files into a fresh temp dir,
+// chdirs into it, and returns the dir.
+func writeModule(t *testing.T, files map[string]string) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Chdir(dir)
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module sigmod\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range files {
+		path := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
 }

@@ -60,35 +60,6 @@ type BlockInfo struct {
 	VariableScopes     map[string][]int `json:"variableScopes"`     // Line ranges where variables are used
 }
 
-// RecommendExtractions analyzes a file and returns recommendations for method extraction.
-// If functionName is non-empty, only the specified function is analyzed; otherwise, all functions are analyzed.
-
-// Helper to recursively analyze all blocks
-
-// Avoid duplicates by checking for overlapping ranges
-
-// Look for function declarations
-
-// AnalyzeBlock analyzes a code block and returns information about it
-
-// Find all nodes in the given line range
-
-// Analyze all nodes in the range
-
-// Track variable assignments
-
-// Track variable reads
-
-// Track variables and their usage
-
-// Track variable reads
-
-// Track variable scope
-
-// Track variable assignments
-
-// Check for error handling pattern
-
 // Update nesting depth
 
 func AnalyzeBlock(filePath string, startLine, endLine int, config *ExtractionConfig) (*BlockInfo, error) {
@@ -122,6 +93,31 @@ func AnalyzeBlock(filePath string, startLine, endLine int, config *ExtractionCon
 	info.IsExtractable = isBlockExtractable(info, config)
 	return info, nil
 }
+
+func RecommendExtractions(filePath string, functionName string, config *ExtractionConfig) ([]*BlockInfo, error) {
+	if config == nil {
+		config = DefaultConfig()
+	}
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
+	if err != nil {
+		return nil, fmt.Errorf("parse file: %w", err)
+	}
+	var recommendations []*BlockInfo
+	ast.Inspect(node, func(n ast.Node) bool {
+		if n == nil {
+			return false
+		}
+		if funcDecl, ok := n.(*ast.FuncDecl); ok {
+			if (functionName == "" || funcDecl.Name.Name == functionName) && funcDecl.Body != nil {
+				collectRecommendations(funcDecl.Body, filePath, fset, config, &recommendations)
+			}
+		}
+		return true
+	})
+	return recommendations, nil
+}
+
 func analyzeBlock(block *ast.BlockStmt, info *BlockInfo) {
 	readVars := make(map[string]bool)
 	writeVars := make(map[string]bool)
@@ -155,6 +151,7 @@ func analyzeBlock(block *ast.BlockStmt, info *BlockInfo) {
 	buildVariableInfo(readVars, writeVars, assignments, info)
 	info.VariableScopes = variableScopes
 }
+
 func collectRecommendations(parent ast.Node, filePath string, fset *token.FileSet, config *ExtractionConfig, recommendations *[]*BlockInfo) {
 	ast.Inspect(parent, func(n ast.Node) bool {
 		block, ok := n.(*ast.BlockStmt)
@@ -175,27 +172,4 @@ func collectRecommendations(parent ast.Node, filePath string, fset *token.FileSe
 		*recommendations = append(*recommendations, info)
 		return true
 	})
-}
-func RecommendExtractions(filePath string, functionName string, config *ExtractionConfig) ([]*BlockInfo, error) {
-	if config == nil {
-		config = DefaultConfig()
-	}
-	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
-	if err != nil {
-		return nil, fmt.Errorf("parse file: %w", err)
-	}
-	var recommendations []*BlockInfo
-	ast.Inspect(node, func(n ast.Node) bool {
-		if n == nil {
-			return false
-		}
-		if funcDecl, ok := n.(*ast.FuncDecl); ok {
-			if (functionName == "" || funcDecl.Name.Name == functionName) && funcDecl.Body != nil {
-				collectRecommendations(funcDecl.Body, filePath, fset, config, &recommendations)
-			}
-		}
-		return true
-	})
-	return recommendations, nil
 }

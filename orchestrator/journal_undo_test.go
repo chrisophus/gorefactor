@@ -6,21 +6,6 @@ import (
 	"testing"
 )
 
-// withWorkDir changes the current working directory to dir for the duration of
-// the test. Tests using this must NOT call t.Parallel() — os.Chdir is
-// process-global.
-func withWorkDir(t *testing.T, dir string) {
-	t.Helper()
-	orig, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(orig) })
-}
-
 // ---- LoadJournal ----
 
 func TestLoadJournal_MissingFile(t *testing.T) {
@@ -377,4 +362,19 @@ func TestSnapshotDir_ReturnsExpectedPath(t *testing.T) {
 	if got != want {
 		t.Errorf("SnapshotDir = %q, want %q", got, want)
 	}
+}
+
+// withWorkDir changes the current working directory to dir for the duration of
+// the test. Tests using this must NOT call t.Parallel() — os.Chdir is
+// process-global.
+func withWorkDir(t *testing.T, dir string) {
+	t.Helper()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(orig) })
 }

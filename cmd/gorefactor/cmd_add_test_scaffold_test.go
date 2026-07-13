@@ -39,26 +39,6 @@ func Lookup(key string) (string, error) {
 }
 `
 
-// addTestWriteModule sets up a temp module with greet package files.
-func addTestWriteModule(t *testing.T, files map[string]string) string {
-	t.Helper()
-	dir := t.TempDir()
-	t.Chdir(dir)
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module greetmod\n\ngo 1.24\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	for name, content := range files {
-		path := filepath.Join(dir, name)
-		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return dir
-}
-
 func TestAddTestCreatesTestFile(t *testing.T) {
 	addTestWriteModule(t, map[string]string{"greet.go": addTestFuncSrc})
 	if err := addTestCommand([]string{"greet.go", "Greet"}); err != nil {
@@ -185,4 +165,24 @@ func TestAddTestJSONOutput(t *testing.T) {
 	if res.UndoToken == "" {
 		t.Fatal("undo token must be set on success")
 	}
+}
+
+// addTestWriteModule sets up a temp module with greet package files.
+func addTestWriteModule(t *testing.T, files map[string]string) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Chdir(dir)
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module greetmod\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range files {
+		path := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
 }

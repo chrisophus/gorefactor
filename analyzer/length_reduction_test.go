@@ -7,25 +7,6 @@ import (
 	"testing"
 )
 
-func writeLengthFixture(t *testing.T) string {
-	t.Helper()
-	var b strings.Builder
-	b.WriteString("package p\n\ntype S struct{}\n\nfunc (s S) Long(xs []int) int {\n\ttotal := 0\n\tfor _, x := range xs {\n")
-	for i := 0; i < 40; i++ {
-		b.WriteString("\t\ttotal += x\n")
-	}
-	b.WriteString("\t}\n")
-	for i := 0; i < 40; i++ {
-		b.WriteString("\ttotal++\n")
-	}
-	b.WriteString("\treturn total\n}\n\nfunc Short() {}\n")
-	path := filepath.Join(t.TempDir(), "p.go")
-	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return path
-}
-
 // The reducer resolves Receiver:Method locators and greedily picks the big
 // for-block, projecting the parent under the threshold.
 func TestRecommendLengthReduction_MethodLocator(t *testing.T) {
@@ -59,4 +40,23 @@ func TestRecommendLengthReduction_UnderThresholdAndMissing(t *testing.T) {
 	if _, err := RecommendLengthReduction(path, "Nope", 75); err == nil {
 		t.Error("expected an error for a missing function")
 	}
+}
+
+func writeLengthFixture(t *testing.T) string {
+	t.Helper()
+	var b strings.Builder
+	b.WriteString("package p\n\ntype S struct{}\n\nfunc (s S) Long(xs []int) int {\n\ttotal := 0\n\tfor _, x := range xs {\n")
+	for i := 0; i < 40; i++ {
+		b.WriteString("\t\ttotal += x\n")
+	}
+	b.WriteString("\t}\n")
+	for i := 0; i < 40; i++ {
+		b.WriteString("\ttotal++\n")
+	}
+	b.WriteString("\treturn total\n}\n\nfunc Short() {}\n")
+	path := filepath.Join(t.TempDir(), "p.go")
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }

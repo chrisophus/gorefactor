@@ -11,55 +11,14 @@ import (
 	"github.com/chrisophus/gorefactor/orchestrator"
 )
 
-// adherenceRepo builds a temp git repo with one baseline commit, chdirs into
-// it (restored on cleanup), and returns the dir. Hermetic: local git only.
-func adherenceRepo(t *testing.T, baseline map[string]string) string {
-	t.Helper()
-	dir := t.TempDir()
-	for name, content := range baseline {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	run := func(args ...string) {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v: %s", args, err, out)
-		}
-	}
-	run("init", "-q")
-	run("add", "-A")
-	run("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "baseline")
-
-	prev, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.Chdir(prev) })
-	return dir
-}
-
-// writeJournal writes a synthetic .gorefactor/journal.json in the cwd.
-func writeJournal(t *testing.T, entries []orchestrator.JournalEntry) {
-	t.Helper()
-	if err := os.MkdirAll(".gorefactor", 0o755); err != nil {
-		t.Fatal(err)
-	}
-	b, _ := json.MarshalIndent(entries, "", "  ")
-	if err := os.WriteFile(filepath.Join(".gorefactor", "journal.json"), b, 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestComputeAdherenceClassifiesAndTimeBounds(t *testing.T) {
 	adherenceRepo(t, map[string]string{
 		"existing_mod.go": "package p\n\nfunc A() {}\n",
 		"existing_raw.go": "package p\n\nfunc B() {}\n",
 	})
 
-	recent := time.Now().Add(time.Hour)  // safely after the baseline commit
-	stale := time.Now().Add(-time.Hour)  // before the baseline ⇒ must not count
+	recent := time.Now().Add(time.Hour) // safely after the baseline commit
+	stale := time.Now().Add(-time.Hour) // before the baseline ⇒ must not count
 	writeJournal(t, []orchestrator.JournalEntry{
 		{Command: "replace-body", Timestamp: recent, Files: []orchestrator.JournalFile{{Path: "existing_mod.go"}}},
 		{Command: "create", Timestamp: recent, Files: []orchestrator.JournalFile{{Path: "created_grf.go", Created: true}}},
@@ -121,6 +80,47 @@ func TestAdherenceRelevantExclusions(t *testing.T) {
 		if got := adherenceRelevant(path); got != want {
 			t.Errorf("adherenceRelevant(%q) = %v, want %v", path, got, want)
 		}
+	}
+}
+
+// adherenceRepo builds a temp git repo with one baseline commit, chdirs into
+// it (restored on cleanup), and returns the dir. Hermetic: local git only.
+func adherenceRepo(t *testing.T, baseline map[string]string) string {
+	t.Helper()
+	dir := t.TempDir()
+	for name, content := range baseline {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	run("init", "-q")
+	run("add", "-A")
+	run("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "baseline")
+
+	prev, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(prev) })
+	return dir
+}
+
+// writeJournal writes a synthetic .gorefactor/journal.json in the cwd.
+func writeJournal(t *testing.T, entries []orchestrator.JournalEntry) {
+	t.Helper()
+	if err := os.MkdirAll(".gorefactor", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.MarshalIndent(entries, "", "  ")
+	if err := os.WriteFile(filepath.Join(".gorefactor", "journal.json"), b, 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 

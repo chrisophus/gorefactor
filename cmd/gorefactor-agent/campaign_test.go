@@ -11,40 +11,6 @@ import (
 	"testing"
 )
 
-// newBigRepo makes a temp git module containing one oversized .go file
-// (so enumerateFindings yields a file-size finding) plus a small clean
-// one. Gate is green at baseline (compiles; no tests = pass).
-func newBigRepo(t *testing.T) string {
-	t.Helper()
-	dir := t.TempDir()
-	var big strings.Builder
-	big.WriteString("package big\n\n")
-	// Comfortably over the file-size limit (analyzer.DefaultMaxFileSize) so
-	// enumerateFindings yields a file-size finding.
-	for i := 0; i < 560; i++ {
-		fmt.Fprintf(&big, "func f%d() int { return %d }\n", i, i)
-	}
-	write := func(name, body string) {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write("go.mod", "module big\n\ngo 1.21\n")
-	write("big.go", big.String())
-	write("small.go", "package big\n\nfunc Small() int { return 1 }\n")
-	for _, args := range [][]string{
-		{"init", "-q"}, {"config", "user.email", "t@e.com"},
-		{"config", "user.name", "t"}, {"config", "commit.gpgsign", "false"},
-		{"add", "-A"}, {"commit", "-q", "-m", "init"},
-	} {
-		c := exec.Command("git", append([]string{"-C", dir}, args...)...)
-		if out, err := c.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-	return dir
-}
-
 func TestCampaign_DetectsDelegatesAndPuntsCleanly(t *testing.T) {
 	dir := newBigRepo(t)
 	before, _ := os.ReadFile(filepath.Join(dir, "big.go"))
@@ -132,4 +98,38 @@ func TestCampaign_NoFindingsIsClean(t *testing.T) {
 	if !strings.Contains(log.String(), "no deterministic findings") {
 		t.Fatalf("expected clean message:\n%s", log.String())
 	}
+}
+
+// newBigRepo makes a temp git module containing one oversized .go file
+// (so enumerateFindings yields a file-size finding) plus a small clean
+// one. Gate is green at baseline (compiles; no tests = pass).
+func newBigRepo(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	var big strings.Builder
+	big.WriteString("package big\n\n")
+	// Comfortably over the file-size limit (analyzer.DefaultMaxFileSize) so
+	// enumerateFindings yields a file-size finding.
+	for i := 0; i < 560; i++ {
+		fmt.Fprintf(&big, "func f%d() int { return %d }\n", i, i)
+	}
+	write := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("go.mod", "module big\n\ngo 1.21\n")
+	write("big.go", big.String())
+	write("small.go", "package big\n\nfunc Small() int { return 1 }\n")
+	for _, args := range [][]string{
+		{"init", "-q"}, {"config", "user.email", "t@e.com"},
+		{"config", "user.name", "t"}, {"config", "commit.gpgsign", "false"},
+		{"add", "-A"}, {"commit", "-q", "-m", "init"},
+	} {
+		c := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		if out, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	return dir
 }

@@ -86,20 +86,8 @@ func (o *Orchestrator) simulateOperationChange(operation *RefactoringOperation) 
 
 	// Map real path → temp path.
 	pathMap := make(map[string]string, len(before))
-	for realPath, content := range before {
-		// Preserve the base name so package-clause detection works.
-		tmpFile := filepath.Join(tempDir, filepath.Base(realPath))
-		// Disambiguate when two files share a basename.
-		for i := 1; ; i++ {
-			if _, exists := pathMap[tmpFile]; !exists {
-				break
-			}
-			tmpFile = filepath.Join(tempDir, fmt.Sprintf("%d_%s", i, filepath.Base(realPath)))
-		}
-		if err := os.WriteFile(tmpFile, []byte(content), 0600); err != nil {
-			return nil, fmt.Errorf("dry-run: write temp file: %w", err)
-		}
-		pathMap[realPath] = tmpFile
+	if r0, r1, done := extractBlockL89(before, tempDir, pathMap); done {
+		return r0, r1
 	}
 
 	// Clone the operation, rewriting all file references to temp paths.
@@ -118,24 +106,7 @@ func (o *Orchestrator) simulateOperationChange(operation *RefactoringOperation) 
 
 	// Compare temp files to the original snapshots to produce per-file diffs.
 	var diffs []*FileDiff
-	for realPath, tmpPath := range pathMap {
-		newContent, err := os.ReadFile(tmpPath)
-		if err != nil {
-			// Temp file may have been deleted (e.g. source removed during move).
-			newContent = nil
-		}
-		oldContent := before[realPath]
-		newStr := string(newContent)
-		if oldContent == newStr {
-			continue // no change for this file
-		}
-		diffs = append(diffs, &FileDiff{
-			File:    realPath,
-			OldCode: oldContent,
-			NewCode: newStr,
-			Summary: fmt.Sprintf("Operation: %s", operation.Type),
-		})
-	}
+	diffs = extractBlockL109(pathMap, before, diffs, operation)
 
 	// Also capture files created by the operation (e.g. move destination).
 	if newFile, ok := operation.Parameters["newFile"].(string); ok && newFile != "" {
@@ -157,6 +128,47 @@ func (o *Orchestrator) simulateOperationChange(operation *RefactoringOperation) 
 	}
 
 	return diffs, nil
+}
+
+func extractBlockL109(pathMap map[string]string, before map[string]string, diffs []*FileDiff, operation *RefactoringOperation) []*FileDiff {
+	for realPath, tmpPath := range pathMap {
+		newContent, err := os.ReadFile(tmpPath)
+		if err != nil {
+
+			newContent = nil
+		}
+		oldContent := before[realPath]
+		newStr := string(newContent)
+		if oldContent == newStr {
+			continue
+		}
+		diffs = append(diffs, &FileDiff{
+			File:    realPath,
+			OldCode: oldContent,
+			NewCode: newStr,
+			Summary: fmt.Sprintf("Operation: %s", operation.Type),
+		})
+	}
+	return diffs
+}
+
+func extractBlockL89(before map[string]string, tempDir string, pathMap map[string]string) (r0 []*FileDiff, r1 error, done bool) {
+	for realPath, content := range before {
+		// Preserve the base name so package-clause detection works.
+		tmpFile := filepath.Join(tempDir, filepath.Base(realPath))
+		// Disambiguate when two files share a basename.
+		for i := 1; ; i++ {
+			if _, exists := pathMap[tmpFile]; !exists {
+				break
+			}
+			tmpFile = filepath.Join(tempDir, fmt.Sprintf("%d_%s", i, filepath.Base(realPath)))
+		}
+		if err := os.WriteFile(tmpFile, []byte(content), 0600); err != nil {
+			return nil, fmt.Errorf("dry-run: write temp file: %w", err), true
+		}
+		pathMap[realPath] = tmpFile
+	}
+	return
 }
 
 // generateDryRunSummary creates a human-readable summary of what would change

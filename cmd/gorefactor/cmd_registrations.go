@@ -6,30 +6,7 @@ package main
 // file with an init() that calls registerCommand, no central edits needed.
 
 func init() {
-	registerCommand(Command{
-		Name:        "recommend",
-		Description: "Recommend code blocks for method extraction",
-		Usage:       "recommend <file.go> [<Func>] [--short] [--reduce-complexity [--threshold N] [--apply] [--json]] [--function NAME] [--min-complexity N] [--max-complexity N] [--min-statements N] [--max-statements N] [--max-read-vars N] [--max-write-vars N] [--num-leading-stmts N]",
-		MinArgs:     0,
-		MaxArgs:     2,
-		Flags: map[string]bool{
-			"--help":              false,
-			"--short":             false,
-			"--reduce-complexity": false,
-			"--apply":             false,
-			"--threshold":         true,
-			"--json":              false,
-			"--function":          true,
-			"--min-complexity":    true,
-			"--max-complexity":    true,
-			"--max-read-vars":     true,
-			"--max-write-vars":    true,
-			"--min-statements":    true,
-			"--max-statements":    true,
-			"--num-leading-stmts": true,
-		},
-		Run: recommendExtractions,
-	})
+	extractBlockL9()
 	registerCommand(Command{
 		Name:        "analyze-diff",
 		Description: "Analyze a diff file and generate a refactoring plan",
@@ -38,77 +15,12 @@ func init() {
 		MaxArgs:     2,
 		Run:         analyzeDiff,
 	})
-	registerCommand(Command{
-		Name:        "analyze-file-sizes",
-		Description: "Analyze Go files in a directory for size issues and extraction opportunities",
-		Usage:       "analyze-file-sizes <directory> [--max-size N] [--format json|text]",
-		MinArgs:     1,
-		MaxArgs:     1,
-		Flags:       map[string]bool{"--max-size": true, "--format": true},
-		Run:         analyzeFileSizes,
-	})
-	registerCommand(Command{
-		Name:        "exec",
-		Description: "Execute a single operation from inline JSON or stdin (supports piping)",
-		Usage:       "exec [json|-]",
-		MinArgs:     0,
-		MaxArgs:     1,
-		Flags:       map[string]bool{"-stdin": false},
-		Run:         execOperation,
-	})
-	registerCommand(Command{
-		Name:        "lint",
-		Description: "Run structural lints (file size, duplicates) [--fix [--verify]] [--json] [--max N] [--fail-only]",
-		Usage:       "lint [path] [--fix] [--verify] [--fix-level safe|aggressive] [--json] [--quiet] [--fail-only] [--info] [--verbose] [--max N] [--rule NAME] [--skip-rule NAME] [--fail-on error|warning] [--config PATH] [--profile NAME]",
-		MinArgs:     0,
-		MaxArgs:     1,
-		Flags: map[string]bool{
-			"--fix":           false,
-			"--verify":        false,
-			"--fix-level":     true,
-			"--json":          false,
-			"--quiet":         false,
-			"--fail-only":     false,
-			"--info":          false,
-			"--verbose":       false,
-			"--cpuprofile":    true,
-			"--profile-rules": false,
-			"--config":        true,
-			"--profile":       true,
-			"--max":           true,
-			"--rule":          true,
-			"--skip-rule":     true,
-			"--fail-on":       true,
-		},
-		Run: lintCommand,
-	})
-	registerCommand(Command{
-		Name:        "find-callers",
-		Description: "Find all callers of a function or method [--in path] [--json]",
-		Usage:       "find-callers <Func|Receiver:Method> [--in path] [--json]",
-		MinArgs:     1,
-		MaxArgs:     1,
-		Flags:       map[string]bool{"--in": true, "--json": false},
-		Run:         findCallersCommand,
-	})
-	registerCommand(Command{
-		Name:        "find-uses",
-		Description: "Find all uses of a symbol [--in path] [--json]",
-		Usage:       "find-uses <Symbol|Receiver:Method> [--in path] [--json]",
-		MinArgs:     1,
-		MaxArgs:     1,
-		Flags:       map[string]bool{"--in": true, "--json": false},
-		Run:         findUsesCommand,
-	})
-	registerCommand(Command{
-		Name:        "find-implementations",
-		Description: "Find all types that implement an interface [--in path] [--json]",
-		Usage:       "find-implementations <Interface> [--in path] [--json]",
-		MinArgs:     1,
-		MaxArgs:     1,
-		Flags:       map[string]bool{"--in": true, "--json": false},
-		Run:         findImplementationsCommand,
-	})
+	extractBlockL41()
+	extractBlockL50()
+	extractBlockL59()
+	extractBlockL85()
+	extractBlockL94()
+	extractBlockL103()
 	registerCommand(Command{
 		Name:        "find-package-deps",
 		Description: "Analyze package dependencies and detect circular imports [--json]",
@@ -161,5 +73,121 @@ func init() {
 		MaxArgs:     1,
 		Flags:       map[string]bool{"--suggest": false, "--output": true, "-o": true},
 		Run:         architectCommand,
+	})
+}
+
+func extractBlockL9() {
+	registerCommand(Command{
+		Name:        "recommend",
+		Description: "Recommend code blocks for method extraction",
+		Usage:       "recommend <file.go> [<Func>] [--short] [--reduce-complexity [--threshold N] [--apply] [--json]] [--function NAME] [--min-complexity N] [--max-complexity N] [--min-statements N] [--max-statements N] [--max-read-vars N] [--max-write-vars N] [--num-leading-stmts N]",
+		MinArgs:     0,
+		MaxArgs:     2,
+		Flags: map[string]bool{
+			"--help":              false,
+			"--short":             false,
+			"--reduce-complexity": false,
+			"--apply":             false,
+			"--threshold":         true,
+			"--json":              false,
+			"--function":          true,
+			"--min-complexity":    true,
+			"--max-complexity":    true,
+			"--max-read-vars":     true,
+			"--max-write-vars":    true,
+			"--min-statements":    true,
+			"--max-statements":    true,
+			"--num-leading-stmts": true,
+		},
+		Run: recommendExtractions,
+	})
+}
+
+func extractBlockL41() {
+	registerCommand(Command{
+		Name:        "analyze-file-sizes",
+		Description: "Analyze Go files in a directory for size issues and extraction opportunities",
+		Usage:       "analyze-file-sizes <directory> [--max-size N] [--format json|text]",
+		MinArgs:     1,
+		MaxArgs:     1,
+		Flags:       map[string]bool{"--max-size": true, "--format": true},
+		Run:         analyzeFileSizes,
+	})
+}
+
+func extractBlockL50() {
+	registerCommand(Command{
+		Name:        "exec",
+		Description: "Execute a single operation from inline JSON or stdin (supports piping)",
+		Usage:       "exec [json|-]",
+		MinArgs:     0,
+		MaxArgs:     1,
+		Flags:       map[string]bool{"-stdin": false},
+		Run:         execOperation,
+	})
+}
+
+func extractBlockL59() {
+	registerCommand(Command{
+		Name:        "lint",
+		Description: "Run structural lints (file size, duplicates) [--fix [--verify]] [--json] [--max N] [--fail-only]",
+		Usage:       "lint [path] [--fix] [--verify] [--fix-level safe|aggressive] [--json] [--quiet] [--fail-only] [--info] [--verbose] [--max N] [--rule NAME] [--skip-rule NAME] [--fail-on error|warning] [--config PATH] [--profile NAME]",
+		MinArgs:     0,
+		MaxArgs:     1,
+		Flags: map[string]bool{
+			"--fix":           false,
+			"--verify":        false,
+			"--fix-level":     true,
+			"--json":          false,
+			"--quiet":         false,
+			"--fail-only":     false,
+			"--info":          false,
+			"--verbose":       false,
+			"--cpuprofile":    true,
+			"--profile-rules": false,
+			"--config":        true,
+			"--profile":       true,
+			"--max":           true,
+			"--rule":          true,
+			"--skip-rule":     true,
+			"--fail-on":       true,
+		},
+		Run: lintCommand,
+	})
+}
+
+func extractBlockL85() {
+	registerCommand(Command{
+		Name:        "find-callers",
+		Description: "Find all callers of a function or method [--in path] [--json]",
+		Usage:       "find-callers <Func|Receiver:Method> [--in path] [--json]",
+		MinArgs:     1,
+		MaxArgs:     1,
+		Flags:       map[string]bool{"--in": true, "--json": false},
+		Run:         findCallersCommand,
+	})
+}
+
+func extractBlockL94() {
+	registerCommand(Command{
+		Name:        "find-uses",
+		Description: "Find all uses of a symbol [--in path] [--json]",
+		Usage:       "find-uses <Symbol|Receiver:Method> [--in path] [--json]",
+		MinArgs:     1,
+		MaxArgs:     1,
+		Flags:       map[string]bool{"--in": true, "--json": false},
+		Run:         findUsesCommand,
+	})
+}
+
+func extractBlockL103() {
+	registerCommand(Command{
+		Name:        "find-implementations",
+		Description: "Find all types that implement an interface [--in path] [--json]",
+		Usage:       "find-implementations <Interface> [--in path] [--json]",
+		MinArgs:     1,
+		MaxArgs:     1,
+		Flags:       map[string]bool{"--in": true, "--json": false},
+		Run:         findImplementationsCommand,
 	})
 }

@@ -61,13 +61,29 @@ func callSitesInFile(fset *token.FileSet, node *ast.File, src []byte, f, funcNam
 
 	var sites []inlineCallSite
 	var refusal error
+	sites, refusal = extractBlockL64(node, funcName, skip, refusal, localDecl, fset, callFun, f, paramCount, src, stmtOf, sites)
+	if refusal != nil {
+		return nil, refusal
+	}
+
+	// Statement-mode bodies require every call to sit in statement position
+	// directly inside a block or case body.
+	for _, s := range sites {
+		if !hasResults && s.stmtStart < 0 {
+			return nil, parseErrorf("cannot inline %s: call at %s:%d is not in statement position", funcName, f, s.line)
+		}
+	}
+	return sites, nil
+}
+
+func extractBlockL64(node *ast.File, funcName string, skip map[*ast.Ident]bool, refusal error, localDecl *ast.FuncDecl, fset *token.FileSet, callFun map[*ast.Ident]*ast.CallExpr, f string, paramCount int, src []byte, stmtOf map[*ast.CallExpr]*ast.ExprStmt, sites []inlineCallSite) ([]inlineCallSite, error) {
 	ast.Inspect(node, func(n ast.Node) bool {
 		id, ok := n.(*ast.Ident)
 		if !ok || id.Name != funcName || skip[id] || refusal != nil {
 			return true
 		}
 		if localDecl != nil && id == localDecl.Name {
-			return true // the declaration itself
+			return true
 		}
 		pos := fset.Position(id.Pos())
 		call, isCall := callFun[id]
@@ -104,16 +120,5 @@ func callSitesInFile(fset *token.FileSet, node *ast.File, src []byte, f, funcNam
 		sites = append(sites, site)
 		return true
 	})
-	if refusal != nil {
-		return nil, refusal
-	}
-
-	// Statement-mode bodies require every call to sit in statement position
-	// directly inside a block or case body.
-	for _, s := range sites {
-		if !hasResults && s.stmtStart < 0 {
-			return nil, parseErrorf("cannot inline %s: call at %s:%d is not in statement position", funcName, f, s.line)
-		}
-	}
-	return sites, nil
+	return sites, refusal
 }

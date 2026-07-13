@@ -188,3 +188,91 @@ func readFileNoT(path string) string {
 	b, _ := os.ReadFile(path)
 	return string(b)
 }
+
+func TestApplyAutoFixesBatchesGoodFixesIntoOneGateCall(t *testing.T) {
+	root := t.TempDir()
+	const n = 6
+	var issues []lintIssue
+	for i := 0; i < n; i++ {
+		d := filepath.Join(root, fmt.Sprintf("pkg%d", i))
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatal(err)
+		}
+		f := filepath.Join(d, "a.go")
+		writeFileT(t, f, fmt.Sprintf("package p%d\n\nfunc F() {}\n", i))
+		issues = append(issues, lintIssue{File: f, Rule: "fake", AutoFixCmd: "fake"})
+	}
+
+	rule := fakeFixRule{name: "fake", fixFn: func(iss lintIssue, _ LintContext) error {
+		return os.WriteFile(iss.File, []byte("package p\n\nfunc F() { _ = 1 }\n"), 0644)
+	}}
+
+	var calls int
+	restore := swapVerifyGate(func(string) error {
+		calls++
+		return nil
+	})
+	defer restore()
+
+	applied, reverted, failed := applyAutoFixes(issues, LintContext{Root: root}, []LintRule{rule}, true)
+	if applied != n || reverted != 0 || failed != 0 {
+		t.Fatalf("counts: applied=%d reverted=%d failed=%d", applied, reverted, failed)
+	}
+	if calls != 1 {
+		t.Fatalf("expected the whole batch to cost exactly 1 gate call, got %d", calls)
+	}
+}
+
+func TestBisectAutoFixBatchIsolatesSingleBadFixEfficiently(t *testing.T) {
+	root := t.TempDir()
+	const n = 32
+	const badIndex = 17
+	var issues []lintIssue
+	var badFile string
+	for i := 0; i < n; i++ {
+		d := filepath.Join(root, fmt.Sprintf("pkg%d", i))
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatal(err)
+		}
+		f := filepath.Join(d, "a.go")
+		writeFileT(t, f, fmt.Sprintf("package p%d\n\nfunc F() {}\n", i))
+		issues = append(issues, lintIssue{File: f, Rule: "fake", AutoFixCmd: "fake"})
+		if i == badIndex {
+			badFile = f
+		}
+	}
+
+	badMarker := "package bad\n\nfunc F() { POISON }\n"
+	rule := fakeFixRule{name: "fake", fixFn: func(iss lintIssue, _ LintContext) error {
+		if iss.File == badFile {
+			return os.WriteFile(iss.File, []byte(badMarker), 0644)
+		}
+		return os.WriteFile(iss.File, []byte("package p\n\nfunc F() { _ = 1 }\n"), 0644)
+	}}
+
+	var calls int
+	restore := swapVerifyGate(func(string) error {
+		calls++
+		if readFileNoT(badFile) == badMarker {
+			return fmt.Errorf("bad package broken")
+		}
+		return nil
+	})
+	defer restore()
+
+	fixerByRule := map[string]FixableRule{"fake": rule}
+	applied, reverted, failed := bisectAutoFixBatch(issues, LintContext{Root: root}, fixerByRule)
+	if applied != n-1 || reverted != 1 || failed != 0 {
+		t.Fatalf("counts: applied=%d reverted=%d failed=%d", applied, reverted, failed)
+	}
+	if got := readFileNoT(badFile); got != fmt.Sprintf("package p%d\n\nfunc F() {}\n", badIndex) {
+		t.Fatalf("bad fix should have been reverted to original; got:\n%s", got)
+	}
+
+	if calls > 15 {
+		t.Fatalf("expected bisection to isolate the bad fix in well under %d gate calls, got %d", n, calls)
+	}
+	if calls < 2 {
+		t.Fatalf("expected more than 1 gate call since the batch wasn't clean, got %d", calls)
+	}
+}

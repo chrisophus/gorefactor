@@ -164,16 +164,26 @@ const (
 	fixLevelAggressive = "aggressive"
 )
 
-// applyAutoFixes runs every issue's registered autofix. With verify set, each
-// fix is guarded: the affected package is snapshotted first, and if the
-// project no longer builds-and-tests clean after the fix, that one fix is
-// reverted and counted separately — good fixes already applied are kept.
-// Without verify it is the original apply-and-hope behavior.
+// defaultAutoFixBatchSize bounds how many fixes are applied together before
+// one verify-gate run under --verify. A batch's build+test cost is paid once
+// for the whole group when the gate stays green (the common case, since most
+// fixes are good); bisectAutoFixBatch binary-searches a red batch to isolate
+// the culprit(s) in O(log K) extra gate runs instead of gating every fix
+// one at a time.
+const defaultAutoFixBatchSize = 8
+
+// applyAutoFixes runs every issue's registered autofix. With verify set,
+// fixes are applied in batches of up to defaultAutoFixBatchSize and gated
+// together — see bisectAutoFixBatch for how a red batch is resolved down to
+// the exact fix(es) that broke it. Without verify it is the original
+// apply-and-hope behavior, ungated and one at a time.
 func applyAutoFixes(issues []lintIssue, ctx LintContext, rules []LintRule, verify bool) (applied, reverted, failed int) {
 	rulesByName := make(map[string]LintRule, len(rules))
 	for _, r := range rules {
 		rulesByName[r.Name()] = r
 	}
+	fixerByRule := make(map[string]FixableRule, len(rules))
+	var fixable []lintIssue
 	for _, iss := range issues {
 		if iss.AutoFixCmd == "" {
 			continue
@@ -186,42 +196,97 @@ func applyAutoFixes(issues []lintIssue, ctx LintContext, rules []LintRule, verif
 		if !ok {
 			continue
 		}
+		fixerByRule[iss.Rule] = fixer
+		fixable = append(fixable, iss)
+	}
 
-		// Snapshot the affected package before the fix so we can revert exactly
-		// this fix if the gate goes red. If the snapshot itself fails we still
-		// apply the fix, but without a revert guard, and say so.
-		var snap dirSnapshot
-		haveSnap := false
-		if verify {
-			if s, serr := snapshotGoDir(filepath.Dir(iss.File)); serr != nil {
-				fmt.Fprintf(os.Stderr, "verify: cannot snapshot for %s: %v (applying %s unguarded)\n",
-					iss.File, serr, iss.Rule)
-			} else {
-				snap, haveSnap = s, true
+	if !verify {
+		for _, iss := range fixable {
+			if err := fixerByRule[iss.Rule].AutoFix(iss, ctx); err != nil {
+				fmt.Fprintf(os.Stderr, "fix failed for %s: %v\n", iss.File, err)
+				failed++
+				continue
 			}
+			applied++
 		}
+		return
+	}
 
-		if err := fixer.AutoFix(iss, ctx); err != nil {
+	for i := 0; i < len(fixable); i += defaultAutoFixBatchSize {
+		end := i + defaultAutoFixBatchSize
+		if end > len(fixable) {
+			end = len(fixable)
+		}
+		a, r, f := bisectAutoFixBatch(fixable[i:end], ctx, fixerByRule)
+		applied += a
+		reverted += r
+		failed += f
+	}
+	return
+
+}
+
+// bisectAutoFixBatch applies every issue in pending, snapshotting each distinct package directory
+// involved before touching it, then runs one verify-gate call for the whole group. A green gate
+// keeps every fix that applied cleanly — one gate run for the whole group. A red gate means at
+// least one fix in the group is bad: every touched directory is restored to its pre-group snapshot,
+// the group is split in half, and each half is retried independently (binary search) — a clean
+// half resolves in a single gate call, a half that's still red keeps splitting until the exact
+// culprit(s) are isolated and reverted on their own.
+func bisectAutoFixBatch(pending []lintIssue, ctx LintContext, fixerByRule map[string]FixableRule) (applied, reverted, failed int) {
+	dirs := make([]string, 0, len(pending))
+	seen := map[string]bool{}
+	for _, iss := range pending {
+		d := filepath.Dir(iss.File)
+		if !seen[d] {
+			seen[d] = true
+			dirs = append(dirs, d)
+		}
+	}
+	snaps := make(map[string]dirSnapshot, len(dirs))
+	for _, d := range dirs {
+		if s, serr := snapshotGoDir(d); serr != nil {
+			fmt.Fprintf(os.Stderr, "verify: cannot snapshot %s: %v (applying unguarded)\n", d, serr)
+		} else {
+			snaps[d] = s
+		}
+	}
+
+	var succeeded []lintIssue
+	for _, iss := range pending {
+		if err := fixerByRule[iss.Rule].AutoFix(iss, ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "fix failed for %s: %v\n", iss.File, err)
 			failed++
 			continue
 		}
+		succeeded = append(succeeded, iss)
+	}
+	if len(succeeded) == 0 {
+		return 0, 0, failed
+	}
 
-		if verify {
-			if gerr := verifyGateFn(ctx.Root); gerr != nil {
-				if haveSnap {
-					if rerr := snap.restore(); rerr != nil {
-						fmt.Fprintf(os.Stderr, "verify: revert of %s failed: %v\n", iss.File, rerr)
-					}
-				}
-				fmt.Fprintf(os.Stderr, "reverted %s [%s]: gate failed after fix\n%v\n", iss.File, iss.Rule, gerr)
-				reverted++
-				continue
+	gerr := verifyGateFn(ctx.Root)
+	if gerr == nil {
+		return len(succeeded), 0, failed
+	}
+
+	for _, d := range dirs {
+		if s, ok := snaps[d]; ok {
+			if rerr := s.restore(); rerr != nil {
+				fmt.Fprintf(os.Stderr, "verify: revert of %s failed: %v\n", d, rerr)
 			}
 		}
-		applied++
 	}
-	return
+
+	if len(succeeded) == 1 {
+		fmt.Fprintf(os.Stderr, "reverted %s [%s]: gate failed after fix\n%v\n", succeeded[0].File, succeeded[0].Rule, gerr)
+		return 0, 1, failed
+	}
+
+	mid := len(succeeded) / 2
+	a1, r1, f1 := bisectAutoFixBatch(succeeded[:mid], ctx, fixerByRule)
+	a2, r2, f2 := bisectAutoFixBatch(succeeded[mid:], ctx, fixerByRule)
+	return a1 + a2, r1 + r2, failed + f1 + f2
 }
 
 type LintContext struct {

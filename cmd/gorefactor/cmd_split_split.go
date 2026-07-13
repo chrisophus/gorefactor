@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/chrisophus/gorefactor/orchestrator"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/chrisophus/gorefactor/orchestrator"
 )
 
 var splitFlags = map[string]bool{

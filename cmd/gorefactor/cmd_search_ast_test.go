@@ -69,9 +69,9 @@ func TestSearchASTExpressionPattern(t *testing.T) {
 		}
 	})
 	var res struct {
-		Pattern string     `json:"pattern"`
+		Pattern string              `json:"pattern"`
 		Matches []analyzer.ASTMatch `json:"matches"`
-		Total   int        `json:"total"`
+		Total   int                 `json:"total"`
 	}
 	if err := json.Unmarshal([]byte(out), &res); err != nil {
 		t.Fatalf("invalid JSON: %v\n%s", err, out)

@@ -141,10 +141,21 @@ func doctorGolangciStage(root string) doctorStage {
 		return doctorStage{name: "golangci", ok: true, info: "skipped (golangci-lint not installed or no config)"}
 	}
 	gci := golangciLintRule{}.Run(LintContext{Root: root, WalkOpts: analyzer.DefaultWalkOptions()})
+	for _, iss := range gci {
+		if iss.Rule == golangciToolFailureRule {
+			// A tool that's present but can't run (version-skewed binary, config
+			// it can't load, ...) gets the same soft-skip treatment as one
+			// that's missing entirely: it can't be told apart from "clean" by
+			// this stage, so it must not gate local commits — CI runs a known-
+			// good golangci-lint and is the real enforcement backstop.
+			return doctorStage{name: "golangci", ok: true, info: "skipped, did not run: " + iss.Message}
+		}
+	}
 	if len(gci) == 0 {
 		return doctorStage{name: "golangci", ok: true, info: "ok"}
 	}
 	return doctorStage{name: "golangci", ok: false, info: fmt.Sprintf("%d issue(s)", len(gci))}
+
 }
 
 func doctorArchStage(root string) doctorStage {

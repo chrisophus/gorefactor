@@ -75,8 +75,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	var runErr error
-	runErr = extractBlockL111(campaign, provider, runErr, cfg, singleShot, interactive)
+	runErr := extractBlockL111(campaign, provider, cfg, singleShot, interactive)
 	if runErr != nil {
 		// A punt is not a crash: the junior cleanly handed work back.
 		// The structured report is already on stdout; exit 3 so a
@@ -135,7 +134,8 @@ func extractBlockL64(printPrompt *bool, singleShot *bool, spec string, dir *stri
 	return
 }
 
-func extractBlockL111(campaign *bool, provider Provider, runErr error, cfg Config, singleShot *bool, interactive *bool) error {
+func extractBlockL111(campaign *bool, provider Provider, cfg Config, singleShot *bool, interactive *bool) error {
+	var runErr error
 	switch {
 	case *campaign:
 		tc, ok := provider.(toolChatter)
@@ -160,6 +160,7 @@ func extractBlockL111(campaign *bool, provider Provider, runErr error, cfg Confi
 		}
 	}
 	return runErr
+
 }
 
 func extractBlockL50(spec string, campaign *bool, interactive *bool) string {

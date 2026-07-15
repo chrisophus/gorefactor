@@ -5,6 +5,38 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`extract-var` / `extract-const`**: new mutation guides that bind an
+  expression inside a function to a named local (`name := expr` /
+  `const name = expr`) and rewrite the occurrence. The binding is placed in the
+  same block as the occurrence — descending into nested `if`/`for`/`switch`
+  bodies — so evaluation timing and scope are preserved and single-occurrence
+  extraction is always behavior-preserving. `--all` rewrites every occurrence;
+  `extract-const` statically rejects non-constant expressions (calls, indexing,
+  composite/func literals, address-of, and local-variable/parameter operands).
+- **`lint --baseline` / `--write-baseline`**: ratchet mode. Record current
+  findings to a committable `.gorefactor-lint-baseline.json`, then fail only on
+  new-or-worsened issues. Matching is line-number-independent (fingerprint =
+  file + rule + digit-normalized message), so a finding that merely shifts when
+  unrelated code is added stays suppressed. `--baseline-file PATH` overrides the
+  path. Enables adopting the linter on an existing backlog without paying it
+  all down first.
+
+### Changed
+- **CI** now builds `gorefactor` and runs its own structural lint gate
+  (`lint . --fail-on error`), so the tool's error-tier rules ratchet on every
+  PR rather than only via the optional local pre-commit hook.
+- **Agentic runs** now aggregate `.gorefactor/failures.jsonl` into a bounded
+  "known failure modes" block appended to the system prompt (top rejected tools
+  with a representative reason, plus capability-gap/budget-hit counts), closing
+  the mistake-cannot-recur loop. Empty on a cold repo, so a fresh checkout pays
+  no tokens.
+- A doc-drift test now asserts every registered command appears in the
+  `CLAUDE.md` command reference, keeping the hand-maintained table in sync with
+  `getCommands()` (this caught `wrap-errors`, which was undocumented).
+
 ## [0.9.0] - 2026-07-11
 
 ### Added

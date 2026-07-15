@@ -138,6 +138,11 @@ end.
 
 ## Recommended shortlist
 
+> **Status (implemented):** all five shortlist items below have shipped —
+> `doctor`/lint gate in CI (#1), `lint --baseline` ratchet (#2), the doc-drift
+> sensor (#4), `extract-var`/`extract-const` (#6), and failure-corpus feedback
+> into the agentic prompt (#15). See CHANGELOG "Unreleased".
+
 If picking five, in order:
 
 1. **#1 doctor in CI** — cheap, and turns the existing green gate into a real

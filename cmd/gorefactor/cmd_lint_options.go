@@ -27,6 +27,13 @@ type lintOptions struct {
 	skipRules  map[string]bool
 	failOn     string // "error" | "warning"
 
+	// Ratchet mode (item 2): compare against / write a committed baseline so
+	// only new-or-worsened issues fail. baseline and writeBaseline are the two
+	// modes; baselineFile overrides the default committed path.
+	baseline      bool
+	writeBaseline bool
+	baselineFile  string
+
 	// Hidden profiling flags (not advertised in help).
 	cpuProfile   string // --cpuprofile <path>: write a CPU profile of the rule phase
 	profileRules bool   // --profile-rules: print per-rule timing to stderr
@@ -44,6 +51,16 @@ func parseLintOptions(args []string) (lintOptions, error) {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch {
+		case a == "--baseline":
+			opts.baseline = true
+		case a == "--write-baseline":
+			opts.writeBaseline = true
+		case a == "--baseline-file":
+			if i+1 >= len(args) {
+				return opts, fmt.Errorf("--baseline-file requires a path")
+			}
+			opts.baselineFile = args[i+1]
+			i++
 		case a == "--fix":
 			opts.fix = true
 		case a == "--verify":
@@ -132,6 +149,9 @@ func parseLintOptions(args []string) (lintOptions, error) {
 	}
 	if opts.fixLevel == fixLevelAggressive && (!opts.fix || !opts.verify) {
 		return opts, fmt.Errorf("--fix-level aggressive requires --fix --verify: every aggressive fix must be build+test gated and revertible")
+	}
+	if opts.baseline && opts.writeBaseline {
+		return opts, fmt.Errorf("--baseline and --write-baseline are mutually exclusive (compare vs record)")
 	}
 	if err := opts.loadConfig(); err != nil {
 		return opts, err

@@ -26,6 +26,30 @@ func lintCommand(args []string) error {
 	issues := runLintRules(rules, ctx, opts)
 	issues = applyConfigSeverity(issues, opts)
 	sortLintIssues(issues)
+
+	if opts.writeBaseline {
+		path := opts.baselineFilePath()
+		if err := writeBaseline(path, issues); err != nil {
+			return err
+		}
+		if !opts.quiet {
+			fmt.Printf("Wrote lint baseline: %d issue(s) recorded -> %s\n", len(issues), path)
+		}
+		return nil
+	}
+	if opts.baseline {
+		base, err := loadBaseline(opts.baselineFilePath())
+		if err != nil {
+			return err
+		}
+		before := len(issues)
+		issues = filterAgainstBaseline(issues, base)
+		if !opts.quiet && !opts.jsonOut {
+			fmt.Printf("Baseline: %d pre-existing issue(s) suppressed, %d new/worsened\n",
+				before-len(issues), len(issues))
+		}
+	}
+
 	shouldFail := lintShouldFail(issues, opts.failOn)
 	outputIssues := issues
 	if opts.failOnly {

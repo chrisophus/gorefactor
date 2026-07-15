@@ -37,6 +37,11 @@ jobs:
           version: v2.12.2
           args: --timeout=5m
 
+      - name: Run gorefactor structural lint gate
+        run: |
+          go build -o gorefactor ./cmd/gorefactor
+          ./gorefactor lint . --fail-on error
+
       - name: Run tests
         run: make ci-test
 

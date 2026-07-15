@@ -291,7 +291,7 @@ func logToolCall(out io.Writer, verbose bool, name, args, result string) {
 
 func agenticSystemPrompt(dir string) string {
 	files := fileList(dir)
-	return prompt(files) + notesPromptSection(dir)
+	return prompt(files) + notesPromptSection(dir) + failureCorpusSection(dir)
 }
 
 func prompt(files string) string {

@@ -66,15 +66,6 @@ func normalizeLintMessage(msg string) string {
 	return b.String()
 }
 
-// baselineCounts folds a slice of issues into a fingerprint -> count multiset.
-func baselineCounts(issues []lintIssue) map[string]int {
-	counts := make(map[string]int, len(issues))
-	for _, iss := range issues {
-		counts[issueFingerprint(iss)]++
-	}
-	return counts
-}
-
 // writeBaseline records the full current issue set (every severity, so nothing
 // is lost from the ratchet) as a sorted baseline snapshot at path.
 func writeBaseline(path string, issues []lintIssue) error {

@@ -79,9 +79,15 @@ func failureCorpusSection(dir string) string {
 	if len(entries) == 0 {
 		return ""
 	}
+	ranked, kindCounts := aggregateFailures(entries)
+	return renderFailureSection(ranked, kindCounts)
+}
 
+// aggregateFailures folds corpus entries into per-tool rejection stats (ranked
+// most-rejected first) and a per-kind count map.
+func aggregateFailures(entries []failureEntry) (ranked []*toolFailureStat, kindCounts map[string]int) {
 	stats := map[string]*toolFailureStat{}
-	kindCounts := map[string]int{}
+	kindCounts = map[string]int{}
 	for _, e := range entries {
 		kindCounts[e.Kind]++
 		if e.Kind != failRejectedOp || e.Tool == "" {
@@ -93,17 +99,13 @@ func failureCorpusSection(dir string) string {
 			stats[e.Tool] = s
 		}
 		s.count++
-		norm := normalizeCorpusReason(e.Reason)
-		if norm == "" {
-			continue
-		}
-		s.reasonTally[norm]++
-		if _, ok := s.reasonEx[norm]; !ok {
-			s.reasonEx[norm] = e.Reason
+		if norm := normalizeCorpusReason(e.Reason); norm != "" {
+			s.reasonTally[norm]++
+			if _, ok := s.reasonEx[norm]; !ok {
+				s.reasonEx[norm] = e.Reason
+			}
 		}
 	}
-
-	ranked := make([]*toolFailureStat, 0, len(stats))
 	for _, s := range stats {
 		for norm, n := range s.reasonTally {
 			if n > s.topReasonN {
@@ -120,7 +122,12 @@ func failureCorpusSection(dir string) string {
 		}
 		return ranked[i].tool < ranked[j].tool
 	})
+	return ranked, kindCounts
+}
 
+// renderFailureSection formats the ranked tool stats and kind counts into the
+// prompt block, or "" when there is nothing worth surfacing.
+func renderFailureSection(ranked []*toolFailureStat, kindCounts map[string]int) string {
 	var b strings.Builder
 	b.WriteString("\n\nKNOWN FAILURE MODES (this repo's failure corpus — do NOT repeat these; " +
 		"when a shape below is unavoidable, run a sense/analysis tool first to confirm the target):\n")
@@ -143,7 +150,6 @@ func failureCorpusSection(dir string) string {
 	if bh := kindCounts[failBudgetHit]; bh > 0 {
 		b.WriteString(fmt.Sprintf("- %d prior budget exhaustion(s): keep plans minimal and act early\n", bh))
 	}
-
 	if shown == 0 && kindCounts[failCapabilityGap] == 0 && kindCounts[failBudgetHit] == 0 {
 		return ""
 	}

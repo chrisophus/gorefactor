@@ -27,6 +27,8 @@ Mapping of common edits to commands (run `./gorefactor` for the full list):
 | Replace a whole function body | `gorefactor replace-body <file> <Func> -` |
 | Delete a function/method | `gorefactor delete <file> <Func> --safe` (checks callers first) |
 | Inline a trivial function into its callers | `gorefactor inline <file> <Func>` |
+| Extract an expression to a named local variable | `gorefactor extract-var <file> <Func> <expr> <name> [--all]` |
+| Extract a constant expression to a named local const | `gorefactor extract-const <file> <Func> <expr> <name> [--all]` |
 | Rename an unexported symbol | `gorefactor rename <file> <old> <new>` |
 | Add a field to a struct | `gorefactor add-field <file> <Struct> "<Name> <Type>" [--update-literals]` |
 | Add/remove/rename a parameter (+ call sites) | `gorefactor change-signature <file> <Func> --add-param "n T"` |
@@ -151,6 +153,8 @@ Main commands in `cmd/gorefactor/main.go` (registered in `getCommands()`):
 - `rename <file> <old> <new>`: Rename unexported symbol across the package (use gopls for exported).
 - `move <source-file> <Func|Receiver:Method> <dest-file>`: Move a declaration between files.
 - `inline <file> <Func>`: Inline a simple function into its call sites and delete it (refuses anything complex).
+- `extract-var <file> <Func|Receiver:Method> <expr> <name> [--all]`: Bind an expression inside a function to a new local variable (`name := expr`) and rewrite the occurrence. The binding is inserted into the *same block* as the occurrence (descending into nested `if`/`for`/`switch` bodies), so the expression is still evaluated at the same point — single-occurrence extraction is always behavior-preserving. `--all` rewrites every textual occurrence in the body, which additionally assumes the expression is pure and its inputs are unchanged (gate it with `--gate`). The pattern is matched as a whole Go expression (whitespace-insensitive), not raw text.
+- `extract-const <file> <Func|Receiver:Method> <expr> <name> [--all]`: Like `extract-var` but emits `const name = expr`. Rejects expressions that syntactically can't be constant (calls, indexing, composite/func literals, address-of) or that reference a local variable/parameter; a package-level `var` operand still slips through the static check, so use `--gate` when unsure.
 - `add-field <file> <Struct> "<Name> <Type> [tag]" [--after F] [--update-literals]`: Add a struct field; optionally rewrite positional literals to keyed form.
 - `change-signature <file> <Func|Receiver:Method> (--add-param "n T" [--position N] [--call-value EXPR] | --remove-param <name|index> | --rename-param <old> <new>)`: Change a signature and update all call sites.
 - `change-receiver <file> <Type:Method> --pointer|--value`: Switch a method's receiver between value and pointer form.

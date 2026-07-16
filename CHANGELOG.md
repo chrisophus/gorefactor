@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-07-16
+
 ### Added
 - **`extract-var` / `extract-const`**: new mutation guides that bind an
   expression inside a function to a named local (`name := expr` /

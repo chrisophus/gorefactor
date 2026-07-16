@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-07-16
+
+### Fixed
+- **`--version` on GoReleaser binaries**: v0.10.2 reported `(devel)` because
+  `-buildvcs=false` suppressed both the dirty suffix and the version stamp.
+  GoReleaser now injects the tag via `-ldflags -X version.injected`, which
+  takes priority over `debug.ReadBuildInfo()`. `go install @vX.Y.Z` still
+  falls through to build info; local `go build` still reports `(devel)`.
+
 ## [0.10.2] - 2026-07-16
 
 ### Fixed

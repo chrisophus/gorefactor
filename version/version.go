@@ -3,12 +3,19 @@ package version
 
 import "runtime/debug"
 
-// Version returns the module version embedded by the Go toolchain at build
-// time. When installed via "go install" or from a GoReleaser binary it returns
-// the tagged version (e.g. "v0.10.0"). Local "go build" builds return
-// "(devel)".
+// injected is set by GoReleaser via -ldflags "-X .../version.injected=vX.Y.Z".
+// It takes priority over build-info so release binaries always report cleanly.
+var injected string
+
+// Version returns the binary's release version. GoReleaser release builds
+// report the exact tag (e.g. "v0.10.2"). Binaries installed via
+// "go install .../gorefactor@vX.Y.Z" report the module version from build
+// info. Local "go build" builds report "(devel)".
 func Version() string {
-	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" {
+	if injected != "" {
+		return injected
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
 		return info.Main.Version
 	}
 	return "(devel)"

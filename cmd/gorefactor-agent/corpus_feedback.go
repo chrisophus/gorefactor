@@ -144,11 +144,11 @@ func renderFailureSection(ranked []*toolFailureStat, kindCounts map[string]int) 
 		shown++
 	}
 	if g := kindCounts[failCapabilityGap]; g > 0 {
-		b.WriteString(fmt.Sprintf("- %d capability-gap punt(s): a needed gorefactor command was missing — "+
-			"prefer an available op or report the gap rather than forcing a bad fit\n", g))
+		fmt.Fprintf(&b, "- %d capability-gap punt(s): a needed gorefactor command was missing — "+
+			"prefer an available op or report the gap rather than forcing a bad fit\n", g)
 	}
 	if bh := kindCounts[failBudgetHit]; bh > 0 {
-		b.WriteString(fmt.Sprintf("- %d prior budget exhaustion(s): keep plans minimal and act early\n", bh))
+		fmt.Fprintf(&b, "- %d prior budget exhaustion(s): keep plans minimal and act early\n", bh)
 	}
 	if shown == 0 && kindCounts[failCapabilityGap] == 0 && kindCounts[failBudgetHit] == 0 {
 		return ""

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-07-16
+
+### Changed
+- **Version reporting**: `--version` now reads the version directly from the Go
+  module's build info (`runtime/debug.ReadBuildInfo`) instead of a hand-maintained
+  constant. GoReleaser and `go install @vX.Y.Z` binaries always self-report the
+  correct tag with no manual sync step. Local `go build` builds report `(devel)`.
+
 ## [0.10.0] - 2026-07-16
 
 ### Added

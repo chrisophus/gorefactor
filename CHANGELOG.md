@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-07-16
+
+### Fixed
+- **`+dirty` version suffix**: GoReleaser binaries no longer report `v0.10.x+dirty`.
+  Root cause was the Go toolchain stamping the binary with VCS state when the
+  build directory was unclean. Fixed by passing `-buildvcs=false` to suppress
+  the stamp in release builds.
+
 ## [0.10.1] - 2026-07-16
 
 ### Changed

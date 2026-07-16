@@ -108,7 +108,7 @@ func mcpCommand(args []string) error {
 func newMCPServer(cmds map[string]Command, allowWrite bool) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "gorefactor",
-		Version: version.Version,
+		Version: version.Version(),
 	}, nil)
 
 	names := append([]string(nil), mcpReadOnlyTools...)

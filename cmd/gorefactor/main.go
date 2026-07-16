@@ -43,7 +43,7 @@ func main() {
 
 func runMain(argv []string) int {
 	if len(argv) >= 1 && (argv[0] == "-version" || argv[0] == "--version" || argv[0] == "version") {
-		fmt.Println(version.Version)
+		fmt.Println(version.Version())
 		return exitOK
 	}
 

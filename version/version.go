@@ -1,7 +1,15 @@
-// Package version holds the release version for gorefactor binaries.
-// GoReleaser overrides Version via -ldflags at link time; the constant
-// below is the default when building with plain `go build`.
+// Package version reports the release version of gorefactor binaries.
 package version
 
-// Version is the current gorefactor release (CLI and agent).
-const Version = "0.10.0"
+import "runtime/debug"
+
+// Version returns the module version embedded by the Go toolchain at build
+// time. When installed via "go install" or from a GoReleaser binary it returns
+// the tagged version (e.g. "v0.10.0"). Local "go build" builds return
+// "(devel)".
+func Version() string {
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" {
+		return info.Main.Version
+	}
+	return "(devel)"
+}

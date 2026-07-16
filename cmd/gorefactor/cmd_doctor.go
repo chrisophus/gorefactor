@@ -12,10 +12,10 @@ func init() {
 	registerCommand(Command{
 		Name:        "doctor",
 		Description: "Aggregate health gate: lint + golangci-lint + go-arch-lint + build + test. Exits non-zero on failure. [--json] [--fix [--fix-level safe|aggressive]]",
-		Usage:       "doctor [dir] [--json] [--fix] [--fix-level safe|aggressive]",
+		Usage:       "doctor [dir] [--json] [--fix] [--fix-level safe|aggressive] [--config PATH]",
 		MinArgs:     0,
 		MaxArgs:     1,
-		Flags:       map[string]bool{"--json": false, "--fix": false, "--fix-level": true},
+		Flags:       map[string]bool{"--json": false, "--fix": false, "--fix-level": true, "--config": true},
 		Run:         doctorCommand,
 	})
 }
@@ -36,6 +36,7 @@ func doctorCommand(args []string) error {
 	jsonOut := false
 	fix := false
 	fixLevel := fixLevelSafe
+	configPath := ""
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch {
@@ -54,6 +55,12 @@ func doctorCommand(args []string) error {
 				return fmt.Errorf("--fix-level must be safe or aggressive")
 			}
 			i++
+		case a == "--config":
+			if i+1 >= len(args) {
+				return fmt.Errorf("--config requires a path")
+			}
+			configPath = args[i+1]
+			i++
 		case !strings.HasPrefix(a, "--"):
 			root = a
 		}
@@ -61,14 +68,14 @@ func doctorCommand(args []string) error {
 
 	var stages []doctorStage
 	if fix {
-		stage, ferr := doctorAutoFixStage(root, fixLevel)
+		stage, ferr := doctorAutoFixStage(root, fixLevel, configPath)
 		if ferr != nil {
 			return ferr
 		}
 		stages = append(stages, stage)
 	}
 
-	lintStage, err := doctorLintStage(root)
+	lintStage, err := doctorLintStage(root, configPath)
 	if err != nil {
 		return err
 	}
@@ -91,8 +98,8 @@ func doctorCommand(args []string) error {
 
 var doctorAutoFixFn = doctorAutoFix
 
-func doctorAutoFixStage(root, fixLevel string) (doctorStage, error) {
-	applied, reverted, failed, err := doctorAutoFixFn(root, fixLevel)
+func doctorAutoFixStage(root, fixLevel, configPath string) (doctorStage, error) {
+	applied, reverted, failed, err := doctorAutoFixFn(root, fixLevel, configPath)
 	if err != nil {
 		return doctorStage{}, err
 	}
@@ -109,20 +116,24 @@ type doctorStage struct {
 	info string
 }
 
-func doctorLintStage(root string) (doctorStage, error) {
-	files, err := collectGoFiles(root, analyzer.DefaultWalkOptions())
+func doctorLintStage(root, configPath string) (doctorStage, error) {
+	opts := lintOptions{root: root, configPath: configPath}
+	if err := opts.loadConfig(); err != nil {
+		return doctorStage{}, err
+	}
+	ctx := opts.lintContext(nil)
+
+	files, err := collectGoFiles(root, ctx.WalkOpts)
 	if err != nil {
 		return doctorStage{}, err
 	}
 
-	sizeCtx := LintContext{MaxSize: defaultSplitMaxLines}
 	var issues []lintIssue
 	for _, f := range files {
-		issues = append(issues, checkFileSize(f, effectiveMaxSizeForFile(f, sizeCtx))...)
+		issues = append(issues, checkFileSize(f, effectiveMaxSizeForFile(f, ctx))...)
 	}
-	walk := analyzer.DefaultWalkOptions()
-	issues = append(issues, checkDuplicates(root, walk)...)
-	issues = append(issues, checkUntestedPackages(root, walk)...)
+	issues = append(issues, checkDuplicates(root, ctx.WalkOpts)...)
+	issues = append(issues, checkUntestedPackages(root, ctx.WalkOpts)...)
 	errCount := 0
 	for _, iss := range issues {
 		if iss.Severity == "error" {
@@ -206,8 +217,8 @@ func reportDoctorStages(stages []doctorStage, jsonOut bool) {
 // individually if it breaks the gate) — the same guarantee as
 // `lint --fix --verify`, but silent and always verified, since doctor is
 // itself the trust gate. Used by `doctor --fix`.
-func doctorAutoFix(root, fixLevel string) (applied, reverted, failed int, err error) {
-	opts := lintOptions{root: root, fix: true, verify: true, fixLevel: fixLevel}
+func doctorAutoFix(root, fixLevel, configPath string) (applied, reverted, failed int, err error) {
+	opts := lintOptions{root: root, fix: true, verify: true, fixLevel: fixLevel, configPath: configPath}
 	if err := opts.loadConfig(); err != nil {
 		return 0, 0, 0, err
 	}

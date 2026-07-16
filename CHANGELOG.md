@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-07-16
+
+### Fixed
+- **`doctor --config PATH`**: `doctor --fix` now accepts `--config` and passes
+  it through to both the lint stage and the autofix pass. Previously `doctor`
+  ignored the `walk:` skip rules in `.gorefactor.yaml` (no `--config` flag
+  existed), causing it to modify generated files such as sqlc output that
+  `lint --fix --config` correctly excluded. Both `doctorLintStage` and
+  `doctorAutoFix` now build their walk options from the loaded config rather
+  than `analyzer.DefaultWalkOptions()`.
+
 ## [0.10.3] - 2026-07-16
 
 ### Fixed

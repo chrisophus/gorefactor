@@ -73,7 +73,7 @@ func DetectShape(root string) (*Shape, error) {
 		}
 	}
 	if shape.MainDirs, err = findMainDirs(root); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("find main dirs: %w", err)
 	}
 	shape.IsLibrary = len(shape.MainDirs) == 0
 	return shape, nil

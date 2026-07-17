@@ -7,27 +7,6 @@ import (
 	"testing"
 )
 
-// installFakeGolangciLint puts a fake golangci-lint script first on PATH for
-// the duration of the test, so golangciLintRule's subprocess-wrapping
-// behavior can be tested deterministically regardless of what's actually
-// installed in the environment running the test.
-func installFakeGolangciLint(t *testing.T, script string) {
-	t.Helper()
-	binDir := t.TempDir()
-	path := filepath.Join(binDir, "golangci-lint")
-	if err := os.WriteFile(path, []byte(script), 0755); err != nil {
-		t.Fatalf("write fake golangci-lint: %v", err)
-	}
-	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-}
-
-func withGolangciConfig(t *testing.T) string {
-	t.Helper()
-	dir := t.TempDir()
-	writeFileT(t, filepath.Join(dir, ".golangci.yml"), "version: \"2\"\n")
-	return dir
-}
-
 func TestGolangciLintRuleReportsToolFailureDistinctly(t *testing.T) {
 	dir := withGolangciConfig(t)
 	installFakeGolangciLint(t, "#!/bin/sh\necho 'fake toolchain mismatch' >&2\nexit 1\n")
@@ -84,4 +63,25 @@ func TestDoctorGolangciStageReportsRealFindingsAsCount(t *testing.T) {
 	if stage.info != "1 issue(s)" {
 		t.Fatalf("expected a plain issue count for real findings, got %q", stage.info)
 	}
+}
+
+// installFakeGolangciLint puts a fake golangci-lint script first on PATH for
+// the duration of the test, so golangciLintRule's subprocess-wrapping
+// behavior can be tested deterministically regardless of what's actually
+// installed in the environment running the test.
+func installFakeGolangciLint(t *testing.T, script string) {
+	t.Helper()
+	binDir := t.TempDir()
+	path := filepath.Join(binDir, "golangci-lint")
+	if err := os.WriteFile(path, []byte(script), 0755); err != nil {
+		t.Fatalf("write fake golangci-lint: %v", err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func withGolangciConfig(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	writeFileT(t, filepath.Join(dir, ".golangci.yml"), "version: \"2\"\n")
+	return dir
 }

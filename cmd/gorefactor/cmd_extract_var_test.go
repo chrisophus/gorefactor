@@ -7,15 +7,6 @@ import (
 	"testing"
 )
 
-func writeGoFile(t *testing.T, dir, name, src string) string {
-	t.Helper()
-	p := filepath.Join(dir, name)
-	if err := os.WriteFile(p, []byte(src), 0o644); err != nil {
-		t.Fatalf("write %s: %v", name, err)
-	}
-	return p
-}
-
 func TestExtractVar_Simple(t *testing.T) {
 	dir := t.TempDir()
 	f := writeGoFile(t, dir, "a.go", "package p\n\nfunc F(a, b int) int {\n\tx := a + b\n\treturn x\n}\n")
@@ -134,6 +125,15 @@ func TestIsValidIdent(t *testing.T) {
 			t.Errorf("%q should be invalid", bad)
 		}
 	}
+}
+
+func writeGoFile(t *testing.T, dir, name, src string) string {
+	t.Helper()
+	p := filepath.Join(dir, name)
+	if err := os.WriteFile(p, []byte(src), 0o644); err != nil {
+		t.Fatalf("write %s: %v", name, err)
+	}
+	return p
 }
 
 func mustRead(t *testing.T, p string) []byte {

@@ -57,6 +57,7 @@ func TestDoctorCommandRejectsBadFixLevel(t *testing.T) {
 		t.Fatal("expected error for invalid --fix-level")
 	}
 }
+
 func TestDoctorAutoFixStageOKDespiteFailedFixes(t *testing.T) {
 	restore := swapDoctorAutoFixFn(func(string, string, string) (int, int, int, error) {
 		return 1, 2, 5, nil
@@ -73,12 +74,6 @@ func TestDoctorAutoFixStageOKDespiteFailedFixes(t *testing.T) {
 	if !strings.Contains(stage.info, "5 failed to apply") {
 		t.Fatalf("info should report the failed count; got %q", stage.info)
 	}
-}
-
-func swapDoctorAutoFixFn(fn func(string, string, string) (int, int, int, error)) func() {
-	prev := doctorAutoFixFn
-	doctorAutoFixFn = fn
-	return func() { doctorAutoFixFn = prev }
 }
 
 func TestDoctorAutoFixFormatsUntouchedFile(t *testing.T) {
@@ -178,4 +173,10 @@ func TestDoctorLintStageRespectsConfigWalkSkips(t *testing.T) {
 	if !stage.ok {
 		t.Fatalf("expected lint stage to pass when oversized file is in skipped dir; got: %s", stage.info)
 	}
+}
+
+func swapDoctorAutoFixFn(fn func(string, string, string) (int, int, int, error)) func() {
+	prev := doctorAutoFixFn
+	doctorAutoFixFn = fn
+	return func() { doctorAutoFixFn = prev }
 }

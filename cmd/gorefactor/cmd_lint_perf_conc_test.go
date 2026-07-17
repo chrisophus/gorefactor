@@ -7,16 +7,6 @@ import (
 	"testing"
 )
 
-func writeLintFixture(t *testing.T, name, src string) LintContext {
-	t.Helper()
-	dir := t.TempDir()
-	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return LintContext{Root: dir, Files: []string{path}}
-}
-
 func TestStringConcatInLoopRule(t *testing.T) {
 	src := `package p
 
@@ -192,4 +182,14 @@ func c(v string) string { return v + "!" }
 	if len(issues) != 0 {
 		t.Fatalf("issues = %+v, want none (only 2 forwarding layers before use)", issues)
 	}
+}
+
+func writeLintFixture(t *testing.T, name, src string) LintContext {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return LintContext{Root: dir, Files: []string{path}}
 }

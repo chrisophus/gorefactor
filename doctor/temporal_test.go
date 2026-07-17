@@ -5,43 +5,6 @@ import (
 	"testing"
 )
 
-// writeTemporalModule lays out a fixture module requiring go.temporal.io/sdk
-// with one workflow file. The in-process scan is parse-only, so the SDK never
-// needs to resolve.
-func writeTemporalModule(t *testing.T, workflowSrc string) string {
-	t.Helper()
-	dir := t.TempDir()
-	writeShapeFile(t, dir, "go.mod", "module example.com/wf\n\ngo 1.26\n\nrequire go.temporal.io/sdk v1.30.0\n")
-	writeShapeFile(t, dir, "wf/workflow.go", workflowSrc)
-	return dir
-}
-
-const violatingWorkflow = `package wf
-
-import (
-	"math/rand"
-	"time"
-
-	"go.temporal.io/sdk/workflow"
-)
-
-func MyWorkflow(ctx workflow.Context) error {
-	now := time.Now()
-	_ = now
-	time.Sleep(time.Second)
-	_ = rand.Intn(10)
-	go func() { _ = time.Now() }()
-	ch := make(chan int)
-	select {
-	case <-ch:
-	default:
-	}
-	return nil
-}
-
-func helper(n int) int { return n + 1 }
-`
-
 func TestTemporalSubstrate_FlagsViolations(t *testing.T) {
 	dir := writeTemporalModule(t, violatingWorkflow)
 	findings, err := Temporal{}.Run(RunContext{Root: dir})
@@ -72,6 +35,32 @@ func TestTemporalSubstrate_FlagsViolations(t *testing.T) {
 		}
 	}
 }
+
+const violatingWorkflow = `package wf
+
+import (
+	"math/rand"
+	"time"
+
+	"go.temporal.io/sdk/workflow"
+)
+
+func MyWorkflow(ctx workflow.Context) error {
+	now := time.Now()
+	_ = now
+	time.Sleep(time.Second)
+	_ = rand.Intn(10)
+	go func() { _ = time.Now() }()
+	ch := make(chan int)
+	select {
+	case <-ch:
+	default:
+	}
+	return nil
+}
+
+func helper(n int) int { return n + 1 }
+`
 
 func TestTemporalSubstrate_IgnoresNonWorkflowFunctions(t *testing.T) {
 	src := `package wf
@@ -150,4 +139,15 @@ not a diagnostic line
 			t.Errorf("finding %+v: wrong rule/category", f)
 		}
 	}
+}
+
+// writeTemporalModule lays out a fixture module requiring go.temporal.io/sdk
+// with one workflow file. The in-process scan is parse-only, so the SDK never
+// needs to resolve.
+func writeTemporalModule(t *testing.T, workflowSrc string) string {
+	t.Helper()
+	dir := t.TempDir()
+	writeShapeFile(t, dir, "go.mod", "module example.com/wf\n\ngo 1.26\n\nrequire go.temporal.io/sdk v1.30.0\n")
+	writeShapeFile(t, dir, "wf/workflow.go", workflowSrc)
+	return dir
 }

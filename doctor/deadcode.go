@@ -34,7 +34,7 @@ func (Deadcode) Probe(root string) error {
 // only by tests.
 func (d Deadcode) Run(ctx RunContext) ([]Finding, error) {
 	if err := d.Probe(ctx.Root); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("probe: %w", err)
 	}
 	cmd := exec.Command("deadcode", "-json", "-test", "./...")
 	cmd.Dir = ctx.Root

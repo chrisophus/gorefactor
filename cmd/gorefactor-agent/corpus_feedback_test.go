@@ -14,13 +14,6 @@ func TestFailureCorpusSection_Empty(t *testing.T) {
 	}
 }
 
-func writeCorpus(t *testing.T, dir string, entries ...failureEntry) {
-	t.Helper()
-	for _, e := range entries {
-		logFailure(dir, e)
-	}
-}
-
 func TestFailureCorpusSection_AggregatesTopTools(t *testing.T) {
 	dir := t.TempDir()
 	writeCorpus(t, dir,
@@ -90,5 +83,12 @@ not json
 	entries := readFailureCorpus(dir, 0)
 	if len(entries) != 2 {
 		t.Errorf("expected 2 valid entries (malformed skipped), got %d", len(entries))
+	}
+}
+
+func writeCorpus(t *testing.T, dir string, entries ...failureEntry) {
+	t.Helper()
+	for _, e := range entries {
+		logFailure(dir, e)
 	}
 }

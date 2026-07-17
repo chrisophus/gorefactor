@@ -33,6 +33,39 @@ func (f *fakeSubstrate) Run(ctx RunContext) ([]Finding, error) {
 
 func (f *fakeSubstrate) Probe(string) error { return f.probeErr }
 
+func TestComputeScore(t *testing.T) {
+	clean := &Report{}
+	clean.ComputeScore()
+	if clean.Score == nil || *clean.Score != 100 {
+		t.Fatalf("clean tree score = %v, want 100", clean.Score)
+	}
+	dirty := &Report{Findings: []Finding{
+		{Severity: SeverityError},
+		{Severity: SeverityWarning},
+		{Severity: SeverityInfo},
+	}}
+	dirty.ComputeScore()
+	if dirty.Score == nil || *dirty.Score >= 100 || *dirty.Score <= 0 {
+		t.Fatalf("dirty tree score = %v, want in (0, 100)", dirty.Score)
+	}
+	worse := &Report{Findings: make([]Finding, 100)}
+	for i := range worse.Findings {
+		worse.Findings[i].Severity = SeverityError
+	}
+	worse.ComputeScore()
+	if *worse.Score >= *dirty.Score {
+		t.Fatalf("score must decrease with findings: %v >= %v", *worse.Score, *dirty.Score)
+	}
+	ranking := &Report{Findings: []Finding{
+		{Severity: SeverityInfo, Rule: "high-blast-radius"},
+		{Severity: SeverityInfo, Rule: "low-gorefactor-adherence"},
+	}}
+	ranking.ComputeScore()
+	if *ranking.Score != 100 {
+		t.Fatalf("ranking-signal rules must not depress the score: %v", *ranking.Score)
+	}
+}
+
 // gitRepo creates a temp dir with one committed Go file and chdirs into it.
 func gitRepo(t *testing.T, files map[string]string) string {
 	t.Helper()
@@ -66,37 +99,5 @@ func gitRun(t *testing.T, dir string, args ...string) {
 	cmd.Env = gitScrubbedEnv() // hook-injected GIT_* vars must not leak into fixtures
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
-}
-func TestComputeScore(t *testing.T) {
-	clean := &Report{}
-	clean.ComputeScore()
-	if clean.Score == nil || *clean.Score != 100 {
-		t.Fatalf("clean tree score = %v, want 100", clean.Score)
-	}
-	dirty := &Report{Findings: []Finding{
-		{Severity: SeverityError},
-		{Severity: SeverityWarning},
-		{Severity: SeverityInfo},
-	}}
-	dirty.ComputeScore()
-	if dirty.Score == nil || *dirty.Score >= 100 || *dirty.Score <= 0 {
-		t.Fatalf("dirty tree score = %v, want in (0, 100)", dirty.Score)
-	}
-	worse := &Report{Findings: make([]Finding, 100)}
-	for i := range worse.Findings {
-		worse.Findings[i].Severity = SeverityError
-	}
-	worse.ComputeScore()
-	if *worse.Score >= *dirty.Score {
-		t.Fatalf("score must decrease with findings: %v >= %v", *worse.Score, *dirty.Score)
-	}
-	ranking := &Report{Findings: []Finding{
-		{Severity: SeverityInfo, Rule: "high-blast-radius"},
-		{Severity: SeverityInfo, Rule: "low-gorefactor-adherence"},
-	}}
-	ranking.ComputeScore()
-	if *ranking.Score != 100 {
-		t.Fatalf("ranking-signal rules must not depress the score: %v", *ranking.Score)
 	}
 }

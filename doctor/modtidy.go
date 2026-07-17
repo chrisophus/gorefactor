@@ -36,11 +36,11 @@ func (ModTidy) Run(ctx RunContext) ([]Finding, error) {
 	}
 	findings, err := tidyDiffFindings(ctx.Root)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("tidy diff findings: %w", err)
 	}
 	single, err := singleUseDependencyFindings(ctx.Root)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("single use dependency findings: %w", err)
 	}
 	return append(findings, single...), nil
 }

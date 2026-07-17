@@ -40,7 +40,7 @@ func FileFuncorderIssues(file string) ([]FuncorderIssue, error) {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, file, nil, parser.ParseComments)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse file: %w", err)
 	}
 	return funcorderIssuesForFile(f, fset, file), nil
 }

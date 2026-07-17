@@ -171,24 +171,6 @@ func TestApplyAutoFixesVerifyKeepsGoodRevertsBad(t *testing.T) {
 	}
 }
 
-func writeFileT(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		t.Fatalf("write %s: %v", path, err)
-	}
-}
-
-func swapVerifyGate(fn func(string) error) func() {
-	prev := verifyGateFn
-	verifyGateFn = fn
-	return func() { verifyGateFn = prev }
-}
-
-func readFileNoT(path string) string {
-	b, _ := os.ReadFile(path)
-	return string(b)
-}
-
 func TestApplyAutoFixesBatchesGoodFixesIntoOneGateCall(t *testing.T) {
 	root := t.TempDir()
 	const n = 6
@@ -275,4 +257,22 @@ func TestBisectAutoFixBatchIsolatesSingleBadFixEfficiently(t *testing.T) {
 	if calls < 2 {
 		t.Fatalf("expected more than 1 gate call since the batch wasn't clean, got %d", calls)
 	}
+}
+
+func writeFileT(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+func swapVerifyGate(fn func(string) error) func() {
+	prev := verifyGateFn
+	verifyGateFn = fn
+	return func() { verifyGateFn = prev }
+}
+
+func readFileNoT(path string) string {
+	b, _ := os.ReadFile(path)
+	return string(b)
 }

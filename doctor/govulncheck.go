@@ -34,7 +34,7 @@ func (Govulncheck) Probe(root string) error {
 // Run implements Substrate.
 func (g Govulncheck) Run(ctx RunContext) ([]Finding, error) {
 	if err := g.Probe(ctx.Root); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("probe: %w", err)
 	}
 	cmd := exec.Command("govulncheck", "-json", "./...")
 	cmd.Dir = ctx.Root

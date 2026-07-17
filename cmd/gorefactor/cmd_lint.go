@@ -348,6 +348,9 @@ func defaultLintRules() []LintRule {
 		deadCodeRule{},
 		untestedPackageRule{},
 		untestedFunctionRule{},
+		vacuousTestRule{},
+		sleepInTestRule{},
+		regexpHoistRule{},
 		lowAdherenceRule{},
 	)
 	return rules

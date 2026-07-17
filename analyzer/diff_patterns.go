@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+var extractIdentifiersRe = regexp.MustCompile(`[a-zA-Z_][a-zA-Z0-9_]*`)
+
 // Pattern detection methods
 func (da *DiffAnalyzer) isFunctionAddition(code string) bool {
 	return strings.Contains(code, "func ") && strings.Contains(code, "(") && strings.Contains(code, ")")
@@ -75,7 +77,7 @@ func (da *DiffAnalyzer) isVariableRename(oldCode, newCode string) bool {
 
 // extractIdentifiers extracts all identifiers (variable names) from code
 func (da *DiffAnalyzer) extractIdentifiers(code string) []string {
-	re := regexp.MustCompile(`[a-zA-Z_][a-zA-Z0-9_]*`)
+	re := extractIdentifiersRe
 	matches := re.FindAllString(code, -1)
 	// Deduplicate and return
 	seen := make(map[string]bool)

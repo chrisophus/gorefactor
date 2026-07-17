@@ -9,15 +9,19 @@ import (
 	"strings"
 )
 
+var normalizeCodeRe = regexp.MustCompile(`//.*`)
+var normalizeCodeRe2 = regexp.MustCompile(`(?s)/\*.*?\*/`)
+var normalizeCodeRe3 = regexp.MustCompile(`\s+`)
+
 // NormalizeCode removes variable names and formatting for semantic comparison
 func NormalizeCode(code string) string {
 	// Remove single-line comments
-	code = regexp.MustCompile(`//.*`).ReplaceAllString(code, "")
+	code = normalizeCodeRe.ReplaceAllString(code, "")
 	// Remove multi-line comments (using (?s) flag so . matches newlines)
-	code = regexp.MustCompile(`(?s)/\*.*?\*/`).ReplaceAllString(code, "")
+	code = normalizeCodeRe2.ReplaceAllString(code, "")
 
 	// Remove extra whitespace
-	code = regexp.MustCompile(`\s+`).ReplaceAllString(code, " ")
+	code = normalizeCodeRe3.ReplaceAllString(code, " ")
 
 	// Replace variable names with placeholders to find structural duplicates
 	// Match identifiers (word characters but not keywords)

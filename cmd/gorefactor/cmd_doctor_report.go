@@ -110,6 +110,7 @@ func doctorSubstrates(configPath string) []doctor.Substrate {
 		structuralSubstrate{configPath: configPath},
 		doctor.Golangci{},
 		doctor.APIDiff{},
+		doctor.Temporal{},
 		doctor.ModTidy{},
 		doctor.Deadcode{},
 		doctor.Govulncheck{},

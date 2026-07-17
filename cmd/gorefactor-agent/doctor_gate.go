@@ -14,11 +14,19 @@ import (
 // or dark gating substrates), or "off".
 var doctorGateMode = "advisory"
 
-// gateSubstrates composes the agent gate's substrate set: the library
-// substrates that can produce error-severity findings. The structural linter
+// gateSubstrates composes the agent gate's substrate set: the library substrates that can produce
+// error-severity findings, plus the full-run-only tier (deadcode, govulncheck) that scoped runs
+// skip automatically and the campaign-completion full pass executes. The structural linter
 // (warning-severity by design) stays in gorefactor's own doctor command.
 func gateSubstrates() []doctor.Substrate {
-	return []doctor.Substrate{doctor.Golangci{}, doctor.APIDiff{}}
+	return []doctor.Substrate{
+		doctor.Golangci{},
+		doctor.APIDiff{},
+		doctor.Temporal{},
+		doctor.Deadcode{},
+		doctor.Govulncheck{},
+	}
+
 }
 
 var doctorGateFlag = flag.String("doctor-gate", "advisory", "doctor findings gate on finish: advisory (report new error-severity findings, never block), hard (block on them and on dark gating substrates), off")

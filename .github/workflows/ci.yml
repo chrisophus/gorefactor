@@ -50,6 +50,22 @@ jobs:
       - name: Structural lint ratchet (no new findings vs baseline)
         run: ./gorefactor lint . --baseline --fail-on warning --fail-only
 
+      # One-way enforcement: the committed baseline may only shrink vs the
+      # PR base — re-baselining to absorb regressions fails here (set-based
+      # per fingerprint, so a swap that keeps the count is still caught).
+      # Deliberate growth (e.g. a new lint rule baselining its pre-existing
+      # backlog) is opted into visibly: put [baseline-growth] in the head
+      # commit message.
+      - name: Baseline shrink check (ratchet is one-way)
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch -q origin "${{ github.base_ref }}" --depth=1
+          if git log -1 --format=%B | grep -qF '[baseline-growth]'; then
+            echo "skipped: [baseline-growth] marker in head commit"
+          else
+            ./gorefactor lint . --baseline-ratchet "origin/${{ github.base_ref }}"
+          fi
+
       - name: Run tests
         run: make ci-test
 

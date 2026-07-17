@@ -30,9 +30,10 @@ type lintOptions struct {
 	// Ratchet mode (item 2): compare against / write a committed baseline so
 	// only new-or-worsened issues fail. baseline and writeBaseline are the two
 	// modes; baselineFile overrides the default committed path.
-	baseline      bool
-	writeBaseline bool
-	baselineFile  string
+	baseline           bool
+	writeBaseline      bool
+	baselineFile       string
+	baselineRatchetRef string
 
 	// Hidden profiling flags (not advertised in help).
 	cpuProfile   string // --cpuprofile <path>: write a CPU profile of the rule phase
@@ -53,6 +54,12 @@ func parseLintOptions(args []string) (lintOptions, error) {
 		switch {
 		case a == "--baseline":
 			opts.baseline = true
+		case a == "--baseline-ratchet":
+			if i+1 >= len(args) {
+				return opts, fmt.Errorf("--baseline-ratchet requires a git ref")
+			}
+			opts.baselineRatchetRef = args[i+1]
+			i++
 		case a == "--write-baseline":
 			opts.writeBaseline = true
 		case a == "--baseline-file":

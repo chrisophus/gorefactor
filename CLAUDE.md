@@ -323,6 +323,11 @@ make check              # Run all checks in sequence
 # warning+ structural findings vs the committed .gorefactor-lint-baseline.json
 # (also a CI step). After a cleanup wave, re-lock with
 # `./gorefactor lint . --write-baseline` and commit the shrunken baseline.
+# The ratchet is mechanically one-way: `lint --baseline-ratchet REF` fails if
+# the baseline file gained a fingerprint or grew a count vs REF (make gate
+# checks vs HEAD; CI checks PRs vs their base). Deliberate growth — e.g. a new
+# lint rule baselining its backlog — is opted into visibly: locally
+# BASELINE_GROWTH_OK=1, in CI a [baseline-growth] head-commit marker.
 
 # Check code quality
 make coverage           # Generate coverage report (HTML)

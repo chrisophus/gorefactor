@@ -15,6 +15,11 @@ func lintCommand(args []string) error {
 		fmt.Fprintln(os.Stderr, "note: --verify only applies with --fix; ignoring")
 	}
 
+	if opts.baselineRatchetRef != "" {
+		// Pure file comparison — no lint run needed.
+		return baselineRatchetCommand(opts.baselineFilePath(), opts.baselineRatchetRef)
+	}
+
 	ctx := opts.lintContext(nil)
 	files, err := collectGoFiles(opts.root, ctx.WalkOpts)
 	if err != nil {

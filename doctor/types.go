@@ -86,7 +86,8 @@ type Report struct {
 	// FixedCount is only populated on full-tree runs: a scoped run not seeing
 	// a baseline fingerprint does not mean the issue was fixed.
 	FixedCount map[Severity]int `json:"fixedCount,omitempty"`
-	// Score is presentation-only and initially always nil (plan decision 4b).
+	// Score is presentation-only and nil unless requested via Options.Score
+	// on a full-tree run (plan decision 4b: nothing gates on it).
 	Score *float64 `json:"score,omitempty"`
 }
 

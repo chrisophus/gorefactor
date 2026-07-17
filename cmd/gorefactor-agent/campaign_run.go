@@ -29,6 +29,10 @@ func RunCampaign(ctx context.Context, tc toolChatter, cfg Config) error {
 	}
 	defer os.Chdir(prev)
 
+	if err := preflightDoctorGate("."); err != nil {
+		return fmt.Errorf("preflight doctor gate: %w", err)
+	}
+
 	t0 := time.Now()
 	fixed, punted, handled, passesRun := 0, 0, 0, 0
 	budgetHit := false
@@ -89,6 +93,13 @@ func RunCampaign(ctx context.Context, tc toolChatter, cfg Config) error {
 	}
 
 	ok, out := runGate(".")
+	if ok && doctorGateMode == "hard" {
+		// Campaign completion additionally requires a full-repo doctor pass
+		// with no new error-severity findings (design plan gate section).
+		if blocking, _ := runDoctorGate(".", true); blocking != "" {
+			ok, out = false, "campaign full-repo doctor pass:\n"+blocking
+		}
+	}
 
 	pt, ctk := 0, 0
 	if ts, isTS := tc.(tokenStater); isTS {

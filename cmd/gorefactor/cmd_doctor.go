@@ -12,10 +12,10 @@ func init() {
 	registerCommand(Command{
 		Name:        "doctor",
 		Description: "Aggregate health gate: lint + golangci-lint + go-arch-lint + build + test. Exits non-zero on failure. [--json] [--fix [--fix-level safe|aggressive]]",
-		Usage:       "doctor [dir] [--json] [--fix] [--fix-level safe|aggressive] [--config PATH]",
+		Usage:       "doctor [dir] [--json] [--fix] [--fix-level safe|aggressive] [--config PATH] [--report [--base REF]]",
 		MinArgs:     0,
 		MaxArgs:     1,
-		Flags:       map[string]bool{"--json": false, "--fix": false, "--fix-level": true, "--config": true},
+		Flags:       map[string]bool{"--json": false, "--fix": false, "--fix-level": true, "--config": true, "--report": false, "--base": true},
 		Run:         doctorCommand,
 	})
 }
@@ -31,62 +31,86 @@ func trimOutput(b []byte) string {
 	return s
 }
 
-func doctorCommand(args []string) error {
-	root := "."
-	jsonOut := false
-	fix := false
-	fixLevel := fixLevelSafe
-	configPath := ""
+type doctorOpts struct {
+	root       string
+	jsonOut    bool
+	fix        bool
+	report     bool
+	baseRef    string
+	fixLevel   string
+	configPath string
+}
+
+func parseDoctorArgs(args []string) (doctorOpts, error) {
+	opts := doctorOpts{root: ".", fixLevel: fixLevelSafe}
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch {
 		case a == "--json":
-			jsonOut = true
+			opts.jsonOut = true
 		case a == "--fix":
-			fix = true
+			opts.fix = true
+		case a == "--report":
+			opts.report = true
+		case a == "--base":
+			if i+1 >= len(args) {
+				return opts, fmt.Errorf("--base requires a git ref")
+			}
+			opts.baseRef = args[i+1]
+			i++
 		case a == "--fix-level":
 			if i+1 >= len(args) {
-				return fmt.Errorf("--fix-level requires safe or aggressive")
+				return opts, fmt.Errorf("--fix-level requires safe or aggressive")
 			}
 			switch args[i+1] {
 			case fixLevelSafe, fixLevelAggressive:
-				fixLevel = args[i+1]
+				opts.fixLevel = args[i+1]
 			default:
-				return fmt.Errorf("--fix-level must be safe or aggressive")
+				return opts, fmt.Errorf("--fix-level must be safe or aggressive")
 			}
 			i++
 		case a == "--config":
 			if i+1 >= len(args) {
-				return fmt.Errorf("--config requires a path")
+				return opts, fmt.Errorf("--config requires a path")
 			}
-			configPath = args[i+1]
+			opts.configPath = args[i+1]
 			i++
 		case !strings.HasPrefix(a, "--"):
-			root = a
+			opts.root = a
 		}
+	}
+	return opts, nil
+}
+func doctorCommand(args []string) error {
+	opts, err := parseDoctorArgs(args)
+	if err != nil {
+		return err
+	}
+	if opts.report {
+		return doctorReportCommand(opts.root, opts.baseRef, opts.jsonOut, opts.configPath)
 	}
 
 	var stages []doctorStage
-	if fix {
-		stage, ferr := doctorAutoFixStage(root, fixLevel, configPath)
+	if opts.fix {
+		stage, ferr := doctorAutoFixStage(opts.root, opts.fixLevel, opts.configPath)
 		if ferr != nil {
 			return ferr
 		}
 		stages = append(stages, stage)
 	}
 
-	lintStage, err := doctorLintStage(root, configPath)
+	lintStage, err := doctorLintStage(opts.root, opts.configPath)
 	if err != nil {
 		return err
 	}
 	stages = append(stages,
 		lintStage,
-		doctorGolangciStage(root),
-		doctorArchStage(root),
-		doctorGoStage(root, "build"),
-		doctorGoStage(root, "test"),
+		doctorGolangciStage(opts.root),
+		doctorArchStage(opts.root),
+		doctorGoStage(opts.root, "build"),
+		doctorGoStage(opts.root, "test"),
 	)
-	reportDoctorStages(stages, jsonOut)
+	reportDoctorStages(stages, opts.jsonOut)
 	for _, s := range stages {
 		if !s.ok {
 			return gateErrorf("doctor: %s failed", s.name)

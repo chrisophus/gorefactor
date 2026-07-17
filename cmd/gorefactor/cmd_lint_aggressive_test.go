@@ -33,20 +33,32 @@ func TestParseLintOptions_FixLevel(t *testing.T) {
 	}
 }
 
-// TestLongFunctionRule_NoAutoFix verifies that the long-function rule never
-// attaches an autofix (extraction autofix is disabled until the extractor is
-// hardened).
-func TestLongFunctionRule_NoAutoFix(t *testing.T) {
+// TestLongFunctionRule_AutoFixAggressiveOnly verifies the long-function
+// extraction autofix is attached only at the aggressive level (where it is
+// always verify-gated) and never at the safe level.
+func TestLongFunctionRule_AutoFixAggressiveOnly(t *testing.T) {
 	path := writeLongFunctionModule(t)
-	for _, level := range []string{fixLevelSafe, fixLevelAggressive} {
-		issues := (longFunctionRule{}).Run(LintContext{Files: []string{path}, FixLevel: level})
-		if len(issues) == 0 {
-			t.Fatalf("level=%s: expected a long-function issue", level)
+
+	safe := (longFunctionRule{}).Run(LintContext{Files: []string{path}, FixLevel: fixLevelSafe})
+	if len(safe) == 0 {
+		t.Fatal("safe: expected a long-function issue")
+	}
+	for _, iss := range safe {
+		if iss.AutoFixCmd != "" || iss.AutoFix != "" {
+			t.Errorf("safe: long-function must not attach an autofix; got %q/%q", iss.AutoFix, iss.AutoFixCmd)
 		}
-		for _, iss := range issues {
-			if iss.AutoFixCmd != "" || iss.AutoFix != "" {
-				t.Errorf("level=%s: long-function rule attached autofix %q/%q; extraction autofix is disabled", level, iss.AutoFix, iss.AutoFixCmd)
-			}
+	}
+
+	aggressive := (longFunctionRule{}).Run(LintContext{Files: []string{path}, FixLevel: fixLevelAggressive})
+	if len(aggressive) == 0 {
+		t.Fatal("aggressive: expected a long-function issue")
+	}
+	for _, iss := range aggressive {
+		if iss.AutoFixCmd == "" {
+			t.Errorf("aggressive: long-function must attach a --reduce-length autofix; got empty AutoFixCmd")
+		}
+		if !strings.Contains(iss.AutoFixCmd, "--reduce-length") {
+			t.Errorf("aggressive: autofix cmd %q should use --reduce-length", iss.AutoFixCmd)
 		}
 	}
 }

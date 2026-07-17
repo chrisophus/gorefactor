@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**User-facing overview and install:** [README.md](README.md). **JSON plans:** [ORCHESTRATION_SYSTEM.md](ORCHESTRATION_SYSTEM.md).
+**User-facing overview and install:** [README.md](README.md). **JSON plans:** [ORCHESTRATION_SYSTEM.md](ORCHESTRATION_SYSTEM.md). **Doctor redesign plan:** [docs/doctor-design-plan.md](docs/doctor-design-plan.md).
 
 ## Project Overview
 

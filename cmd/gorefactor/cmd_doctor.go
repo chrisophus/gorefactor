@@ -12,10 +12,10 @@ func init() {
 	registerCommand(Command{
 		Name:        "doctor",
 		Description: "Aggregate health gate: lint + golangci-lint + go-arch-lint + build + test. Exits non-zero on failure. [--json] [--fix [--fix-level safe|aggressive]]",
-		Usage:       "doctor [dir] [--json] [--fix] [--fix-level safe|aggressive] [--config PATH] [--report [--base REF]]",
+		Usage:       "doctor [dir] [--json] [--fix] [--fix-level safe|aggressive] [--config PATH] [--report [--base REF] [--scoped]]",
 		MinArgs:     0,
 		MaxArgs:     1,
-		Flags:       map[string]bool{"--json": false, "--fix": false, "--fix-level": true, "--config": true, "--report": false, "--base": true},
+		Flags:       map[string]bool{"--json": false, "--fix": false, "--fix-level": true, "--config": true, "--report": false, "--base": true, "--scoped": false},
 		Run:         doctorCommand,
 	})
 }
@@ -39,6 +39,7 @@ type doctorOpts struct {
 	baseRef    string
 	fixLevel   string
 	configPath string
+	scoped     bool
 }
 
 func parseDoctorArgs(args []string) (doctorOpts, error) {
@@ -52,6 +53,8 @@ func parseDoctorArgs(args []string) (doctorOpts, error) {
 			opts.fix = true
 		case a == "--report":
 			opts.report = true
+		case a == "--scoped":
+			opts.scoped = true
 		case a == "--base":
 			if i+1 >= len(args) {
 				return opts, fmt.Errorf("--base requires a git ref")
@@ -87,7 +90,7 @@ func doctorCommand(args []string) error {
 		return err
 	}
 	if opts.report {
-		return doctorReportCommand(opts.root, opts.baseRef, opts.jsonOut, opts.configPath)
+		return doctorReportCommand(opts)
 	}
 
 	var stages []doctorStage

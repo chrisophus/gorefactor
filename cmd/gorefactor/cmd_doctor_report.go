@@ -113,21 +113,26 @@ func doctorSubstrates(configPath string) []doctor.Substrate {
 	}
 }
 
-// doctorReportCommand implements `doctor --report [--base ref]`: the merged
-// diagnose Report, advisory-first (plan decision 7) — it prints new findings
-// and substrate availability but always exits zero so it can never block a
-// commit while rules are still earning trust.
-func doctorReportCommand(root, baseRef string, jsonOut bool, configPath string) error {
+// doctorReportCommand implements `doctor --report [--base ref] [--scoped]`:
+// the merged diagnose Report, advisory-first (plan decision 7) — it prints new
+// findings and substrate availability but always exits zero so it can never
+// block a commit while rules are still earning trust. --scoped matches the
+// agent gate's per-edit behavior: only the packages touched vs the base ref
+// (plus depth-1 reverse deps) are analyzed; full-run-only substrates are
+// skipped with a recorded status and FixedCount is omitted.
+func doctorReportCommand(opts doctorOpts) error {
 	rep, err := doctor.Diagnose(doctor.Options{
-		Root:       root,
-		BaseRef:    baseRef,
-		Substrates: doctorSubstrates(configPath),
-		ConfigPath: configPath,
+		Root:       opts.root,
+		BaseRef:    opts.baseRef,
+		Substrates: doctorSubstrates(opts.configPath),
+		ConfigPath: opts.configPath,
+		Scoped:     opts.scoped,
 	})
+
 	if err != nil {
 		return fmt.Errorf("diagnose: %w", err)
 	}
-	if jsonOut {
+	if opts.jsonOut {
 		return json.NewEncoder(os.Stdout).Encode(rep)
 	}
 	printDoctorReport(rep)
@@ -136,6 +141,10 @@ func doctorReportCommand(root, baseRef string, jsonOut bool, configPath string) 
 
 func printDoctorReport(rep *doctor.Report) {
 	fmt.Printf("doctor report (base %s)\n", rep.BaseRef)
+	if len(rep.Scope) > 0 {
+		fmt.Printf("  scope: %s\n", strings.Join(rep.Scope, ", "))
+	}
+
 	for _, s := range rep.Substrates {
 		mark := "ok"
 		if s.State != doctor.SubstrateRan {

@@ -43,11 +43,11 @@ func TestIntentCommandRejectsMissingArgs(t *testing.T) {
 }
 
 func TestParseDoctorArgsReportMode(t *testing.T) {
-	opts, err := parseDoctorArgs([]string{"--report", "--base", "main", "--json", "subdir"})
+	opts, err := parseDoctorArgs([]string{"--report", "--base", "main", "--json", "--scoped", "subdir"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !opts.report || opts.baseRef != "main" || !opts.jsonOut || opts.root != "subdir" {
+	if !opts.report || opts.baseRef != "main" || !opts.jsonOut || !opts.scoped || opts.root != "subdir" {
 		t.Fatalf("parse wrong: %+v", opts)
 	}
 	if _, err := parseDoctorArgs([]string{"--base"}); err == nil {

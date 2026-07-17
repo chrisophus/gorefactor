@@ -2,9 +2,23 @@ package main
 
 import (
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// mustBuildModule compiles the temp module containing path, failing the test on
+// any compile error — the extraction regressions produced build errors, so
+// parse-validity alone would not catch them.
+func mustBuildModule(t *testing.T, path string) {
+	t.Helper()
+	cmd := exec.Command("go", "build", "./...")
+	cmd.Dir = filepath.Dir(path)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("module did not build after extraction: %v\n%s", err, out)
+	}
+}
 
 // Without --allow-returns a return-bearing block is refused, exactly as before.
 func TestExtract_ReturnsRefusedWithoutFlag(t *testing.T) {
@@ -158,4 +172,68 @@ func readBack(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+// A return-bearing block that is the function's tail must return the helper's
+// values unconditionally — a conditional would leave the function to fall off
+// its end (missing return). Regression for the tail-lift fix.
+const tailReturnSrc = `package cxmod
+
+func Classify(n int) (string, error) {
+	if n < 0 {
+		return "neg", nil
+	}
+	switch {
+	case n == 0:
+		return "zero", nil
+	default:
+		return "pos", nil
+	}
+}
+`
+
+func TestExtract_TailReturnLiftUsesUnconditionalReturn(t *testing.T) {
+	path := writeComplexityModule(t, tailReturnSrc)
+	if err := extractCommand([]string{path, "7", "12", "classifyRest", "--allow-returns"}); err != nil {
+		t.Fatalf("extract tail block: %v", err)
+	}
+	got := readBack(t, path)
+	if strings.Contains(got, "if r0, r1, done := classifyRest") {
+		t.Errorf("tail block should not use conditional return (falls off end)\n---\n%s", got)
+	}
+	for _, want := range []string{"r0, r1, _ := classifyRest(n)", "return r0, r1"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q\n---\n%s", want, got)
+		}
+	}
+	mustBuildModule(t, path)
+}
+
+// A type-switch case variable (`switch s := x.(type)`) is declared in the block
+// and must not be lifted to a parameter. Regression for the info.Implicits fix.
+const typeSwitchSrc = `package cxmod
+
+func Describe(n any) string {
+	out := ""
+	switch s := n.(type) {
+	case int:
+		out = "int"
+		_ = s
+	case string:
+		out = s
+	}
+	return out
+}
+`
+
+func TestExtract_TypeSwitchBindingNotLiftedToParam(t *testing.T) {
+	path := writeComplexityModule(t, typeSwitchSrc)
+	if err := extractCommand([]string{path, "5", "11", "describeKind"}); err != nil {
+		t.Fatalf("extract type-switch block: %v", err)
+	}
+	got := readBack(t, path)
+	if strings.Contains(got, "s any") || strings.Contains(got, ", s ") {
+		t.Errorf("type-switch var s wrongly lifted to a parameter\n---\n%s", got)
+	}
+	mustBuildModule(t, path)
 }

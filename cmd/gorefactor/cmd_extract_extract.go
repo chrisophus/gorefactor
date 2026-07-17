@@ -124,7 +124,12 @@ func extractCommand(args []string) error {
 		if rerr != nil {
 			return m.fail(rerr)
 		}
-		newFunc, callSite, err = buildReturnLiftedFunc(fset, methodName, blockStmts, params, rets, resultTypes, src)
+		// If the block is the function's tail, the original compiled only
+		// because every path through the block returns, so `done` is always
+		// true — the call site must unconditionally return the helper's values,
+		// else the outer function falls off the end (missing return).
+		isTail := blockIsFuncTail(blockStmts, enclosing)
+		newFunc, callSite, err = buildReturnLiftedFunc(fset, methodName, blockStmts, params, rets, resultTypes, src, isTail)
 	} else {
 		newFunc, callSite, err = buildExtractedFunc(fset, methodName, blockStmts, params, returns)
 	}

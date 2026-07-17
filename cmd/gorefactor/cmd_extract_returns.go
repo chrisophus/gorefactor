@@ -124,7 +124,16 @@ func liftResultNames(stmts []ast.Stmt, params []paramSpec, nResults int) (result
 //	if r0, done := helper(args); done {
 //		return r0
 //	}
-func buildReturnLiftedFunc(fset *token.FileSet, methodName string, stmts []ast.Stmt, params []paramSpec, rets []*ast.ReturnStmt, resultTypes []string, src []byte) (newFunc, callSite string, err error) {
+// blockIsFuncTail reports whether the extracted block ends the enclosing
+// function body (its last statement is the function's last statement).
+func blockIsFuncTail(blockStmts []ast.Stmt, fn *ast.FuncDecl) bool {
+	if fn.Body == nil || len(fn.Body.List) == 0 || len(blockStmts) == 0 {
+		return false
+	}
+	return fn.Body.List[len(fn.Body.List)-1] == blockStmts[len(blockStmts)-1]
+}
+
+func buildReturnLiftedFunc(fset *token.FileSet, methodName string, stmts []ast.Stmt, params []paramSpec, rets []*ast.ReturnStmt, resultTypes []string, src []byte, isTail bool) (newFunc, callSite string, err error) {
 	startOff := fset.Position(stmts[0].Pos()).Offset
 	endOff := fset.Position(stmts[len(stmts)-1].End()).Offset
 	if startOff < 0 || endOff > len(src) || startOff >= endOff {
@@ -179,9 +188,18 @@ func buildReturnLiftedFunc(fset *token.FileSet, methodName string, stmts []ast.S
 		args = append(args, p.name)
 	}
 	call := fmt.Sprintf("%s(%s)", methodName, strings.Join(args, ", "))
-	if len(resultTypes) == 0 {
+	switch {
+	case len(resultTypes) == 0:
+		// Void function: falling through after the block is legal, so a
+		// conditional return suffices even at the tail.
 		callSite = fmt.Sprintf("if %s {\n\treturn\n}", call)
-	} else {
+	case isTail:
+		// The block ended the function, so every path through it returned in
+		// the original; done is always true. Bind the results and return them
+		// unconditionally — a conditional here would fall off the end.
+		lhs := strings.Join(append(append([]string(nil), resultNames...), "_"), ", ")
+		callSite = fmt.Sprintf("%s := %s\n\treturn %s", lhs, call, strings.Join(resultNames, ", "))
+	default:
 		lhs := strings.Join(append(append([]string(nil), resultNames...), doneName), ", ")
 		callSite = fmt.Sprintf("if %s := %s; %s {\n\treturn %s\n}", lhs, call, doneName, strings.Join(resultNames, ", "))
 	}

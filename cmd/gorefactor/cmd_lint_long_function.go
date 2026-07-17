@@ -38,14 +38,53 @@ func (r longFunctionRule) Run(ctx LintContext) []lintIssue {
 				Severity: "warning",
 				Message:  fmt.Sprintf("%s is %d lines (threshold %d, line %d) — consider extracting", m.Key(), m.Lines, threshold, m.Line),
 			}
-			// Extraction autofix disabled: the automated extraction engine
-			// produces unreliable output (name collisions, invalid signatures).
-			// TODO: re-enable once the extractor is hardened.
+			// Extraction autofix is aggressive-only (needs generated helper
+			// names) and therefore always verify-gated. The extractor now names
+			// blocks from their leading comment/structure and correctly handles
+			// return-lifting tails and type-switch bindings; the gate catches
+			// any residual bad lift and reverts it.
+			if ctx.AggressiveFix() {
+				iss.AutoFix = "extract blocks to reduce length (aggressive)"
+				iss.AutoFixCmd = fmt.Sprintf("gorefactor recommend --reduce-length %s %s --max-lines %d --apply --allow-returns",
+					f, m.Key(), threshold)
+			}
 			out = append(out, iss)
 		}
 	}
 	return out
 
+}
+
+// AutoFix extracts top-level blocks to bring the function under threshold. It
+// mirrors extract-candidate's fixer and shares its reduction path; it is only
+// wired at the aggressive fix level, so it is always verify-gated.
+func (r longFunctionRule) AutoFix(issue lintIssue, _ LintContext) error {
+	file, function, ok := parseReduceLengthAutoFixCmd(issue.AutoFixCmd)
+	if !ok {
+		return fmt.Errorf("malformed long-function autofix command: %q", issue.AutoFixCmd)
+	}
+	metrics, err := analyzer.FunctionMetricsForFile(file)
+	if err != nil {
+		return fmt.Errorf("re-derive function length: %w", err)
+	}
+	lines := 0
+	for _, m := range metrics {
+		if m.Key() == function {
+			lines = m.Lines
+			break
+		}
+	}
+	if lines == 0 {
+		return fmt.Errorf("%s: function no longer present in %s", function, file)
+	}
+	applied, err := reduceLengthByExtraction(file, function, lines-1, true)
+	if err != nil {
+		return fmt.Errorf("reduce length by extraction: %w", err)
+	}
+	if applied == 0 {
+		return fmt.Errorf("%s: no extractable top-level blocks", function)
+	}
+	return nil
 }
 
 func parseReduceLengthAutoFixCmd(cmd string) (file, function string, ok bool) {

@@ -64,8 +64,10 @@ func hasGolangciConfig(root string) bool {
 	return false
 }
 
-// parseGolangciJSON maps a golangci-lint JSON report to findings. Severity is
-// category-derived (plan decision 3b); golangci's own severities are ignored.
+// parseGolangciJSON maps a golangci-lint JSON report to findings. Severity is category-derived
+// (plan decision 3b); golangci's own severities are ignored. Only the first JSON value is decoded:
+// golangci v2 can append a text stats line after the JSON object even with the text writer pointed
+// elsewhere.
 func parseGolangciJSON(out []byte) ([]Finding, error) {
 	var report struct {
 		Issues []struct {
@@ -77,7 +79,7 @@ func parseGolangciJSON(out []byte) ([]Finding, error) {
 			} `json:"Pos"`
 		} `json:"Issues"`
 	}
-	if err := json.Unmarshal(out, &report); err != nil {
+	if err := json.NewDecoder(bytes.NewReader(out)).Decode(&report); err != nil {
 		return nil, fmt.Errorf("parse golangci-lint JSON: %w", err)
 	}
 	var findings []Finding

@@ -350,6 +350,7 @@ func defaultLintRules() []LintRule {
 		untestedFunctionRule{},
 		vacuousTestRule{},
 		sleepInTestRule{},
+		fatalInLibraryRule{},
 		regexpHoistRule{},
 		lowAdherenceRule{},
 	)

@@ -37,6 +37,7 @@ func TestDefaultLintRules_ExpectedSet(t *testing.T) {
 		"untested-function",
 		"vacuous-test",
 		"sleep-in-test",
+		"fatal-in-library",
 		"regexp-compile-in-func",
 		"low-gorefactor-adherence",
 	}

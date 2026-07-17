@@ -203,6 +203,26 @@ The struct is the shared contract for every consumer (agent loop, CI, escalation
 13. Findings are journaled to `.gorefactor/doctor-history.jsonl` (the failures-corpus pattern): the data source for both rule graduation and the prevention-loop metric.
 14. Generated-file and `walk:` skip filtering is a merge-layer contract applied uniformly across substrates.
 
+## Rule inventory: react-doctor adaptations
+
+react-doctor's selection filter — code that compiles and passes tests but quietly misbehaves, especially agent-written code — applied to Go. Rules already covered by the structural linter or the golangci substrate are excluded; these are the gaps. Implemented rules live in the structural substrate (so they flow into `lint`, `doctor`, and `doctor --report` uniformly); each declares its `FixCmd` or documents why the fix is judgment-required.
+
+| Rule | react-doctor analog | Category | Status |
+|---|---|---|---|
+| `vacuous-test` — a test with no assertion path (no `t.Error`/`Fatal`/`Skip`, `*testing.T` never passed to a helper) can never fail | the "agent writes bad code the gate can't see" premise itself | struct (gate integrity) | **Implemented.** Judgment-required fix by design |
+| `sleep-in-test` — `time.Sleep` as synchronization in tests | flakiness family | struct (gate integrity) | **Implemented.** Judgment-required fix |
+| `regexp-compile-in-func` — `regexp.MustCompile`/`Compile` with a constant pattern inside a function | `js-*` hoist RegExp/Intl | perf | **Implemented**, with `hoist-regexp` autofix (MustCompile sites; comment-preserving text surgery) |
+| String `+=` in loops → `strings.Builder` | string concat in hot paths | perf | Planned (step 5) |
+| Linear search inside a loop → build a map | use Set/Map for repeated lookups | perf | Planned (step 5) |
+| Naked goroutines / `NewTicker` without `Stop` in library code | `effect-needs-cleanup` | conc | Planned (step 5; plan already commits to goroutine leaks) |
+| Context misuse (`Background()`/`TODO()` where a ctx is in scope; loops without `ctx.Done()`) | lifecycle wiring family | conc | Planned — first try enabling golangci's `contextcheck`/`containedctx` via config + category mapping before writing our own |
+| Pass-through parameters (forwarded ≥3 call layers unused) | prop drilling | struct | Planned (step 5; builds on existing callgraph infra) |
+| `panic`/`log.Fatal` in library packages | server/client boundary violations | struct, shape-conditioned | Planned (step 4, needs shape detection; extends the plan's `os.Exit` example) |
+| Dependency hygiene (`go mod tidy -diff` substrate; heavyweight single-symbol imports) | bundle size / barrel imports | dead | Planned (cheap substrate, step 4) |
+| Sequential independent I/O → `errgroup` | fetch waterfalls | perf | Deferred — independence proof is the hardest analysis here |
+
+Not transferable: the state-and-effects core (render-model-specific), accessibility, and their security rules (gosec's territory).
+
 ## Open items (empirical, not design)
 
 1. **The load-bearing measurement**: warm-cache, package-scoped golangci-lint latency on a large production-scale codebase. The single-rule-set bet rests on this number being small (seconds). Measure before building the cache layer.

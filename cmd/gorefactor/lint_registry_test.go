@@ -35,6 +35,9 @@ func TestDefaultLintRules_ExpectedSet(t *testing.T) {
 		"dead-code",
 		"untested-package",
 		"untested-function",
+		"vacuous-test",
+		"sleep-in-test",
+		"regexp-compile-in-func",
 		"low-gorefactor-adherence",
 	}
 	got := defaultLintRules()
@@ -91,6 +94,7 @@ func TestFixableRule_ExpectedSet(t *testing.T) {
 		"funcorder-constructor":   true,
 		"funcorder-struct-method": true,
 		"funcorder-function":      true,
+		"regexp-compile-in-func":  true,
 	}
 	got := make(map[string]bool)
 	for _, r := range defaultLintRules() {

@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+var parseHunkHeaderRe = regexp.MustCompile(`^@@ -(\d+),?(\d+)? \+(\d+),?(\d+)? @@`)
+
 func (da *DiffAnalyzer) processDiffGit(state *diffState) {
 	if state.currentFile != nil {
 		if state.currentHunk != nil {
@@ -36,7 +38,7 @@ func (da *DiffAnalyzer) processHunkHeader(state *diffState, line string) {
 // parseHunkHeader parses a hunk header line
 func (da *DiffAnalyzer) parseHunkHeader(line string) *DiffHunk {
 	// Parse @@ -start,count +start,count @@ format
-	re := regexp.MustCompile(`^@@ -(\d+),?(\d+)? \+(\d+),?(\d+)? @@`)
+	re := parseHunkHeaderRe
 	matches := re.FindStringSubmatch(line)
 	if len(matches) < 5 {
 		return &DiffHunk{}

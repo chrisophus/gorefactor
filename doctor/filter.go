@@ -92,7 +92,7 @@ func hasGeneratedHeader(path string) bool {
 	if err != nil {
 		return false
 	}
-	defer fh.Close()
+	defer func() { _ = fh.Close() }()
 	scanner := bufio.NewScanner(fh)
 	for i := 0; scanner.Scan() && i < 50; i++ {
 		line := scanner.Text()

@@ -236,6 +236,6 @@ Not transferable: the state-and-effects core (render-model-specific), accessibil
 2. **Done.** apidiff gate wiring on the existing differ + session-scoped intent records — `doctor.APIDiff` substrate (removed/changed gate as errors, additions warn) and `gorefactor intent api-change <scope> <reason>` / `--list` / `--clear` writing `.gorefactor/intents.json`; declared deltas demote to info citing the reason, scope-matched so blanket declarations don't pass.
 3. **Done.** Gate wiring: the agent's `runGate` is build + test + scoped diagnose vs HEAD (golangci + apidiff substrates). Advisory-first per decision 7: the default `-doctor-gate advisory` reports new error-severity findings in the finish output without blocking; `-doctor-gate hard` blocks on them and on dark gating substrates, adds the campaign full-repo pass, and fail-fasts campaigns at start via `doctor.Preflight`.
 4. govulncheck + deadcode (full-run tier) + shape detection
-5. Temporal custom analyzers
+5. Temporal custom analyzers — first evaluate wrapping Temporal's official `workflowcheck` analyzer (`go.temporal.io/sdk/contrib/tools/workflowcheck`) as the substrate before writing our own, the same reuse-first logic as the context-misuse row (golangci's `contextcheck` before a bespoke rule)
 6. Agent-install mode; complete the `FixCmd` mapping table for existing autofixes
 7. Score layer (optional, last)

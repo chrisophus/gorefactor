@@ -75,12 +75,12 @@ func buildBaseline(root, baseSHA string, substrates []Substrate) (BaselineSet, e
 	}
 	worktree := filepath.Join(tmp, "tree")
 	if out, werr := gitCmd(root, "worktree", "add", "--detach", worktree, baseSHA).CombinedOutput(); werr != nil {
-		os.RemoveAll(tmp)
+		_ = os.RemoveAll(tmp)
 		return nil, fmt.Errorf("baseline worktree for %s: %v: %s", baseSHA, werr, strings.TrimSpace(string(out)))
 	}
 	defer func() {
 		_ = gitCmd(root, "worktree", "remove", "--force", worktree).Run()
-		os.RemoveAll(tmp)
+		_ = os.RemoveAll(tmp)
 	}()
 
 	walk := analyzer.DefaultWalkOptions()

@@ -87,7 +87,7 @@ func TestLintRules_RuleFieldMatchesName(t *testing.T) {
 
 func TestFixableRule_ExpectedSet(t *testing.T) {
 	want := map[string]bool{
-		"file-size":               true,
+		"file-size": true,
 		// complexity and long-function extraction autofixes disabled (unreliable).
 		"extract-candidate":       true,
 		"dead-code":               true,

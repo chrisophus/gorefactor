@@ -17,6 +17,12 @@ func checkDuplicates(root string, walk analyzer.WalkOptions) []lintIssue {
 		if d.ImpactScore < analyzer.MinDuplicateImpactScore {
 			continue
 		}
+		// Duplication confined entirely to test files is idiomatic (table
+		// fixtures, parallel setup) — only flag when at least one occurrence
+		// is in production code.
+		if allTestLocations(d.Locations) {
+			continue
+		}
 		locs := make([]string, 0, len(d.Locations))
 		for _, l := range d.Locations {
 			locs = append(locs, fmt.Sprintf("%s:%d-%d", l.File, l.StartLine, l.EndLine))
@@ -29,6 +35,17 @@ func checkDuplicates(root string, walk analyzer.WalkOptions) []lintIssue {
 		})
 	}
 	return out
+}
+
+// allTestLocations reports whether every duplicate occurrence lives in a
+// _test.go file.
+func allTestLocations(locs []analyzer.Location) bool {
+	for _, l := range locs {
+		if !isTestFile(l.File) {
+			return false
+		}
+	}
+	return len(locs) > 0
 }
 
 type duplicateRule struct{}

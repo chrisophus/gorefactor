@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/chrisophus/gorefactor/analyzer"
@@ -11,6 +12,14 @@ import (
 // function is "load-bearing": a change ripples to at least this many other
 // functions, so it warrants test coverage before being refactored.
 const highBlastRadiusTransitive = 20
+
+// highBlastRadiusMaxFindings caps how many load-bearing functions the rule
+// reports. This is a ranking/awareness signal, not a defect list: the point is
+// "here are the riskiest functions to change", so only the highest-scoring few
+// are actionable. Reporting every function over the threshold (name-based
+// transitive counting over-approximates, so that can be hundreds) is pure
+// noise. Surface the top slice by blast score.
+const highBlastRadiusMaxFindings = 10
 
 type blastRadiusRule struct{}
 
@@ -34,7 +43,11 @@ func (r blastRadiusRule) Run(ctx LintContext) []lintIssue {
 		return nil
 	}
 
-	var out []lintIssue
+	type finding struct {
+		iss   lintIssue
+		score int
+	}
+	var found []finding
 	for key, def := range idx.defs {
 		if strings.HasSuffix(def.file, "_test.go") {
 			continue
@@ -43,15 +56,33 @@ func (r blastRadiusRule) Run(ctx LintContext) []lintIssue {
 			continue
 		}
 		br := computeBlastRadius(idx, def)
-		out = append(out, lintIssue{
-			File:     def.file,
-			Rule:     "high-blast-radius",
-			Severity: "info",
-			Message: fmt.Sprintf(
-				"%s is load-bearing: %d transitive callers across %d files (blast score %d) — changes here ripple widely; ensure tests cover it before refactoring",
-				key, br.TransitiveCallers, br.FilesAffected, br.Score,
-			),
+		found = append(found, finding{
+			score: br.Score,
+			iss: lintIssue{
+				File:     def.file,
+				Rule:     "high-blast-radius",
+				Severity: "info",
+				Message: fmt.Sprintf(
+					"%s is load-bearing: %d transitive callers across %d files (blast score %d) — changes here ripple widely; ensure tests cover it before refactoring",
+					key, br.TransitiveCallers, br.FilesAffected, br.Score,
+				),
+			},
 		})
+	}
+	// Rank by blast score (ties broken by file for determinism) and keep only
+	// the most load-bearing few — this is an awareness signal, not a backlog.
+	sort.Slice(found, func(i, j int) bool {
+		if found[i].score != found[j].score {
+			return found[i].score > found[j].score
+		}
+		return found[i].iss.File < found[j].iss.File
+	})
+	if len(found) > highBlastRadiusMaxFindings {
+		found = found[:highBlastRadiusMaxFindings]
+	}
+	out := make([]lintIssue, 0, len(found))
+	for _, f := range found {
+		out = append(out, f.iss)
 	}
 	return out
 }

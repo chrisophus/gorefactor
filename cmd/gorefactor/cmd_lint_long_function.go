@@ -21,15 +21,19 @@ func (r longFunctionRule) Run(ctx LintContext) []lintIssue {
 		if err != nil {
 			continue
 		}
+		threshold := longFunctionThreshold
+		if isTestFile(f) {
+			threshold *= longFunctionTestFactor
+		}
 		for _, m := range metrics {
-			if m.Lines < longFunctionThreshold {
+			if m.Lines < threshold {
 				continue
 			}
 			iss := lintIssue{
 				File:     f,
 				Rule:     "long-function",
 				Severity: "warning",
-				Message:  fmt.Sprintf("%s is %d lines (threshold %d, line %d) — consider extracting", m.Key(), m.Lines, longFunctionThreshold, m.Line),
+				Message:  fmt.Sprintf("%s is %d lines (threshold %d, line %d) — consider extracting", m.Key(), m.Lines, threshold, m.Line),
 			}
 			// Extraction autofix disabled: the automated extraction engine
 			// produces unreliable output (name collisions, invalid signatures).

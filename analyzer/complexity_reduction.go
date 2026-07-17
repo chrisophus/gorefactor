@@ -40,10 +40,11 @@ type ComplexityReduction struct {
 // remainder (total minus shed points) is at or below the threshold.
 func RecommendComplexityReduction(filePath, functionName string, threshold int) (*ComplexityReduction, error) {
 	fset := token.NewFileSet()
-	astFile, err := parser.ParseFile(fset, filePath, nil, 0)
+	astFile, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
 		return nil, fmt.Errorf("parse file: %w", err)
 	}
+	cmap := ast.NewCommentMap(fset, astFile, astFile.Comments)
 	var target *ast.FuncDecl
 	for _, decl := range astFile.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
@@ -97,6 +98,7 @@ func RecommendComplexityReduction(filePath, functionName string, threshold int) 
 	})
 
 	projected := total
+	used := map[string]bool{}
 	for _, c := range candidates {
 		if projected <= threshold {
 			break
@@ -106,7 +108,7 @@ func RecommendComplexityReduction(filePath, functionName string, threshold int) 
 			EndLine:    c.end,
 			Complexity: c.contrib,
 			Branches:   c.branches,
-			Suggestion: fmt.Sprintf("extractBlockL%d", c.start),
+			Suggestion: SuggestBlockName(c.stmt, cmap, c.start, used),
 		})
 		projected -= c.contrib
 	}

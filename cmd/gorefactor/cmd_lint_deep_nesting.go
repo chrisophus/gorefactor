@@ -21,15 +21,19 @@ func (r deepNestingRule) Run(ctx LintContext) []lintIssue {
 		if err != nil {
 			continue
 		}
+		threshold := maxNestingThreshold
+		if isTestFile(f) {
+			threshold++
+		}
 		for _, m := range metrics {
-			if m.MaxNesting <= maxNestingThreshold {
+			if m.MaxNesting <= threshold {
 				continue
 			}
 			out = append(out, lintIssue{
 				File:     f,
 				Rule:     "deep-nesting",
 				Severity: "warning",
-				Message:  fmt.Sprintf("%s has nesting depth %d (threshold %d, line %d) — consider extracting inner blocks", m.Key(), m.MaxNesting, maxNestingThreshold, m.Line),
+				Message:  fmt.Sprintf("%s has nesting depth %d (threshold %d, line %d) — consider extracting inner blocks", m.Key(), m.MaxNesting, threshold, m.Line),
 			})
 		}
 	}

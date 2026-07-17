@@ -18,9 +18,22 @@ var severityWeight = map[Severity]float64{
 	SeverityInfo:    0.25,
 }
 
+// scoreExemptRules are rules whose findings describe context or aspiration
+// rather than an actionable defect in the current tree, so they must not drag
+// the health score. high-blast-radius / low-gorefactor-adherence are ranking
+// signals; the rest are advisory info-tier rules (coverage gaps, extraction
+// suggestions, heuristics that admit they can't see enough to be sure). They
+// still surface in `lint --info`; they just don't define "health".
 var scoreExemptRules = map[string]bool{
 	"high-blast-radius":        true,
 	"low-gorefactor-adherence": true,
+	"untested-function":        true,
+	"untested-package":         true,
+	"extract-candidate":        true,
+	"linear-search-in-loop":    true,
+	"naked-goroutine":          true,
+	"pass-through-param":       true,
+	"premature-abstraction":    true,
 }
 
 // ComputeScore sets r.Score from all findings (not just new ones — the score

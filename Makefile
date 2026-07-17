@@ -43,6 +43,11 @@ install: ## Install binaries + helper scripts globally (on PATH), for use in ANY
 gate: ## Doctor gate: build gorefactor, then lint + build + test (use as a commit/CI gate)
 	@go build -o gorefactor ./cmd/gorefactor
 	@./gorefactor doctor
+	@# Ratchet: no new/worsened warning+ structural findings vs the committed
+	@# baseline (deterministic fingerprint match; info stays advisory). Skips
+	@# quietly when no baseline exists (fresh projects). Re-lock after cleanup
+	@# waves with: ./gorefactor lint . --write-baseline
+	@test ! -f .gorefactor-lint-baseline.json || ./gorefactor lint . --baseline --fail-on warning --fail-only
 
 refactor: ## Delegate a spec to gorefactor-agent, Haiku->Sonnet escalation. Usage: make refactor SPEC="..."
 	@go build -o gorefactor-agent ./cmd/gorefactor-agent

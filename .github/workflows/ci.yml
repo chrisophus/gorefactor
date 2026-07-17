@@ -42,6 +42,14 @@ jobs:
           go build -o gorefactor ./cmd/gorefactor
           ./gorefactor lint . --fail-on error
 
+      # Ratchet: fail on new/worsened warning+ findings vs the committed
+      # baseline snapshot (deterministic fingerprint match, line-number
+      # independent). The backlog never blocks; growing it does. After a
+      # cleanup wave, re-lock with `gorefactor lint . --write-baseline`
+      # and commit the shrunken .gorefactor-lint-baseline.json.
+      - name: Structural lint ratchet (no new findings vs baseline)
+        run: ./gorefactor lint . --baseline --fail-on warning --fail-only
+
       - name: Run tests
         run: make ci-test
 

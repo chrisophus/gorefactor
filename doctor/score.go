@@ -18,14 +18,23 @@ var severityWeight = map[Severity]float64{
 	SeverityInfo:    0.25,
 }
 
+var scoreExemptRules = map[string]bool{
+	"high-blast-radius":        true,
+	"low-gorefactor-adherence": true,
+}
+
 // ComputeScore sets r.Score from all findings (not just new ones — the score
 // describes the tree, the gate describes the change). Only meaningful on
 // full-tree runs; scoped callers should not request it.
 func (r *Report) ComputeScore() {
 	weighted := 0.0
 	for _, f := range r.Findings {
+		if scoreExemptRules[f.Rule] {
+			continue
+		}
 		weighted += severityWeight[f.Severity]
 	}
+
 	score := 100.0 / (1.0 + weighted/scoreHalfLife)
 	r.Score = &score
 }

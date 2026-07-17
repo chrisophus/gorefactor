@@ -91,4 +91,12 @@ func TestComputeScore(t *testing.T) {
 	if *worse.Score >= *dirty.Score {
 		t.Fatalf("score must decrease with findings: %v >= %v", *worse.Score, *dirty.Score)
 	}
+	ranking := &Report{Findings: []Finding{
+		{Severity: SeverityInfo, Rule: "high-blast-radius"},
+		{Severity: SeverityInfo, Rule: "low-gorefactor-adherence"},
+	}}
+	ranking.ComputeScore()
+	if *ranking.Score != 100 {
+		t.Fatalf("ranking-signal rules must not depress the score: %v", *ranking.Score)
+	}
 }

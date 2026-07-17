@@ -26,7 +26,10 @@ func (r longFunctionRule) Run(ctx LintContext) []lintIssue {
 			threshold *= longFunctionTestFactor
 		}
 		for _, m := range metrics {
-			if m.Lines < threshold {
+			// Measure logic lines, not data: a declarative catalog of composite
+			// literals is long in data, not complexity, and extracting it helps
+			// no one. LogicLines subtracts the literal span.
+			if m.LogicLines() < threshold {
 				continue
 			}
 			iss := lintIssue{

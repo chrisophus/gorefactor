@@ -67,11 +67,65 @@ func nameFromStructure(stmt ast.Stmt) string {
 			}
 		}
 	case *ast.RangeStmt:
-		if id, ok := s.X.(*ast.Ident); ok {
-			return "process" + upperFirst(id.Name)
+		if label := exprLabel(s.X); label != "" {
+			return "process" + upperFirst(label)
 		}
+	case *ast.ForStmt:
+		// A counted loop is usually iterating a collection; name it after the
+		// len(coll) that bounds it, e.g. `for i:=0; i<len(args); i++` -> processArgs.
+		if coll := loopCollection(s.Cond); coll != "" {
+			return "process" + upperFirst(coll)
+		}
+	case *ast.SwitchStmt:
+		if label := exprLabel(s.Tag); label != "" {
+			return "handle" + upperFirst(label)
+		}
+	case *ast.TypeSwitchStmt:
+		return "handleTypeSwitch"
 	}
 	return ""
+}
+
+// exprLabel returns a short identifier-ish label for an expression used as a
+// naming hint: a plain name, the last field of a selector chain (joined with
+// the one before it when that adds meaning), or the base of an index/call.
+func exprLabel(expr ast.Expr) string {
+	switch e := expr.(type) {
+	case *ast.Ident:
+		return e.Name
+	case *ast.SelectorExpr:
+		// Prefer the last two segments (`call.Function.Name` -> FunctionName)
+		// so the label stays distinctive; fall back to the field alone.
+		if inner, ok := e.X.(*ast.SelectorExpr); ok {
+			return inner.Sel.Name + upperFirst(e.Sel.Name)
+		}
+		return e.Sel.Name
+	case *ast.IndexExpr:
+		return exprLabel(e.X)
+	case *ast.CallExpr:
+		return exprLabel(e.Fun)
+	}
+	return ""
+}
+
+// loopCollection finds a `len(X)` operand in a for-loop condition and returns
+// the label of X, so counted loops can be named after what they iterate.
+func loopCollection(cond ast.Expr) string {
+	var found string
+	ast.Inspect(cond, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		if id, ok := call.Fun.(*ast.Ident); ok && id.Name == "len" && len(call.Args) == 1 {
+			if label := exprLabel(call.Args[0]); label != "" {
+				found = label
+				return false
+			}
+		}
+		return true
+	})
+	return found
 }
 
 // slugToCamel converts a phrase into a verb-first lowerCamelCase identifier,

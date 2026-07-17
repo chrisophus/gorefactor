@@ -72,3 +72,41 @@ func TestFunctionMetricsForSourceParseError(t *testing.T) {
 		t.Fatal("expected parse error")
 	}
 }
+
+func TestLogicLines_ExcludesDataLiterals(t *testing.T) {
+	src := []byte(`package p
+func catalog() []T {
+	return []T{
+		{A: 1},
+		{A: 2},
+		{A: 3},
+		{A: 4},
+		{A: 5},
+	}
+}
+func logic(n int) int {
+	x := 0
+	for i := 0; i < n; i++ {
+		x += i
+	}
+	return x
+}`)
+	metrics, err := FunctionMetricsForSource("p.go", src)
+	if err != nil {
+		t.Fatalf("metrics: %v", err)
+	}
+	byName := map[string]FunctionMetrics{}
+	for _, m := range metrics {
+		byName[m.Name] = m
+	}
+	cat := byName["catalog"]
+	if cat.LiteralLines < 5 {
+		t.Errorf("catalog LiteralLines = %d, want >=5", cat.LiteralLines)
+	}
+	if cat.LogicLines() > 3 {
+		t.Errorf("catalog LogicLines = %d, want small (data, not logic)", cat.LogicLines())
+	}
+	if lg := byName["logic"]; lg.LiteralLines != 0 {
+		t.Errorf("logic LiteralLines = %d, want 0", lg.LiteralLines)
+	}
+}

@@ -18,6 +18,20 @@ type FunctionMetrics struct {
 	Lines      int    `json:"lines"`
 	Complexity int    `json:"complexity"`
 	MaxNesting int    `json:"maxNesting"`
+	// LiteralLines is the count of source lines occupied by composite literals
+	// (slice/map/struct data) in the body. A declarative catalog is long in
+	// data, not logic; LogicLines subtracts it so length rules measure logic.
+	LiteralLines int `json:"literalLines"`
+}
+
+// LogicLines returns the function's length excluding composite-literal data
+// lines, so a 180-line catalog of `[]T{...}` reads as a few logic lines.
+func (m FunctionMetrics) LogicLines() int {
+	n := m.Lines - m.LiteralLines
+	if n < 0 {
+		return 0
+	}
+	return n
 }
 
 // Key returns "Receiver:Name" for methods or "Name" for plain functions,
@@ -62,13 +76,14 @@ func FunctionMetricsForSource(filename string, src []byte) ([]FunctionMetrics, e
 		start := fset.Position(fn.Pos()).Line
 		end := fset.Position(fn.End()).Line
 		out = append(out, FunctionMetrics{
-			Name:       fn.Name.Name,
-			Receiver:   receiverTypeName(fn),
-			Line:       start,
-			EndLine:    end,
-			Lines:      end - start + 1,
-			Complexity: calculateFunctionComplexity(fn),
-			MaxNesting: functionMaxNesting(fn),
+			Name:         fn.Name.Name,
+			Receiver:     receiverTypeName(fn),
+			Line:         start,
+			EndLine:      end,
+			Lines:        end - start + 1,
+			Complexity:   calculateFunctionComplexity(fn),
+			MaxNesting:   functionMaxNesting(fn),
+			LiteralLines: compositeLiteralLines(fset, fn.Body),
 		})
 	}
 	return out, nil
@@ -129,4 +144,30 @@ func functionMaxNesting(fn *ast.FuncDecl) int {
 		return true
 	})
 	return max
+}
+
+// compositeLiteralLines counts the distinct source lines occupied by composite
+// literals (slice/map/struct data) within body. Nested and sibling literals are
+// de-duplicated by line, so a catalog like `return []Tool{ {...}, {...} }`
+// reports the literal's full span once. Body braces themselves aren't literal
+// data, but counting the literal's line span is a good enough proxy for
+// "how much of this function is data vs logic".
+func compositeLiteralLines(fset *token.FileSet, body *ast.BlockStmt) int {
+	if body == nil {
+		return 0
+	}
+	lines := map[int]bool{}
+	ast.Inspect(body, func(n ast.Node) bool {
+		lit, ok := n.(*ast.CompositeLit)
+		if !ok {
+			return true
+		}
+		start := fset.Position(lit.Lbrace).Line
+		end := fset.Position(lit.Rbrace).Line
+		for l := start; l <= end; l++ {
+			lines[l] = true
+		}
+		return true
+	})
+	return len(lines)
 }

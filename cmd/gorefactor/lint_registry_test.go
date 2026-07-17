@@ -38,6 +38,11 @@ func TestDefaultLintRules_ExpectedSet(t *testing.T) {
 		"vacuous-test",
 		"sleep-in-test",
 		"fatal-in-library",
+		"string-concat-in-loop",
+		"linear-search-in-loop",
+		"unstopped-ticker",
+		"naked-goroutine",
+		"pass-through-param",
 		"regexp-compile-in-func",
 		"low-gorefactor-adherence",
 	}

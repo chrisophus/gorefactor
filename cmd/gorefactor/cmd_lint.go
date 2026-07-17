@@ -351,6 +351,11 @@ func defaultLintRules() []LintRule {
 		vacuousTestRule{},
 		sleepInTestRule{},
 		fatalInLibraryRule{},
+		stringConcatInLoopRule{},
+		linearSearchInLoopRule{},
+		unstoppedTickerRule{},
+		nakedGoroutineRule{},
+		passThroughParamRule{},
 		regexpHoistRule{},
 		lowAdherenceRule{},
 	)

@@ -24,10 +24,12 @@ func TestParseGolangciJSON(t *testing.T) {
 
 func TestGolangciCategoryMapping(t *testing.T) {
 	for linter, want := range map[string]Category{
-		"gosec":    CategorySec,
-		"unused":   CategoryDead,
-		"prealloc": CategoryPerf,
-		"gocritic": CategoryLint,
+		"gosec":        CategorySec,
+		"unused":       CategoryDead,
+		"prealloc":     CategoryPerf,
+		"contextcheck": CategoryConc,
+		"containedctx": CategoryConc,
+		"gocritic":     CategoryLint,
 	} {
 		if got := golangciCategory(linter); got != want {
 			t.Errorf("golangciCategory(%q) = %s, want %s", linter, got, want)

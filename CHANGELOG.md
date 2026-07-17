@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-07-17
+
+### Fixed
+- **`wrap-errors`: sentinel branch before bare `return err` was skipped** —
+  `if err != nil` blocks containing an `errors.Is` sentinel branch (returning
+  a translated error with `nil` in the error slot) followed by a bare
+  `return nil, err` were skipped entirely. `findBareErrReturn` now tolerates
+  leading sentinel-only branches and wraps the final bare return.
+- **`wrap-errors`: bare `return err` inside loops was skipped** — `if err !=
+  nil` blocks nested inside `for`/`range`/`switch`/`select` bodies were never
+  visited. The processor now recurses into all compound statement types.
+- **`wrap-errors`: doc comment of next function embedded in `fmt.Errorf`** —
+  When the last statement in a function was `return nil, err`, the go/printer
+  could pull the doc comment of the immediately following function into the
+  `fmt.Errorf(...)` argument list and remove it from its correct position.
+  Fixed by propagating the original `err` identifier's source position to the
+  replacement node so the printer has a precise anchor.
+- **`error-not-wrapped` lint rule: false positives inside function literals** —
+  `return err` inside `filepath.Walk`/`WalkDir` callbacks (and any closure)
+  was reported as an unwrapped error on the outer exported function. The
+  detector now stops `ast.Inspect` from descending into `*ast.FuncLit` nodes.
+
 ## [0.10.4] - 2026-07-16
 
 ### Fixed

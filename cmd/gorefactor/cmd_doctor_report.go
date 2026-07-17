@@ -57,10 +57,17 @@ func (s structuralSubstrate) Run(ctx doctor.RunContext) ([]doctor.Finding, error
 			Category: doctor.CategoryStruct,
 			Severity: sev,
 			Message:  iss.Message,
-			FixCmd:   iss.AutoFixCmd,
+			FixCmd:   runnableFixCmd(iss.AutoFixCmd),
 		})
 	}
 	return findings, nil
+}
+
+func runnableFixCmd(cmd string) string {
+	if cmd == "" || strings.HasPrefix(cmd, "gorefactor ") || strings.HasPrefix(cmd, "go ") {
+		return cmd
+	}
+	return "gorefactor " + cmd
 }
 
 // structuralScopeFiles lists the .go files to lint: the scope dirs when the

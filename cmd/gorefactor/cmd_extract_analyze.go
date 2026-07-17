@@ -23,6 +23,13 @@ func analyzeBlockTypes(pkg *packages.Package, fileAST *ast.File, enclosing *ast.
 					declaredInBlock[obj] = true
 				}
 			}
+			// Type-switch case variables (`switch s := x.(type)`) are recorded
+			// as implicit objects per case clause, not in Defs. Without this
+			// they look free and get wrongly lifted to parameters, producing
+			// `undefined: s` at the call site.
+			if obj := info.Implicits[n]; obj != nil {
+				declaredInBlock[obj] = true
+			}
 			return true
 		})
 	}

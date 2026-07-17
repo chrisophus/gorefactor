@@ -85,44 +85,91 @@ func Diagnose(opts Options) (*Report, error) {
 	return report, nil
 }
 
-// runSubstrates executes each substrate in its tier and records availability.
+// substrateResult is the output of one substrate execution.
+type substrateResult struct {
+	idx      int
+	status   SubstrateStatus
+	findings []Finding
+}
+
+// runSubstrates executes each substrate concurrently and records availability.
 // It returns the merged findings and the set of diff-based substrate names
-// (exempt from baseline marking).
+// (exempt from baseline marking). Results are merged in the original substrate
+// order so output is deterministic.
 func runSubstrates(opts Options, report *Report) ([]Finding, map[string]bool) {
-	var findings []Finding
 	diffBased := map[string]bool{}
-	for _, s := range opts.Substrates {
+	type work struct {
+		idx  int
+		s    Substrate
+		info SubstrateInfo
+		rctx RunContext
+		skip bool
+	}
+
+	// Build work items, recording diffBased and skipped substrates up front.
+	items := make([]work, 0, len(opts.Substrates))
+	for i, s := range opts.Substrates {
 		info := s.Info()
 		if info.DiffBased {
 			diffBased[info.Name] = true
 		}
-		status := SubstrateStatus{Name: info.Name, Gating: info.Gating}
-		if opts.Scoped && !info.ScopeCapable && !info.DiffBased {
-			status.State = SubstrateSkipped
-			status.Detail = "full-run-only substrate skipped in scoped run"
-			report.Substrates = append(report.Substrates, status)
-			continue
-		}
 		rctx := RunContext{Root: opts.Root, BaseRef: opts.BaseRef}
+		skip := opts.Scoped && !info.ScopeCapable && !info.DiffBased
 		if opts.Scoped && info.ScopeCapable {
 			rctx.ScopeDirs = report.Scope
 		}
-		fs, err := s.Run(rctx)
-		switch {
-		case errors.Is(err, ErrUnavailable):
-			status.State = SubstrateSkipped
-			status.Detail = err.Error()
-		case err != nil:
-			status.State = SubstrateFailed
-			status.Detail = err.Error()
-		default:
-			status.State = SubstrateRan
-			for i := range fs {
-				fillDefaults(&fs[i], info.Name)
+		items = append(items, work{idx: i, s: s, info: info, rctx: rctx, skip: skip})
+	}
+
+	// Run non-skipped substrates in parallel.
+	results := make([]substrateResult, len(items))
+	ch := make(chan substrateResult, len(items))
+	running := 0
+	for _, w := range items {
+		if w.skip {
+			results[w.idx] = substrateResult{
+				idx: w.idx,
+				status: SubstrateStatus{
+					Name:    w.info.Name,
+					Gating:  w.info.Gating,
+					State:   SubstrateSkipped,
+					Detail:  "full-run-only substrate skipped in scoped run",
+				},
 			}
-			findings = append(findings, fs...)
+			continue
 		}
-		report.Substrates = append(report.Substrates, status)
+		running++
+		go func(w work) {
+			fs, err := w.s.Run(w.rctx)
+			status := SubstrateStatus{Name: w.info.Name, Gating: w.info.Gating}
+			switch {
+			case errors.Is(err, ErrUnavailable):
+				status.State = SubstrateSkipped
+				status.Detail = err.Error()
+				fs = nil
+			case err != nil:
+				status.State = SubstrateFailed
+				status.Detail = err.Error()
+				fs = nil
+			default:
+				status.State = SubstrateRan
+				for i := range fs {
+					fillDefaults(&fs[i], w.info.Name)
+				}
+			}
+			ch <- substrateResult{idx: w.idx, status: status, findings: fs}
+		}(w)
+	}
+	for i := 0; i < running; i++ {
+		r := <-ch
+		results[r.idx] = r
+	}
+
+	// Merge in original order for deterministic output.
+	var findings []Finding
+	for _, r := range results {
+		report.Substrates = append(report.Substrates, r.status)
+		findings = append(findings, r.findings...)
 	}
 	return findings, diffBased
 }

@@ -111,11 +111,13 @@ func splitLintFilePos(file string) (string, int) {
 }
 
 // doctorSubstrates composes the CLI's substrate set.
+// APIDiff is intentionally omitted: for an internal codebase the compiler
+// catches broken API contracts at build time, and the type-checker cost
+// (~14s) makes it unsuitable for the per-edit agent feedback loop.
 func doctorSubstrates(configPath string) []doctor.Substrate {
 	return []doctor.Substrate{
 		structuralSubstrate{configPath: configPath},
 		doctor.Golangci{},
-		doctor.APIDiff{},
 		doctor.Temporal{},
 		doctor.ModTidy{},
 		doctor.Deadcode{},

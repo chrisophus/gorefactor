@@ -46,11 +46,11 @@ func appendJournal(root string, entry JournalEntry) error {
 	if err != nil {
 		return fmt.Errorf("encode journal entry: %w", err)
 	}
-	fh, err := os.OpenFile(filepath.Join(dir, journalFileName), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	fh, err := os.OpenFile(filepath.Join(dir, journalFileName), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return fmt.Errorf("open journal: %w", err)
 	}
-	defer fh.Close()
+	defer func() { _ = fh.Close() }()
 	if _, err := fh.Write(append(data, '\n')); err != nil {
 		return fmt.Errorf("append journal: %w", err)
 	}

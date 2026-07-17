@@ -130,35 +130,16 @@ func runSubstrates(opts Options, report *Report) ([]Finding, map[string]bool) {
 			results[w.idx] = substrateResult{
 				idx: w.idx,
 				status: SubstrateStatus{
-					Name:    w.info.Name,
-					Gating:  w.info.Gating,
-					State:   SubstrateSkipped,
-					Detail:  "full-run-only substrate skipped in scoped run",
+					Name:   w.info.Name,
+					Gating: w.info.Gating,
+					State:  SubstrateSkipped,
+					Detail: "full-run-only substrate skipped in scoped run",
 				},
 			}
 			continue
 		}
 		running++
-		go func(w work) {
-			fs, err := w.s.Run(w.rctx)
-			status := SubstrateStatus{Name: w.info.Name, Gating: w.info.Gating}
-			switch {
-			case errors.Is(err, ErrUnavailable):
-				status.State = SubstrateSkipped
-				status.Detail = err.Error()
-				fs = nil
-			case err != nil:
-				status.State = SubstrateFailed
-				status.Detail = err.Error()
-				fs = nil
-			default:
-				status.State = SubstrateRan
-				for i := range fs {
-					fillDefaults(&fs[i], w.info.Name)
-				}
-			}
-			ch <- substrateResult{idx: w.idx, status: status, findings: fs}
-		}(w)
+		go func(w work) { ch <- runOneSubstrate(w.idx, w.s, w.info, w.rctx) }(w)
 	}
 	for i := 0; i < running; i++ {
 		r := <-ch
@@ -172,6 +153,29 @@ func runSubstrates(opts Options, report *Report) ([]Finding, map[string]bool) {
 		findings = append(findings, r.findings...)
 	}
 	return findings, diffBased
+}
+
+// runOneSubstrate executes a single substrate and returns its result.
+// Intended to be called in a goroutine by runSubstrates.
+func runOneSubstrate(idx int, s Substrate, info SubstrateInfo, rctx RunContext) substrateResult {
+	fs, err := s.Run(rctx)
+	status := SubstrateStatus{Name: info.Name, Gating: info.Gating}
+	switch {
+	case errors.Is(err, ErrUnavailable):
+		status.State = SubstrateSkipped
+		status.Detail = err.Error()
+		fs = nil
+	case err != nil:
+		status.State = SubstrateFailed
+		status.Detail = err.Error()
+		fs = nil
+	default:
+		status.State = SubstrateRan
+		for i := range fs {
+			fillDefaults(&fs[i], info.Name)
+		}
+	}
+	return substrateResult{idx: idx, status: status, findings: fs}
 }
 
 // markAgainstBaseline loads (or builds) the base ref's fingerprint set and

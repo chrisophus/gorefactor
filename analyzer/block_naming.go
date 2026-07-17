@@ -3,7 +3,10 @@ package analyzer
 import (
 	"fmt"
 	"go/ast"
+	"go/parser"
 	"go/token"
+	"os"
+	"path/filepath"
 	"strings"
 	"unicode"
 )
@@ -41,6 +44,37 @@ func SuggestBlockName(stmt ast.Stmt, cmap ast.CommentMap, fallbackLine int, used
 		used[name] = true
 	}
 	return name
+}
+
+// PackageFuncNames returns the set of top-level function/method names declared
+// across every .go file in the same directory as filePath. Seeding a naming
+// run's `used` set with this prevents a generated helper name — especially the
+// positional extractBlockL<line> fallback — from colliding with a function that
+// already exists elsewhere in the package (a real bug: two files with a block
+// at the same line both minted extractBlockL<line>, redeclaring it).
+func PackageFuncNames(filePath string) map[string]bool {
+	names := map[string]bool{}
+	dir := filepath.Dir(filePath)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return names
+	}
+	fset := token.NewFileSet()
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, filepath.Join(dir, e.Name()), nil, 0)
+		if err != nil {
+			continue
+		}
+		for _, decl := range f.Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok {
+				names[fn.Name.Name] = true
+			}
+		}
+	}
+	return names
 }
 
 // nameFromComment turns a block's leading comment into an identifier.

@@ -83,7 +83,7 @@ func RecommendLengthReduction(filePath, locator string, maxLines int) (*LengthRe
 	})
 
 	projected := total
-	used := map[string]bool{}
+	used := PackageFuncNames(filePath)
 	for _, c := range candidates {
 		if projected <= maxLines {
 			break

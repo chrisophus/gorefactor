@@ -2,6 +2,8 @@ package analyzer
 
 import (
 	"go/ast"
+	"os"
+	"path/filepath"
 	"go/parser"
 	"go/token"
 	"testing"
@@ -57,4 +59,34 @@ func blockStmtFromSrc(t *testing.T, src string) (ast.Stmt, ast.CommentMap) {
 		t.Fatalf("no statements parsed from %q", src)
 	}
 	return fn.Body.List[0], cmap
+}
+
+func TestSuggestBlockName_AvoidsPackageCollision(t *testing.T) {
+	// Seed `used` as the reducers do (with existing package function names);
+	// a positional fallback that would collide must get a numeric suffix.
+	used := map[string]bool{"extractBlockL98": true}
+	stmt, cmap := blockStmtFromSrc(t, "for i := 0; i < 3; i++ {\n_ = i\n}")
+	got := SuggestBlockName(stmt, cmap, 98, used)
+	if got == "extractBlockL98" {
+		t.Fatalf("collided with existing package function; got %q", got)
+	}
+	if got != "extractBlockL982" {
+		t.Errorf("want suffixed extractBlockL982, got %q", got)
+	}
+}
+
+func TestPackageFuncNames(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte("package p\nfunc Foo() {}\nfunc bar() {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.go"), []byte("package p\nfunc Baz() {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	names := PackageFuncNames(filepath.Join(dir, "a.go"))
+	for _, want := range []string{"Foo", "bar", "Baz"} {
+		if !names[want] {
+			t.Errorf("PackageFuncNames missing %q (got %v)", want, names)
+		}
+	}
 }

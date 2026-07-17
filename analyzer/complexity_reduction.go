@@ -98,7 +98,7 @@ func RecommendComplexityReduction(filePath, functionName string, threshold int) 
 	})
 
 	projected := total
-	used := map[string]bool{}
+	used := PackageFuncNames(filePath)
 	for _, c := range candidates {
 		if projected <= threshold {
 			break

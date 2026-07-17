@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 )
@@ -154,6 +155,22 @@ func printUsage() {
 	fmt.Println("  --num-leading-stmts N  Number of leading statements to include (default: 1, 0 for none)")
 	fmt.Println("  --function NAME        Analyze only the specified function")
 }
+// printCommandHelp prints detailed help for a single command and returns the
+// appropriate exit code. Used by `gorefactor help <cmd>` and
+// `gorefactor <cmd> help`.
+func printCommandHelp(name string) int {
+	cmd, ok := commandRegistry[name]
+	if !ok {
+		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", name)
+		if hint := closestMatch(name, commandNames()); hint != "" {
+			fmt.Fprintf(os.Stderr, "Did you mean %q?\n", hint)
+		}
+		return exitUsage
+	}
+	fmt.Printf("Usage: gorefactor %s\n\n%s\n", cmd.usageLine(), cmd.Description)
+	return exitOK
+}
+
 func (cmd Command) usageLine() string {
 	if cmd.Usage != "" {
 		return cmd.Usage

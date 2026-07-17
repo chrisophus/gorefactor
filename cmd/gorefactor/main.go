@@ -52,6 +52,14 @@ func runMain(argv []string) int {
 		return exitUsage
 	}
 
+	// gorefactor help <cmd>  or  gorefactor <cmd> help
+	if argv[0] == "help" && len(argv) >= 2 {
+		return printCommandHelp(argv[1])
+	}
+	if len(argv) >= 2 && argv[1] == "help" {
+		return printCommandHelp(argv[0])
+	}
+
 	cmdName := argv[0]
 	cmd, exists := getCommands()[cmdName]
 	if !exists {

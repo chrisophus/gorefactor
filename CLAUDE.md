@@ -319,6 +319,10 @@ make fmt                # Format code
 make vet                # Run go vet
 make check              # Run all checks in sequence
 ./gorefactor doctor     # lint + golangci-lint + build + test gate
+# make gate additionally enforces the lint ratchet: no new/worsened
+# warning+ structural findings vs the committed .gorefactor-lint-baseline.json
+# (also a CI step). After a cleanup wave, re-lock with
+# `./gorefactor lint . --write-baseline` and commit the shrunken baseline.
 
 # Check code quality
 make coverage           # Generate coverage report (HTML)

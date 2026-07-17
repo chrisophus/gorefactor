@@ -9,6 +9,11 @@ run:
 
 linters:
   enable:
+    - containedctx
+    # contextcheck (doctor plan step 5): context misuse is covered by
+    # golangci's linters rather than a bespoke gorefactor rule; the doctor
+    # golangci substrate maps these to the conc category.
+    - contextcheck
     - cyclop
     - funlen
     - dupl

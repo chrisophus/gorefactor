@@ -95,13 +95,16 @@ func parseGolangciJSON(out []byte) ([]Finding, error) {
 	return findings, nil
 }
 
-// golangciCategory maps a golangci linter name to a doctor category. Anything
-// unmapped lands in the warning-severity lint category rather than guessing an
-// error-severity one.
+// golangciCategory maps a golangci linter name to a doctor category. Anything unmapped lands in the
+// warning-severity lint category rather than guessing an error-severity one. The context linters
+// (contextcheck, containedctx, fatcontext) are the plan's reuse-first answer to context misuse:
+// enabled in config and mapped to conc rather than reimplemented.
 func golangciCategory(linter string) Category {
 	switch linter {
 	case "gosec":
 		return CategorySec
+	case "contextcheck", "containedctx", "fatcontext":
+		return CategoryConc
 	case "unused", "deadcode", "unparam", "wastedassign":
 		return CategoryDead
 	case "prealloc", "perfsprint", "makezero":

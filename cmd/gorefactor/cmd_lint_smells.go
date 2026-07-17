@@ -64,6 +64,24 @@ type smellRule struct {
 
 func (r smellRule) Name() string { return r.ruleName }
 
+// canonicalSmellSeverity maps the PatternDetector's confidence labels onto the
+// linter's canonical tiers. The detector emits "low"/"medium"/"high", which are
+// not lint severities; "low" in particular is a low-confidence structural smell
+// (data clumps, excess params/returns) that shouldn't sit in the warning bucket
+// and inflate the health score. Unknown values pass through unchanged.
+func canonicalSmellSeverity(detectorSeverity string) string {
+	switch detectorSeverity {
+	case "low":
+		return "info"
+	case "medium":
+		return "warning"
+	case "high":
+		return "error"
+	default:
+		return detectorSeverity
+	}
+}
+
 func (r smellRule) Run(ctx LintContext) []lintIssue {
 	var out []lintIssue
 	for _, f := range ctx.Files {
@@ -79,7 +97,7 @@ func (r smellRule) Run(ctx LintContext) []lintIssue {
 			out = append(out, lintIssue{
 				File:     f,
 				Rule:     r.ruleName,
-				Severity: p.Severity,
+				Severity: canonicalSmellSeverity(p.Severity),
 				Message:  p.Description,
 			})
 		}

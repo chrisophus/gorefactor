@@ -155,6 +155,7 @@ func printUsage() {
 	fmt.Println("  --num-leading-stmts N  Number of leading statements to include (default: 1, 0 for none)")
 	fmt.Println("  --function NAME        Analyze only the specified function")
 }
+
 // printCommandHelp prints detailed help for a single command and returns the
 // appropriate exit code. Used by `gorefactor help <cmd>` and
 // `gorefactor <cmd> help`.

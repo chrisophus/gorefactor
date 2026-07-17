@@ -20,14 +20,68 @@ type stringConcatInLoopRule struct{}
 func (stringConcatInLoopRule) Name() string { return "string-concat-in-loop" }
 
 func (r stringConcatInLoopRule) Run(ctx LintContext) []lintIssue {
-	return scanLoopsDeduped(ctx, func(n ast.Node) (string, string, bool) {
-		assign, ok := n.(*ast.AssignStmt)
-		if !ok || !isStringConcatAssign(assign) {
-			return "", "", false
-		}
-		return "string-concat-in-loop", "string concatenation in loop (line %d) — quadratic allocation; use strings.Builder", true
+	var out []lintIssue
+	seen := map[string]bool{}
+	forEachLoopBody(ctx, func(f string, fset *token.FileSet, loop ast.Node, body *ast.BlockStmt) {
+		declaredInLoop := identsDeclaredIn(body)
+		ast.Inspect(body, func(n ast.Node) bool {
+			assign, ok := n.(*ast.AssignStmt)
+			if !ok || !isStringConcatAssign(assign) {
+				return true
+			}
+			// An accumulator declared inside the loop is reset every
+			// iteration, so the concatenation is bounded — not quadratic.
+			// Only a variable declared outside the loop grows across
+			// iterations, which is the O(n²) pattern worth flagging.
+			if lhs, ok := assign.Lhs[0].(*ast.Ident); ok && declaredInLoop[lhs.Name] {
+				return true
+			}
+			line := fset.Position(n.Pos()).Line
+			key := fmt.Sprintf("%s:%d", f, line)
+			if seen[key] {
+				return true
+			}
+			seen[key] = true
+			out = append(out, lintIssue{
+				File:     f,
+				Rule:     "string-concat-in-loop",
+				Severity: "warning",
+				Message:  fmt.Sprintf("string concatenation in loop (line %d) — quadratic allocation; use strings.Builder", line),
+			})
+			return true
+		})
 	})
+	return out
+}
 
+// identsDeclaredIn collects the names of variables declared within body's
+// subtree via `:=`, `var`, or as range loop variables.
+func identsDeclaredIn(body *ast.BlockStmt) map[string]bool {
+	declared := map[string]bool{}
+	ast.Inspect(body, func(n ast.Node) bool {
+		switch d := n.(type) {
+		case *ast.AssignStmt:
+			if d.Tok == token.DEFINE {
+				for _, lhs := range d.Lhs {
+					if id, ok := lhs.(*ast.Ident); ok {
+						declared[id.Name] = true
+					}
+				}
+			}
+		case *ast.RangeStmt:
+			for _, v := range []ast.Expr{d.Key, d.Value} {
+				if id, ok := v.(*ast.Ident); ok {
+					declared[id.Name] = true
+				}
+			}
+		case *ast.ValueSpec:
+			for _, id := range d.Names {
+				declared[id.Name] = true
+			}
+		}
+		return true
+	})
+	return declared
 }
 
 // isStringConcatAssign reports whether assign grows a string: `s += <string>`

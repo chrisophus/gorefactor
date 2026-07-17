@@ -318,6 +318,12 @@ func effectiveMaxSizeForFile(file string, ctx LintContext) int {
 	return defaultSplitMaxLines
 }
 
+func isTestFile(path string) bool {
+	return strings.HasSuffix(path, "_test.go")
+}
+
+const longFunctionTestFactor = 2
+
 type LintRule interface {
 	Name() string
 	Run(ctx LintContext) []lintIssue

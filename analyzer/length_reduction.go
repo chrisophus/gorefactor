@@ -42,10 +42,11 @@ type LengthReduction struct {
 // block spanning N lines sheds N-1.
 func RecommendLengthReduction(filePath, locator string, maxLines int) (*LengthReduction, error) {
 	fset := token.NewFileSet()
-	astFile, err := parser.ParseFile(fset, filePath, nil, 0)
+	astFile, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
 		return nil, fmt.Errorf("parse file: %w", err)
 	}
+	cmap := ast.NewCommentMap(fset, astFile, astFile.Comments)
 	target := findFuncByLocator(astFile, locator)
 	if target == nil {
 		return nil, fmt.Errorf("function %q not found in %s", locator, filePath)
@@ -63,6 +64,7 @@ func RecommendLengthReduction(filePath, locator string, maxLines int) (*LengthRe
 	}
 
 	type candidate struct {
+		stmt       ast.Stmt
 		shed       int
 		start, end int
 	}
@@ -74,13 +76,14 @@ func RecommendLengthReduction(filePath, locator string, maxLines int) (*LengthRe
 		if span < minExtractableBlockLines {
 			continue
 		}
-		candidates = append(candidates, candidate{shed: span - 1, start: start, end: end})
+		candidates = append(candidates, candidate{stmt: stmt, shed: span - 1, start: start, end: end})
 	}
 	sort.SliceStable(candidates, func(i, j int) bool {
 		return candidates[i].shed > candidates[j].shed
 	})
 
 	projected := total
+	used := map[string]bool{}
 	for _, c := range candidates {
 		if projected <= maxLines {
 			break
@@ -89,7 +92,7 @@ func RecommendLengthReduction(filePath, locator string, maxLines int) (*LengthRe
 			StartLine:  c.start,
 			EndLine:    c.end,
 			Lines:      c.shed,
-			Suggestion: fmt.Sprintf("extractBlockL%d", c.start),
+			Suggestion: SuggestBlockName(c.stmt, cmap, c.start, used),
 		})
 		projected -= c.shed
 	}

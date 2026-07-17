@@ -23,5 +23,3 @@ func reduceComplexityByExtraction(file, function string, threshold int, allowRet
 	return applyExtractionsBottomUp(file, specs, allowReturns), nil
 
 }
-
-

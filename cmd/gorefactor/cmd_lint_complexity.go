@@ -19,19 +19,23 @@ func (r complexityRule) Run(ctx LintContext) []lintIssue {
 		if err != nil {
 			continue
 		}
+		threshold := defaultComplexityThreshold
+		if isTestFile(f) {
+			threshold *= longFunctionTestFactor
+		}
 		for _, c := range complexities {
-			if c.Complexity <= defaultComplexityThreshold {
+			if c.Complexity <= threshold {
 				continue
 			}
 			sev := "warning"
-			if c.Complexity > defaultComplexityThreshold*2 {
+			if c.Complexity > threshold*2 {
 				sev = "error"
 			}
 			iss := lintIssue{
 				File:     f,
 				Rule:     "complexity",
 				Severity: sev,
-				Message:  fmt.Sprintf("%s has cyclomatic complexity %d (threshold %d, line %d) — consider extracting", c.Name, c.Complexity, defaultComplexityThreshold, c.Line),
+				Message:  fmt.Sprintf("%s has cyclomatic complexity %d (threshold %d, line %d) — consider extracting", c.Name, c.Complexity, threshold, c.Line),
 			}
 			// Only offer the autofix when there is at least one block to shed;
 			// a function whose complexity is pure straight-line branching has no

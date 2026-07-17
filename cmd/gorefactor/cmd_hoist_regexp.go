@@ -18,29 +18,40 @@ func init() {
 	registerCommand(Command{
 		Name:        "hoist-regexp",
 		Description: "Hoist function-local regexp.MustCompile calls with constant patterns to package-level vars (the regexp-compile-in-func autofix). Optionally scoped to one function.",
-		Usage:       "hoist-regexp <file.go> [Func]",
+		Usage:       "hoist-regexp <file.go> [Func] [--json] [--dry-run] [--gate]",
 		MinArgs:     1,
 		MaxArgs:     2,
+		Flags:       hoistRegexpFlags,
 		Run:         hoistRegexpCommand,
 	})
 }
 
+var hoistRegexpFlags = mutFlagSpec(nil)
+
 func hoistRegexpCommand(args []string) error {
-	file := args[0]
+	pos, flags := parseFlags(args, hoistRegexpFlags)
+	if len(pos) < 1 {
+		return usageErrorf("usage: hoist-regexp <file.go> [Func]")
+	}
+	file := pos[0]
 	funcName := ""
-	if len(args) > 1 {
-		funcName = args[1]
+	if len(pos) >= 2 {
+		funcName = pos[1]
 	}
-	n, err := hoistRegexpInFile(file, funcName)
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		fmt.Println("hoist-regexp: no function-local literal regexp.MustCompile found")
-		return nil
-	}
-	fmt.Printf("hoist-regexp: hoisted %d pattern(s) to package-level vars in %s\n", n, file)
-	return nil
+	m := &mutation{op: "hoist-regexp", file: file}
+	m.setCommonFlags(flags)
+
+	return m.run(func() (string, error) {
+		n, err := hoistRegexpInFile(file, funcName)
+		if err != nil {
+			return "", err
+		}
+		if n == 0 {
+			return "hoist-regexp: no function-local literal regexp.MustCompile found", nil
+		}
+		return fmt.Sprintf("hoist-regexp: hoisted %d pattern(s) to package-level vars in %s", n, file), nil
+	})
+
 }
 
 // hoistRegexpInFile rewrites every function-local regexp.MustCompile call with

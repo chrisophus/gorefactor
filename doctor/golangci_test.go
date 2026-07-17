@@ -46,3 +46,20 @@ func TestPreflightReportsProbeFailures(t *testing.T) {
 		t.Fatalf("broken substrate should be reported: %v", failures)
 	}
 }
+
+// TestParseGolangciJSON_TrailingStats covers golangci v2 appending a text
+// stats line after the JSON object on stdout: only the first JSON value is
+// decoded.
+func TestParseGolangciJSON_TrailingStats(t *testing.T) {
+	out := []byte(`{"Issues": [{"FromLinter": "errcheck", "Text": "unchecked", "Pos": {"Filename": "a.go", "Line": 3}}]}
+2 issues:
+* errcheck: 2
+`)
+	findings, err := parseGolangciJSON(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 1 || findings[0].Rule != "golangci/errcheck" {
+		t.Fatalf("findings = %+v", findings)
+	}
+}

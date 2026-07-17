@@ -2,10 +2,10 @@ package analyzer
 
 import (
 	"go/ast"
-	"os"
-	"path/filepath"
 	"go/parser"
 	"go/token"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -44,23 +44,6 @@ func TestSuggestBlockNameUnique(t *testing.T) {
 	}
 }
 
-// blockStmtFromSrc parses a function body and returns its first statement plus
-// a comment map, so naming heuristics can be exercised on realistic AST input.
-func blockStmtFromSrc(t *testing.T, src string) (ast.Stmt, ast.CommentMap) {
-	t.Helper()
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, "x.go", "package p\nfunc f() {\n"+src+"\n}\n", parser.ParseComments)
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-	cmap := ast.NewCommentMap(fset, f, f.Comments)
-	fn := f.Decls[0].(*ast.FuncDecl)
-	if len(fn.Body.List) == 0 {
-		t.Fatalf("no statements parsed from %q", src)
-	}
-	return fn.Body.List[0], cmap
-}
-
 func TestSuggestBlockName_AvoidsPackageCollision(t *testing.T) {
 	// Seed `used` as the reducers do (with existing package function names);
 	// a positional fallback that would collide must get a numeric suffix.
@@ -87,6 +70,38 @@ func TestPackageFuncNames(t *testing.T) {
 	for _, want := range []string{"Foo", "bar", "Baz"} {
 		if !names[want] {
 			t.Errorf("PackageFuncNames missing %q (got %v)", want, names)
+		}
+	}
+}
+
+// blockStmtFromSrc parses a function body and returns its first statement plus
+// a comment map, so naming heuristics can be exercised on realistic AST input.
+func blockStmtFromSrc(t *testing.T, src string) (ast.Stmt, ast.CommentMap) {
+	t.Helper()
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "x.go", "package p\nfunc f() {\n"+src+"\n}\n", parser.ParseComments)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	cmap := ast.NewCommentMap(fset, f, f.Comments)
+	fn := f.Decls[0].(*ast.FuncDecl)
+	if len(fn.Body.List) == 0 {
+		t.Fatalf("no statements parsed from %q", src)
+	}
+	return fn.Body.List[0], cmap
+}
+
+func TestIsGeneratedFallbackName(t *testing.T) {
+	fallback := []string{"extractBlockL98", "extractBlockL982", "extractBlockL1"}
+	meaningful := []string{"processStmts", "handleFunctionName", "computeTotal", "extractBlock", "extractBlockLX", "extract"}
+	for _, n := range fallback {
+		if !IsGeneratedFallbackName(n) {
+			t.Errorf("%q should be a fallback name", n)
+		}
+	}
+	for _, n := range meaningful {
+		if IsGeneratedFallbackName(n) {
+			t.Errorf("%q should NOT be a fallback name", n)
 		}
 	}
 }

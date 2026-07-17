@@ -12,10 +12,10 @@ func init() {
 	registerCommand(Command{
 		Name:        "doctor",
 		Description: "Aggregate health gate: lint + golangci-lint + go-arch-lint + build + test. Exits non-zero on failure. [--json] [--fix [--fix-level safe|aggressive]]",
-		Usage:       "doctor [dir] [--json] [--fix] [--fix-level safe|aggressive] [--config PATH] [--report [--base REF] [--scoped]] | doctor install [--target claude.md|cursor|agents.md|all]",
+		Usage:       "doctor [dir] [--json] [--fix] [--fix-level safe|aggressive] [--config PATH] [--report [--base REF] [--scoped] [--score]] | doctor install [--target claude.md|cursor|agents.md|all]",
 		MinArgs:     0,
 		MaxArgs:     1,
-		Flags:       map[string]bool{"--json": false, "--fix": false, "--fix-level": true, "--config": true, "--report": false, "--base": true, "--scoped": false, "--target": true},
+		Flags:       map[string]bool{"--json": false, "--fix": false, "--fix-level": true, "--config": true, "--report": false, "--base": true, "--scoped": false, "--score": false, "--target": true},
 		Run:         doctorCommand,
 	})
 }
@@ -40,6 +40,7 @@ type doctorOpts struct {
 	fixLevel   string
 	configPath string
 	scoped     bool
+	score      bool
 }
 
 func parseDoctorArgs(args []string) (doctorOpts, error) {
@@ -55,6 +56,8 @@ func parseDoctorArgs(args []string) (doctorOpts, error) {
 			opts.report = true
 		case a == "--scoped":
 			opts.scoped = true
+		case a == "--score":
+			opts.score = true
 		case a == "--base":
 			if i+1 >= len(args) {
 				return opts, fmt.Errorf("--base requires a git ref")

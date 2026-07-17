@@ -12,11 +12,10 @@ import (
 	"github.com/chrisophus/gorefactor/doctor"
 )
 
-// structuralSubstrate adapts the in-process structural linter (the 28 rules)
-// to the doctor engine — kept as a first-class substrate per plan decision 8.
-// It lives in package main because the rules do; the agent loop composes the
-// library substrates without it (structural findings are warning-severity and
-// never gate).
+// structuralSubstrate adapts the in-process structural linter (the default rule registry) to the
+// doctor engine — kept as a first-class substrate per plan decision 8. It lives in package main
+// because the rules do; the agent loop composes the library substrates without it (structural
+// findings are warning-severity and never gate).
 type structuralSubstrate struct {
 	configPath string
 }
@@ -138,6 +137,7 @@ func doctorReportCommand(opts doctorOpts) error {
 		Substrates: doctorSubstrates(opts.configPath),
 		ConfigPath: opts.configPath,
 		Scoped:     opts.scoped,
+		Score:      opts.score,
 	})
 
 	if err != nil {
@@ -152,6 +152,10 @@ func doctorReportCommand(opts doctorOpts) error {
 
 func printDoctorReport(rep *doctor.Report) {
 	fmt.Printf("doctor report (base %s)\n", rep.BaseRef)
+	if rep.Score != nil {
+		fmt.Printf("  score: %.1f/100 (presentation-only; nothing gates on it)\n", *rep.Score)
+	}
+
 	if len(rep.Scope) > 0 {
 		fmt.Printf("  scope: %s\n", strings.Join(rep.Scope, ", "))
 	}

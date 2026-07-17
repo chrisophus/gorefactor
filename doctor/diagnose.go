@@ -26,6 +26,9 @@ type Options struct {
 	ConfigPath string
 	// NoJournal suppresses the doctor-history.jsonl append.
 	NoJournal bool
+	// Score computes the presentation-only score on full-tree runs
+	// (decision 4b: nothing gates on it; ignored when Scoped).
+	Score bool
 }
 
 // Diagnose runs the configured substrates, merges their findings into one
@@ -70,6 +73,9 @@ func Diagnose(opts Options) (*Report, error) {
 		if f.New {
 			report.NewCount[f.Severity]++
 		}
+	}
+	if opts.Score && !opts.Scoped {
+		report.ComputeScore()
 	}
 	if !opts.NoJournal {
 		if jerr := appendJournal(opts.Root, journalEntryFor(report)); jerr != nil {

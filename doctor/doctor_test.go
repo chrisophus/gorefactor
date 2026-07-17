@@ -68,3 +68,27 @@ func gitRun(t *testing.T, dir string, args ...string) {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
 }
+func TestComputeScore(t *testing.T) {
+	clean := &Report{}
+	clean.ComputeScore()
+	if clean.Score == nil || *clean.Score != 100 {
+		t.Fatalf("clean tree score = %v, want 100", clean.Score)
+	}
+	dirty := &Report{Findings: []Finding{
+		{Severity: SeverityError},
+		{Severity: SeverityWarning},
+		{Severity: SeverityInfo},
+	}}
+	dirty.ComputeScore()
+	if dirty.Score == nil || *dirty.Score >= 100 || *dirty.Score <= 0 {
+		t.Fatalf("dirty tree score = %v, want in (0, 100)", dirty.Score)
+	}
+	worse := &Report{Findings: make([]Finding, 100)}
+	for i := range worse.Findings {
+		worse.Findings[i].Severity = SeverityError
+	}
+	worse.ComputeScore()
+	if *worse.Score >= *dirty.Score {
+		t.Fatalf("score must decrease with findings: %v >= %v", *worse.Score, *dirty.Score)
+	}
+}

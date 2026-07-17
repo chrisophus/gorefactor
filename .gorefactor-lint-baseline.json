@@ -14,14 +14,8 @@
       "count": 2
     },
     {
-      "fingerprint": "analyzer/complexity_reduction.go\u0000long-function\u0000RecommendComplexityReduction is # lines (threshold #, line #) — consider extracting",
-      "file": "analyzer/complexity_reduction.go",
-      "rule": "long-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "analyzer/complexity_reduction.go\u0000low-gorefactor-adherence\u0000only #/# modified .go files went through gorefactor (#%); raw-edited: analyzer/complexity_reduction.go, analyzer/length_reduction.go, cmd/gorefactor/cmd_lint_blast_radius.go, cmd/gorefactor/cmd_lint_complexity.go, cmd/gorefactor/cmd_lint_complexity_fix.go, cmd/gorefactor/cmd_lint_deep_nesting.go, cmd/gorefactor/cmd_lint_duplicates.go, cmd/gorefactor/cmd_lint_long_function.go, cmd/gorefactor/cmd_lint_perf.go, cmd/gorefactor/cmd_lint_smells.go, cmd/gorefactor/cmd_registrations.go, cmd/gorefactor/lint_registry_test.go, cmd/gorefactor/registry.go, doctor/score.go — prefer a gorefactor command (see CLAUDE.md) so edits are parse-checked and cheaper",
-      "file": "analyzer/complexity_reduction.go",
+      "fingerprint": "analyzer/block_naming.go\u0000low-gorefactor-adherence\u0000only #/# modified .go files went through gorefactor (#%); raw-edited: analyzer/block_naming.go, analyzer/fn_metrics.go, analyzer/fn_metrics_test.go, cmd/gorefactor/cmd_lint_long_function.go — prefer a gorefactor command (see CLAUDE.md) so edits are parse-checked and cheaper",
+      "file": "analyzer/block_naming.go",
       "rule": "low-gorefactor-adherence",
       "count": 1
     },
@@ -86,18 +80,6 @@
       "count": 1
     },
     {
-      "fingerprint": "analyzer/recommendations_config_test.go\u0000long-function\u0000TestRecommendExtractionsWithConfig is # lines (threshold #, line #) — consider extracting",
-      "file": "analyzer/recommendations_config_test.go",
-      "rule": "long-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "benchmark/agent_tasks.go\u0000long-function\u0000agentTasks is # lines (threshold #, line #) — consider extracting",
-      "file": "benchmark/agent_tasks.go",
-      "rule": "long-function",
-      "count": 1
-    },
-    {
       "fingerprint": "benchmark/oracle.go\u0000deep-nesting\u0000declOf has nesting depth # (threshold #, line #) — consider extracting inner blocks",
       "file": "benchmark/oracle.go",
       "rule": "deep-nesting",
@@ -116,20 +98,8 @@
       "count": 1
     },
     {
-      "fingerprint": "benchmark/scenarios.go\u0000long-function\u0000buildScenarios is # lines (threshold #, line #) — consider extracting",
-      "file": "benchmark/scenarios.go",
-      "rule": "long-function",
-      "count": 1
-    },
-    {
       "fingerprint": "cmd/gorefactor-agent/agent_tools.go\u0000long-function\u0000prompt is # lines (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor-agent/agent_tools.go",
-      "rule": "long-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor-agent/agent_tools_catalog.go\u0000long-function\u0000toolCatalog is # lines (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor-agent/agent_tools_catalog.go",
       "rule": "long-function",
       "count": 1
     },
@@ -482,12 +452,6 @@
       "count": 1
     },
     {
-      "fingerprint": "cmd/gorefactor/cmd_move.go\u0000long-function\u0000moveCode is # lines (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor/cmd_move.go",
-      "rule": "long-function",
-      "count": 1
-    },
-    {
       "fingerprint": "cmd/gorefactor/cmd_recommend.go\u0000long-function\u0000recommendExtractions is # lines (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor/cmd_recommend.go",
       "rule": "long-function",
@@ -508,12 +472,6 @@
     {
       "fingerprint": "cmd/gorefactor/cmd_replace_text.go\u0000long-function\u0000replaceTextCommand is # lines (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor/cmd_replace_text.go",
-      "rule": "long-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_review.go\u0000long-function\u0000reviewFile is # lines (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor/cmd_review.go",
       "rule": "long-function",
       "count": 1
     },
@@ -614,12 +572,6 @@
       "count": 1
     },
     {
-      "fingerprint": "examples/complex_sample.go\u0000long-function\u0000OrderService:ProcessOrder is # lines (threshold #, line #) — consider extracting",
-      "file": "examples/complex_sample.go",
-      "rule": "long-function",
-      "count": 1
-    },
-    {
       "fingerprint": "github.com/chrisophus/gorefactor/analyzer/api_diff.go:38\u0000untested-function\u0000exported ComputeAPIDiff has #% coverage",
       "file": "github.com/chrisophus/gorefactor/analyzer/api_diff.go:38",
       "rule": "untested-function",
@@ -670,12 +622,6 @@
     {
       "fingerprint": "github.com/chrisophus/gorefactor/analyzer/file_size_analyzer.go:65\u0000untested-function\u0000exported FileFunctionComplexities has #% coverage",
       "file": "github.com/chrisophus/gorefactor/analyzer/file_size_analyzer.go:65",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/fn_metrics.go:34\u0000untested-function\u0000exported FunctionMetricsForFile has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/fn_metrics.go:34",
       "rule": "untested-function",
       "count": 1
     },

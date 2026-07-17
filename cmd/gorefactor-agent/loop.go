@@ -223,7 +223,15 @@ func runGate(dir string) (bool, string) {
 	if out, err := runIn(dir, "go", "test", "./..."); err != nil {
 		return false, "go test ./...\n" + out
 	}
-	return true, ""
+	// Third leg of the gate (design plan): no new error-severity doctor
+	// findings vs HEAD. Advisory mode reports them in the success output
+	// instead of blocking; hard mode fails the gate.
+	blocking, advisory := runDoctorGate(dir, false)
+	if blocking != "" {
+		return false, "doctor gate (new findings vs HEAD):\n" + blocking
+	}
+	return true, advisory
+
 }
 
 // runInWithStdin runs a command with the given string piped to stdin.

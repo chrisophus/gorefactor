@@ -40,6 +40,9 @@ func dispatchTool(call toolCall, cfg Config, gateFails *int) (string, toolStatus
 		ok, out := runGate(".")
 		if ok {
 			msg := "gate green"
+			if out != "" {
+				msg += "\n" + out
+			}
 			if advisory := runLintAdvisory("."); advisory != "" {
 				msg += "\n" + advisory
 			}
@@ -52,6 +55,9 @@ func dispatchTool(call toolCall, cfg Config, gateFails *int) (string, toolStatus
 		ok, out := runGate(".")
 		if ok {
 			msg := "gate green"
+			if out != "" {
+				msg += "\n" + out
+			}
 			if advisory := runLintAdvisory("."); advisory != "" {
 				msg += "\n" + advisory
 			}

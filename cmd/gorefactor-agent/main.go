@@ -19,6 +19,7 @@ import (
 func main() {
 	specFlag, dir, providerK, model, apiBase, maxIter, dryRun, allowDirty, verbose, printPrompt, showVersion, noSchema, singleShot, interactive, campaign, budget := extractBlockL20()
 	flag.Parse()
+	applyDoctorGateFlag()
 
 	if *showVersion {
 		fmt.Println(agentVersion)

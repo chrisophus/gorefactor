@@ -1,6 +1,6 @@
 # gorefactor doctor: Design Plan
 
-Status: purified via AISP 5.1 (source: `gorefactor-doctor-v2.aisp`); revised 2026-07-17 after codebase-integration review
+Status: purified via AISP 5.1 (source: `gorefactor-doctor-v2.aisp`); revised 2026-07-17 after codebase-integration review. **Build order steps 1–3 are implemented** (`doctor/` package, `gorefactor doctor --report`, `gorefactor intent`, agent `-doctor-gate`); see per-step status in Build order.
 Date: 2026-07-16
 
 ## Summary
@@ -212,10 +212,10 @@ The struct is the shared contract for every consumer (agent loop, CI, escalation
 
 ## Build order
 
-1. `diagnose` API wrapping the structural linter + golangci-lint JSON, with fingerprint-based baseline marking against a cached base-ref set, findings journal, and the merge-layer skip filtering (advisory value from day one)
-2. apidiff gate wiring on the existing differ + session-scoped intent records (CLI command, plan field, agent spec)
-3. Gate wiring: finish = build + test + no new errors, substrate-availability fail-fast; campaign full-pass
+1. **Done.** `diagnose` API wrapping the structural linter + golangci-lint JSON, with fingerprint-based baseline marking against a cached base-ref set, findings journal, and the merge-layer skip filtering — implemented as the `doctor/` package (`doctor.Diagnose`), surfaced as `gorefactor doctor --report [--base REF]` (advisory: always exits zero). `FixCmd` hints already flow from the structural substrate's autofix commands.
+2. **Done.** apidiff gate wiring on the existing differ + session-scoped intent records — `doctor.APIDiff` substrate (removed/changed gate as errors, additions warn) and `gorefactor intent api-change <scope> <reason>` / `--list` / `--clear` writing `.gorefactor/intents.json`; declared deltas demote to info citing the reason, scope-matched so blanket declarations don't pass.
+3. **Done.** Gate wiring: the agent's `runGate` is build + test + scoped diagnose vs HEAD (golangci + apidiff substrates). Advisory-first per decision 7: the default `-doctor-gate advisory` reports new error-severity findings in the finish output without blocking; `-doctor-gate hard` blocks on them and on dark gating substrates, adds the campaign full-repo pass, and fail-fasts campaigns at start via `doctor.Preflight`.
 4. govulncheck + deadcode (full-run tier) + shape detection
 5. Temporal custom analyzers
-6. Agent-install mode; `FixCmd` mapping table for existing autofixes
+6. Agent-install mode; complete the `FixCmd` mapping table for existing autofixes
 7. Score layer (optional, last)

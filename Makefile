@@ -48,6 +48,11 @@ gate: ## Doctor gate: build gorefactor, then lint + build + test (use as a commi
 	@# quietly when no baseline exists (fresh projects). Re-lock after cleanup
 	@# waves with: ./gorefactor lint . --write-baseline
 	@test ! -f .gorefactor-lint-baseline.json || ./gorefactor lint . --baseline --fail-on warning --fail-only
+	@# One-way enforcement: the baseline itself may only shrink vs HEAD —
+	@# re-baselining to absorb regressions fails here. Deliberate growth
+	@# (e.g. a new lint rule baselining its backlog):
+	@#   BASELINE_GROWTH_OK=1 git commit ...
+	@test -n "$(BASELINE_GROWTH_OK)" || ./gorefactor lint . --baseline-ratchet HEAD
 
 refactor: ## Delegate a spec to gorefactor-agent, Haiku->Sonnet escalation. Usage: make refactor SPEC="..."
 	@go build -o gorefactor-agent ./cmd/gorefactor-agent

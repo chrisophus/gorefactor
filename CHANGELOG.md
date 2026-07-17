@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-07-17
+
+### Fixed
+- **`complexity` and `long-function` extraction autofix disabled** — the
+  automated extraction engine produced unreliable output in some cases (name
+  collisions, invalid function signatures, missing returns), causing build
+  failures after `lint --fix`. Both autofixes are disabled until the extractor
+  is hardened; `recommend --reduce-complexity --apply` and
+  `recommend --reduce-length --apply` are unaffected.
+
+### Changed
+- Applied safe auto-fixes repo-wide: `error-not-wrapped` and `funcorder`
+  issues resolved across `analyzer/`, `doctor/`, and test files.
+
 ## [0.11.0] - 2026-07-17
 
 ### Fixed

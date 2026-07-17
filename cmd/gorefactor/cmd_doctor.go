@@ -12,10 +12,10 @@ func init() {
 	registerCommand(Command{
 		Name:        "doctor",
 		Description: "Aggregate health gate: lint + golangci-lint + go-arch-lint + build + test. Exits non-zero on failure. [--json] [--fix [--fix-level safe|aggressive]]",
-		Usage:       "doctor [dir] [--json] [--fix] [--fix-level safe|aggressive] [--config PATH] [--report [--base REF] [--scoped]]",
+		Usage:       "doctor [dir] [--json] [--fix] [--fix-level safe|aggressive] [--config PATH] [--report [--base REF] [--scoped]] | doctor install [--target claude.md|cursor|agents.md|all]",
 		MinArgs:     0,
 		MaxArgs:     1,
-		Flags:       map[string]bool{"--json": false, "--fix": false, "--fix-level": true, "--config": true, "--report": false, "--base": true, "--scoped": false},
+		Flags:       map[string]bool{"--json": false, "--fix": false, "--fix-level": true, "--config": true, "--report": false, "--base": true, "--scoped": false, "--target": true},
 		Run:         doctorCommand,
 	})
 }
@@ -85,7 +85,11 @@ func parseDoctorArgs(args []string) (doctorOpts, error) {
 	return opts, nil
 }
 func doctorCommand(args []string) error {
+	if len(args) > 0 && args[0] == "install" {
+		return doctorInstallCommand(args[1:])
+	}
 	opts, err := parseDoctorArgs(args)
+
 	if err != nil {
 		return err
 	}

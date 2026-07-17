@@ -38,17 +38,9 @@ func (r complexityRule) Run(ctx LintContext) []lintIssue {
 			// extractable top-level block (RecommendComplexityReduction returns
 			// none), and the extract engine additionally refuses return-bearing
 			// blocks, so the fix is advertised optimistically and best-effort.
-			if red, rerr := analyzer.RecommendComplexityReduction(f, c.Name, defaultComplexityThreshold); rerr == nil && len(red.Extractions) > 0 {
-				iss.AutoFix = "extract sub-blocks"
-				iss.AutoFixCmd = fmt.Sprintf("gorefactor recommend --reduce-complexity %s %s --apply", f, c.Name)
-				// At the aggressive level the extract engine may also lift
-				// return-bearing blocks (verify-gated), so complexity
-				// concentrated in error branches stops being skipped.
-				if ctx.AggressiveFix() {
-					iss.AutoFix = "extract sub-blocks (aggressive)"
-					iss.AutoFixCmd += " --allow-returns"
-				}
-			}
+			// Extraction autofix disabled: the automated extraction engine
+			// produces unreliable output (name collisions, invalid signatures).
+			// TODO: re-enable once the extractor is hardened.
 			out = append(out, iss)
 		}
 	}

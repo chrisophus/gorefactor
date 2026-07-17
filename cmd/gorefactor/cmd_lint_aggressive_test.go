@@ -33,48 +33,21 @@ func TestParseLintOptions_FixLevel(t *testing.T) {
 	}
 }
 
-// The long-function rule attaches its autofix only at the aggressive level.
-func TestLongFunctionRule_AutoFixIsAggressiveOnly(t *testing.T) {
+// TestLongFunctionRule_NoAutoFix verifies that the long-function rule never
+// attaches an autofix (extraction autofix is disabled until the extractor is
+// hardened).
+func TestLongFunctionRule_NoAutoFix(t *testing.T) {
 	path := writeLongFunctionModule(t)
-	safe := (longFunctionRule{}).Run(LintContext{Files: []string{path}})
-	if len(safe) == 0 {
-		t.Fatal("expected a long-function issue")
-	}
-	for _, iss := range safe {
-		if iss.AutoFixCmd != "" {
-			t.Errorf("safe level attached AutoFixCmd %q", iss.AutoFixCmd)
+	for _, level := range []string{fixLevelSafe, fixLevelAggressive} {
+		issues := (longFunctionRule{}).Run(LintContext{Files: []string{path}, FixLevel: level})
+		if len(issues) == 0 {
+			t.Fatalf("level=%s: expected a long-function issue", level)
 		}
-	}
-	agg := (longFunctionRule{}).Run(LintContext{Files: []string{path}, FixLevel: fixLevelAggressive})
-	if len(agg) == 0 {
-		t.Fatal("expected a long-function issue at aggressive level")
-	}
-	found := false
-	for _, iss := range agg {
-		if strings.Contains(iss.AutoFixCmd, "--reduce-length") && strings.Contains(iss.AutoFixCmd, "--allow-returns") {
-			found = true
+		for _, iss := range issues {
+			if iss.AutoFixCmd != "" || iss.AutoFix != "" {
+				t.Errorf("level=%s: long-function rule attached autofix %q/%q; extraction autofix is disabled", level, iss.AutoFix, iss.AutoFixCmd)
+			}
 		}
-	}
-	if !found {
-		t.Errorf("aggressive level did not attach a reduce-length autofix: %+v", agg)
-	}
-}
-
-// End to end: the attached autofix actually shortens the function under the
-// threshold and leaves a parseable file.
-func TestLongFunctionRule_AutoFixShortens(t *testing.T) {
-	path := writeLongFunctionModule(t)
-	ctx := LintContext{Files: []string{path}, FixLevel: fixLevelAggressive}
-	issues := (longFunctionRule{}).Run(ctx)
-	if len(issues) == 0 || issues[0].AutoFixCmd == "" {
-		t.Fatalf("expected an autofixable issue, got %+v", issues)
-	}
-	if err := (longFunctionRule{}).AutoFix(issues[0], ctx); err != nil {
-		t.Fatalf("AutoFix: %v", err)
-	}
-	mustParse(t, path)
-	if again := (longFunctionRule{}).Run(LintContext{Files: []string{path}}); len(again) != 0 {
-		t.Errorf("function still over threshold after autofix: %+v", again)
 	}
 }
 

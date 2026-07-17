@@ -10,16 +10,6 @@ import (
 	"github.com/chrisophus/gorefactor/analyzer"
 )
 
-func TestParseComplexityAutoFixCmd(t *testing.T) {
-	file, fn, ok := parseComplexityAutoFixCmd("gorefactor recommend --reduce-complexity a/b.go Foo --apply")
-	if !ok || file != "a/b.go" || fn != "Foo" {
-		t.Fatalf("parse = (%q, %q, %v), want (a/b.go, Foo, true)", file, fn, ok)
-	}
-	if _, _, ok := parseComplexityAutoFixCmd("gorefactor split x.go"); ok {
-		t.Fatalf("expected parse to fail on unrelated command")
-	}
-}
-
 // TestReduceComplexityByExtraction_ExtractsPureBlock verifies the autofix lifts
 // an over-threshold function's highest-contribution non-return block and that
 // the result still parses.

@@ -46,6 +46,29 @@ func SuggestBlockName(stmt ast.Stmt, cmap ast.CommentMap, fallbackLine int, used
 	return name
 }
 
+// IsGeneratedFallbackName reports whether name is the positional
+// extractBlockL<line> fallback — i.e. SuggestBlockName found no comment or
+// recognizable structure to name the block. Such blocks (typically guard
+// clauses like `if err != nil { return err }`) make poor auto-extraction
+// targets: lifting them into a many-parameter (results, done bool) helper hurts
+// readability, so the autofix path skips them.
+func IsGeneratedFallbackName(name string) bool {
+	const prefix = "extractBlockL"
+	if !strings.HasPrefix(name, prefix) {
+		return false
+	}
+	digits := strings.TrimPrefix(name, prefix)
+	if digits == "" {
+		return false
+	}
+	for _, r := range digits {
+		if !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return true
+}
+
 // PackageFuncNames returns the set of top-level function/method names declared
 // across every .go file in the same directory as filePath. Seeding a naming
 // run's `used` set with this prevents a generated helper name — especially the

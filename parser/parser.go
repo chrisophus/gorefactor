@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"go/types"
 )
 
 // FileInfo represents the structure of a Go file
@@ -56,8 +57,9 @@ type Field struct {
 
 // Interface represents an interface type declaration
 type Interface struct {
-	Name    string   `json:"name"`
-	Methods []Method `json:"methods"`
+	Name     string   `json:"name"`
+	Methods  []Method `json:"methods"`
+	Embedded []string `json:"embedded,omitempty"`
 }
 
 // ParseFile parses a Go file and returns its structure
@@ -153,6 +155,7 @@ func parseStruct(name string, st *ast.StructType) Struct {
 
 func parseInterface(name string, it *ast.InterfaceType) Interface {
 	methods := make([]Method, 0)
+	embedded := make([]string, 0)
 	for _, m := range it.Methods.List {
 		if len(m.Names) > 0 {
 			if fn, ok := m.Type.(*ast.FuncType); ok {
@@ -163,11 +166,18 @@ func parseInterface(name string, it *ast.InterfaceType) Interface {
 				}
 				methods = append(methods, method)
 			}
+			continue
 		}
+		// No names: an embedded interface (or type-set term in a constraint).
+		embedded = append(embedded, exprToString(m.Type))
+	}
+	if len(embedded) == 0 {
+		embedded = nil
 	}
 	return Interface{
-		Name:    name,
-		Methods: methods,
+		Name:     name,
+		Methods:  methods,
+		Embedded: embedded,
 	}
 }
 
@@ -177,35 +187,22 @@ func parseFieldList(fl *ast.FieldList) []Param {
 	}
 	params := make([]Param, 0)
 	for _, f := range fl.List {
-		paramName := ""
-		if len(f.Names) > 0 {
-			paramName = f.Names[0].Name
+		typeStr := exprToString(f.Type)
+		if len(f.Names) == 0 {
+			// Anonymous (unnamed) field: one entry with an empty name.
+			params = append(params, Param{Name: "", Type: typeStr})
+			continue
 		}
-		params = append(params, Param{
-			Name: paramName,
-			Type: exprToString(f.Type),
-		})
+		for _, n := range f.Names {
+			params = append(params, Param{Name: n.Name, Type: typeStr})
+		}
 	}
 	return params
 }
 
+// exprToString renders a type expression as Go source text. It delegates to go/types.ExprString,
+// which handles every expression form (array lengths, variadics, func types, channels, generics)
+// losslessly.
 func exprToString(expr ast.Expr) string {
-	switch e := expr.(type) {
-	case *ast.Ident:
-		return e.Name
-	case *ast.SelectorExpr:
-		return exprToString(e.X) + "." + e.Sel.Name
-	case *ast.StarExpr:
-		return "*" + exprToString(e.X)
-	case *ast.ArrayType:
-		return "[]" + exprToString(e.Elt)
-	case *ast.MapType:
-		return "map[" + exprToString(e.Key) + "]" + exprToString(e.Value)
-	case *ast.InterfaceType:
-		return "interface{}"
-	case *ast.StructType:
-		return "struct{}"
-	default:
-		return "unknown"
-	}
+	return types.ExprString(expr)
 }

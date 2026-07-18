@@ -8,13 +8,20 @@ import (
 	"github.com/chrisophus/gorefactor/config"
 )
 
-type lintOptions struct {
-	root       string
-	maxSize    int
-	maxSet     bool
+// lintFixOptions groups the flags controlling the autofix pass; embedded in
+// lintOptions so field access stays flat (opts.fix, opts.verify, ...).
+type lintFixOptions struct {
 	fix        bool
 	verify     bool
-	fixLevel   string // --verify: gate each autofix (build+test) and revert it on failure
+	probeFixes bool   // --probe-fixes: apply+gate+restore, journaling outcomes; tree unchanged
+	fixLevel   string // gate each autofix (build+test) and revert it on failure
+}
+
+type lintOptions struct {
+	root    string
+	maxSize int
+	maxSet  bool
+	lintFixOptions
 	jsonOut    bool
 	quiet      bool
 	failOnly   bool
@@ -42,12 +49,12 @@ type lintOptions struct {
 
 func parseLintOptions(args []string) (lintOptions, error) {
 	opts := lintOptions{
-		root:      ".",
-		fixLevel:  fixLevelSafe,
-		maxSize:   defaultSplitMaxLines,
-		failOn:    "error",
-		onlyRules: make(map[string]bool),
-		skipRules: make(map[string]bool),
+		root:           ".",
+		lintFixOptions: lintFixOptions{fixLevel: fixLevelSafe},
+		maxSize:        defaultSplitMaxLines,
+		failOn:         "error",
+		onlyRules:      make(map[string]bool),
+		skipRules:      make(map[string]bool),
 	}
 	for i := 0; i < len(args); i++ {
 		n, ok, err := opts.parseFlagAt(args, i)
@@ -64,8 +71,11 @@ func parseLintOptions(args []string) (lintOptions, error) {
 		}
 		opts.root = args[i]
 	}
-	if opts.fixLevel == fixLevelAggressive && (!opts.fix || !opts.verify) {
-		return opts, fmt.Errorf("--fix-level aggressive requires --fix --verify: every aggressive fix must be build+test gated and revertible")
+	if opts.fixLevel == fixLevelAggressive && (!opts.fix || !opts.verify) && !opts.probeFixes {
+		return opts, fmt.Errorf("--fix-level aggressive requires --fix --verify (or --probe-fixes): every aggressive fix must be build+test gated and revertible")
+	}
+	if opts.probeFixes && opts.fix {
+		return opts, fmt.Errorf("--probe-fixes and --fix are mutually exclusive: probe is a sensor run that always restores the tree")
 	}
 	if opts.baseline && opts.writeBaseline {
 		return opts, fmt.Errorf("--baseline and --write-baseline are mutually exclusive (compare vs record)")
@@ -122,6 +132,8 @@ func (opts *lintOptions) parseFixFlags(args []string, i int) (int, bool, error) 
 		opts.fix = true
 	case "--verify":
 		opts.verify = true
+	case "--probe-fixes":
+		opts.probeFixes = true
 	case "--fix-level":
 		if i+1 >= len(args) {
 			return 0, true, fmt.Errorf("--fix-level requires safe or aggressive")

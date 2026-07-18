@@ -84,7 +84,7 @@ func TestApplyAutoFixesVerifyRevertsOnRedGate(t *testing.T) {
 	defer restore()
 
 	applied, reverted, failed := applyAutoFixes([]lintIssue{iss},
-		LintContext{Root: dir}, []LintRule{rule}, true)
+		LintContext{Root: dir}, []LintRule{rule}, true, false)
 	if applied != 0 || reverted != 1 || failed != 0 {
 		t.Fatalf("counts: applied=%d reverted=%d failed=%d", applied, reverted, failed)
 	}
@@ -108,7 +108,7 @@ func TestApplyAutoFixesVerifyKeepsOnGreenGate(t *testing.T) {
 	defer restore()
 
 	applied, reverted, failed := applyAutoFixes([]lintIssue{iss},
-		LintContext{Root: dir}, []LintRule{rule}, true)
+		LintContext{Root: dir}, []LintRule{rule}, true, false)
 	if applied != 1 || reverted != 0 || failed != 0 {
 		t.Fatalf("counts: applied=%d reverted=%d failed=%d", applied, reverted, failed)
 	}
@@ -159,7 +159,7 @@ func TestApplyAutoFixesVerifyKeepsGoodRevertsBad(t *testing.T) {
 		{File: goodFile, Rule: "fake", AutoFixCmd: "fake"},
 		{File: badFile, Rule: "fake", AutoFixCmd: "fake"},
 	}
-	applied, reverted, failed := applyAutoFixes(issues, LintContext{Root: root}, []LintRule{rule}, true)
+	applied, reverted, failed := applyAutoFixes(issues, LintContext{Root: root}, []LintRule{rule}, true, false)
 	if applied != 1 || reverted != 1 || failed != 0 {
 		t.Fatalf("counts: applied=%d reverted=%d failed=%d", applied, reverted, failed)
 	}
@@ -196,7 +196,7 @@ func TestApplyAutoFixesBatchesGoodFixesIntoOneGateCall(t *testing.T) {
 	})
 	defer restore()
 
-	applied, reverted, failed := applyAutoFixes(issues, LintContext{Root: root}, []LintRule{rule}, true)
+	applied, reverted, failed := applyAutoFixes(issues, LintContext{Root: root}, []LintRule{rule}, true, false)
 	if applied != n || reverted != 0 || failed != 0 {
 		t.Fatalf("counts: applied=%d reverted=%d failed=%d", applied, reverted, failed)
 	}
@@ -244,7 +244,7 @@ func TestBisectAutoFixBatchIsolatesSingleBadFixEfficiently(t *testing.T) {
 
 	fixerByRule := map[string]FixableRule{"fake": rule}
 	var recs []autofixOutcome
-	applied, reverted, failed := bisectAutoFixBatch(issues, LintContext{Root: root}, fixerByRule, &recs)
+	applied, reverted, failed := bisectAutoFixBatch(issues, LintContext{Root: root}, fixerByRule, &recs, false)
 	_ = recs
 	if applied != n-1 || reverted != 1 || failed != 0 {
 		t.Fatalf("counts: applied=%d reverted=%d failed=%d", applied, reverted, failed)

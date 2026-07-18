@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,20 +12,25 @@ import (
 // scriptedFixRule is a FixableRule whose fix outcome is scripted per file.
 type scriptedFixRule struct {
 	name     string
-	fixErr   map[string]error // file -> AutoFix result (nil = success)
-	fixCalls *[]string        // records files AutoFix was invoked for
+	fixErr   map[string]error  // file -> AutoFix result (nil = success)
+	fixCalls *[]string         // records files AutoFix was invoked for
+	mutate   func(file string) // optional: simulate the fix touching the file
 }
 
-func (r scriptedFixRule) Name() string                { return r.name }
+func (r scriptedFixRule) Name() string { return r.name }
+
 func (r scriptedFixRule) Run(LintContext) []lintIssue { return nil }
+
 func (r scriptedFixRule) AutoFix(iss lintIssue, _ LintContext) error {
 	*r.fixCalls = append(*r.fixCalls, iss.File)
-	return r.fixErr[iss.File]
-}
+	if err := r.fixErr[iss.File]; err != nil {
+		return fmt.Errorf("scripted failure: %w", err)
+	}
 
-func outcomeFixIssue(rule, file string) lintIssue {
-	return lintIssue{File: file, Rule: rule, Severity: "warning",
-		Message: "x is dead (line 3)", AutoFixCmd: "gorefactor whatever"}
+	if r.mutate != nil {
+		r.mutate(iss.File)
+	}
+	return nil
 }
 
 // Outcomes append and reload; the latest record per fingerprint wins.
@@ -85,7 +91,7 @@ func TestApplyAutoFixesSkipsKnownReverted(t *testing.T) {
 	var calls []string
 	rule := scriptedFixRule{name: "dead-code", fixErr: map[string]error{}, fixCalls: &calls}
 	ctx := LintContext{Root: root}
-	applied, reverted, failed := applyAutoFixes([]lintIssue{skippedIss, freshIss}, ctx, []LintRule{rule}, false)
+	applied, reverted, failed := applyAutoFixes([]lintIssue{skippedIss, freshIss}, ctx, []LintRule{rule}, false, false)
 
 	if len(calls) != 1 || calls[0] != freshIss.File {
 		t.Fatalf("AutoFix calls = %v, want only the fresh issue", calls)
@@ -116,7 +122,7 @@ func TestBisectRecordsOutcomes(t *testing.T) {
 	restore := swapVerifyGate(func(string) error { return errors.New("tests failed") })
 	defer restore()
 
-	applied, reverted, failed := applyAutoFixes([]lintIssue{bad, noTgt}, LintContext{Root: root}, []LintRule{rule}, true)
+	applied, reverted, failed := applyAutoFixes([]lintIssue{bad, noTgt}, LintContext{Root: root}, []LintRule{rule}, true, false)
 	if applied != 0 || reverted != 1 || failed != 1 {
 		t.Fatalf("counts = %d/%d/%d, want 0 applied, 1 reverted, 1 failed", applied, reverted, failed)
 	}
@@ -127,4 +133,9 @@ func TestBisectRecordsOutcomes(t *testing.T) {
 	if oc[issueFingerprint(noTgt)] != outcomeNoTarget {
 		t.Errorf("no-target outcome = %q, want no_target", oc[issueFingerprint(noTgt)])
 	}
+}
+
+func outcomeFixIssue(rule, file string) lintIssue {
+	return lintIssue{File: file, Rule: rule, Severity: "warning",
+		Message: "x is dead (line 3)", AutoFixCmd: "gorefactor whatever"}
 }

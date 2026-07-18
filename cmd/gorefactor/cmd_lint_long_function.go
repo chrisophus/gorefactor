@@ -26,12 +26,25 @@ func (r longFunctionRule) Run(ctx LintContext) []lintIssue {
 			threshold *= longFunctionTestFactor
 		}
 		for _, m := range metrics {
-			// Measure logic lines, not data: a declarative catalog of composite
-			// literals is long in data, not complexity, and extracting it helps
-			// no one. LogicLines subtracts the literal span.
 			if m.LogicLines() < threshold {
 				continue
 			}
+
+			if d := m.Dispatch; d != nil && m.LogicLines()-d.LineDiscount < threshold {
+				out = append(out, lintIssue{
+					File:     f,
+					Rule:     "long-function",
+					Severity: "info",
+					Message: fmt.Sprintf("%s is %d lines (threshold %d, line %d) — dispatch table: %d cases, worst case %d lines; per-branch length %d is under threshold",
+
+						// Measure logic lines, not data: a declarative catalog of composite
+						// literals is long in data, not complexity, and extracting it helps
+						// no one. LogicLines subtracts the literal span.
+						m.Key(), m.Lines, threshold, m.Line, d.Cases, d.WorstCaseLines, m.LogicLines()-d.LineDiscount),
+				})
+				continue
+			}
+
 			iss := lintIssue{
 				File:     f,
 				Rule:     "long-function",

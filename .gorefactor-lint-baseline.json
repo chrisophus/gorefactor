@@ -8,7 +8,7 @@
       "count": 1
     },
     {
-      "fingerprint": "analyzer/file_size_analyzer.go\u0000complexity\u0000countComplexity has cyclomatic complexity # (threshold #, line #) — consider extracting",
+      "fingerprint": "analyzer/file_size_analyzer.go\u0000complexity\u0000countComplexity has cyclomatic complexity # (threshold #, line #) — dispatch table: # cases, worst case #; per-branch score # is under threshold",
       "file": "analyzer/file_size_analyzer.go",
       "rule": "complexity",
       "count": 1
@@ -50,19 +50,13 @@
       "count": 1
     },
     {
-      "fingerprint": "cmd/gorefactor-agent/agent_tools.go\u0000long-function\u0000prompt is # lines (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor-agent/agent_tools.go",
-      "rule": "long-function",
-      "count": 1
-    },
-    {
       "fingerprint": "cmd/gorefactor-agent/dispatch_tool.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): cmd/gorefactor-agent/dispatch_tool.go:#-#, cmd/gorefactor-agent/dispatch_tool.go:#-#",
       "file": "cmd/gorefactor-agent/dispatch_tool.go",
       "rule": "duplicate-block",
       "count": 1
     },
     {
-      "fingerprint": "cmd/gorefactor-agent/dispatch_tool.go\u0000long-function\u0000dispatchTool is # lines (threshold #, line #) — consider extracting",
+      "fingerprint": "cmd/gorefactor-agent/dispatch_tool.go\u0000long-function\u0000dispatchTool is # lines (threshold #, line #) — dispatch table: # cases, worst case # lines; per-branch length # is under threshold",
       "file": "cmd/gorefactor-agent/dispatch_tool.go",
       "rule": "long-function",
       "count": 1
@@ -272,7 +266,7 @@
       "count": 1
     },
     {
-      "fingerprint": "cmd/gorefactor/cmd_wrap_errors_process.go\u0000complexity\u0000recurseIntoStmt has cyclomatic complexity # (threshold #, line #) — consider extracting",
+      "fingerprint": "cmd/gorefactor/cmd_wrap_errors_process.go\u0000complexity\u0000recurseIntoStmt has cyclomatic complexity # (threshold #, line #) — dispatch table: # cases, worst case #; per-branch score # is under threshold",
       "file": "cmd/gorefactor/cmd_wrap_errors_process.go",
       "rule": "complexity",
       "count": 1

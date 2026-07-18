@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/chrisophus/gorefactor/analyzer"
 )
 
 // dirSnapshot captures the .go files of a single package directory so an autofix confined to that
@@ -94,6 +96,8 @@ func verifyGate(root string) error {
 	for _, st := range stages {
 		cmd := exec.Command("go", st.args...)
 		cmd.Dir = root
+		cmd.Env = analyzer.SanitizedGitEnv()
+
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("%s:\n%s", st.label, strings.TrimSpace(string(out)))
 		}

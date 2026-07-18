@@ -191,17 +191,37 @@ func countComplexity(node ast.Node, count *int) {
 		}
 	case *ast.SwitchStmt:
 		*count += 2 // Higher penalty for switch
-		if s, ok := node.(*ast.SwitchStmt); ok && s.Body != nil {
-			for _, stmt := range s.Body.List {
+		if n.Body != nil {
+			for _, stmt := range n.Body.List {
 				countComplexity(stmt, count)
 			}
 		}
-	case *ast.SelectStmt:
-		*count += 2
-		if s, ok := node.(*ast.SelectStmt); ok && s.Body != nil {
-			for _, stmt := range s.Body.List {
+	case *ast.TypeSwitchStmt:
+		*count += 2 // same penalty as an expression switch
+		if n.Body != nil {
+			for _, stmt := range n.Body.List {
 				countComplexity(stmt, count)
 			}
+		}
+	case *ast.CaseClause:
+		// A switch body is a list of CaseClause nodes; without this case the
+		// walk stopped here and every branch inside a case was invisible,
+		// underreporting switch-heavy functions (a 140-line dispatch switch
+		// scored 3).
+		for _, stmt := range n.Body {
+			countComplexity(stmt, count)
+		}
+	case *ast.SelectStmt:
+		*count += 2
+		if n.Body != nil {
+			for _, stmt := range n.Body.List {
+				countComplexity(stmt, count)
+			}
+		}
+	case *ast.CommClause:
+		// Same blindness as CaseClause, for select statements.
+		for _, stmt := range n.Body {
+			countComplexity(stmt, count)
 		}
 	case *ast.BlockStmt:
 		if n != nil {

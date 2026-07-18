@@ -34,6 +34,8 @@ type LengthReduction struct {
 	Extractions []LengthExtraction `json:"extractions"`
 }
 
+const DefaultLongFunctionLines = 75
+
 // RecommendLengthReduction is the line-count analog of
 // RecommendComplexityReduction: given a function or method (locator "Name" or
 // "Receiver:Name") that exceeds maxLines, it greedily picks the minimum set
@@ -76,6 +78,10 @@ func RecommendLengthReduction(filePath, locator string, maxLines int) (*LengthRe
 		if span < minExtractableBlockLines {
 			continue
 		}
+		if span+2 >= helperLineBudget(maxLines) {
+			continue
+		}
+
 		candidates = append(candidates, candidate{stmt: stmt, shed: span - 1, start: start, end: end})
 	}
 	sort.SliceStable(candidates, func(i, j int) bool {
@@ -98,6 +104,13 @@ func RecommendLengthReduction(filePath, locator string, maxLines int) (*LengthRe
 	}
 	result.Projected = projected
 	return result, nil
+}
+
+func helperLineBudget(maxLines int) int {
+	if maxLines < DefaultLongFunctionLines {
+		return maxLines
+	}
+	return DefaultLongFunctionLines
 }
 
 // findFuncByLocator matches a *ast.FuncDecl by "Name" or "Receiver:Name"

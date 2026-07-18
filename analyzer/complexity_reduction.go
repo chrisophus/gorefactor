@@ -85,6 +85,12 @@ func RecommendComplexityReduction(filePath, functionName string, threshold int) 
 		if contrib == 0 {
 			continue // straight-line statement, extracting it sheds nothing
 		}
+		if contrib+1 > threshold {
+			// A helper carries base complexity 1 plus the block contribution.
+			// If that already exceeds the threshold, extracting only relocates
+			// the finding into the helper; skip the block as vacuous.
+			continue
+		}
 		candidates = append(candidates, candidate{
 			stmt:     stmt,
 			contrib:  contrib,

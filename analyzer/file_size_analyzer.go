@@ -78,9 +78,11 @@ func FileFunctionComplexities(file string) ([]FunctionComplexity, error) {
 			Name:       fn.Name.Name,
 			Line:       fset.Position(fn.Pos()).Line,
 			Complexity: calculateFunctionComplexity(fn),
+			Dispatch:   AnalyzeDispatch(fset, fn),
 		})
 	}
 	return out, nil
+
 }
 
 // countLines counts the number of lines in a file
@@ -236,6 +238,9 @@ type FunctionComplexity struct {
 	Name       string
 	Line       int
 	Complexity int
+	// Dispatch is the per-branch re-scoring for table-shaped functions
+	// (nil when the body has no eligible top-level dispatch switch).
+	Dispatch *DispatchInfo
 }
 
 // calculateExtractionPriority determines how important it is to extract a function

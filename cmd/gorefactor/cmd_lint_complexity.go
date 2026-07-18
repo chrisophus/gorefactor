@@ -27,6 +27,18 @@ func (r complexityRule) Run(ctx LintContext) []lintIssue {
 			if c.Complexity <= threshold {
 				continue
 			}
+
+			if d := c.Dispatch; d != nil && d.NormalizedComplexity <= threshold {
+				out = append(out, lintIssue{
+					File:     f,
+					Rule:     "complexity",
+					Severity: "info",
+					Message: fmt.Sprintf("%s has cyclomatic complexity %d (threshold %d, line %d) — dispatch table: %d cases, worst case %d; per-branch score %d is under threshold",
+						c.Name, c.Complexity, threshold, c.Line, d.Cases, d.WorstCaseComplexity, d.NormalizedComplexity),
+				})
+				continue
+			}
+
 			sev := "warning"
 			if c.Complexity > threshold*2 {
 				sev = "error"

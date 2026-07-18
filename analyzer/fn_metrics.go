@@ -18,10 +18,15 @@ type FunctionMetrics struct {
 	Lines      int    `json:"lines"`
 	Complexity int    `json:"complexity"`
 	MaxNesting int    `json:"maxNesting"`
-	// LiteralLines is the count of source lines occupied by composite literals
-	// (slice/map/struct data) in the body. A declarative catalog is long in
-	// data, not logic; LogicLines subtracts it so length rules measure logic.
+	// LiteralLines is the count of source lines occupied by literal data in
+	// the body: composite literals (slice/map/struct catalogs) and multi-line
+	// string literals (templates, prompts, embedded text). A declarative
+	// catalog is long in data, not logic; LogicLines subtracts it so length
+	// rules measure logic.
 	LiteralLines int `json:"literalLines"`
+	// Dispatch is the per-branch re-scoring for table-shaped functions
+	// (nil when the body has no eligible top-level dispatch switch).
+	Dispatch *DispatchInfo `json:"dispatch,omitempty"`
 }
 
 // LogicLines returns the function's length excluding composite-literal data
@@ -84,6 +89,7 @@ func FunctionMetricsForSource(filename string, src []byte) ([]FunctionMetrics, e
 			Complexity:   calculateFunctionComplexity(fn),
 			MaxNesting:   functionMaxNesting(fn),
 			LiteralLines: compositeLiteralLines(fset, fn.Body),
+			Dispatch:     AnalyzeDispatch(fset, fn),
 		})
 	}
 	return out, nil
@@ -146,28 +152,35 @@ func functionMaxNesting(fn *ast.FuncDecl) int {
 	return max
 }
 
-// compositeLiteralLines counts the distinct source lines occupied by composite
-// literals (slice/map/struct data) within body. Nested and sibling literals are
-// de-duplicated by line, so a catalog like `return []Tool{ {...}, {...} }`
-// reports the literal's full span once. Body braces themselves aren't literal
-// data, but counting the literal's line span is a good enough proxy for
-// "how much of this function is data vs logic".
+// compositeLiteralLines counts the distinct source lines occupied by literal data within body:
+// composite literals (slice/map/struct catalogs) and multi-line string literals (templates,
+// prompts). Nested and sibling literals are de-duplicated by line, so a catalog like `return
+// []Tool{ {...}, {...} }` reports the literal's full span once.
 func compositeLiteralLines(fset *token.FileSet, body *ast.BlockStmt) int {
 	if body == nil {
 		return 0
 	}
 	lines := map[int]bool{}
-	ast.Inspect(body, func(n ast.Node) bool {
-		lit, ok := n.(*ast.CompositeLit)
-		if !ok {
-			return true
-		}
-		start := fset.Position(lit.Lbrace).Line
-		end := fset.Position(lit.Rbrace).Line
+	mark := func(from, to token.Pos) {
+		start := fset.Position(from).Line
+		end := fset.Position(to).Line
 		for l := start; l <= end; l++ {
 			lines[l] = true
+		}
+	}
+	ast.Inspect(body, func(n ast.Node) bool {
+		switch lit := n.(type) {
+		case *ast.CompositeLit:
+			mark(lit.Lbrace, lit.Rbrace)
+		case *ast.BasicLit:
+			// A multi-line string literal (raw-string template, prompt text,
+			// embedded document) is data too; single-line strings stay logic.
+			if lit.Kind == token.STRING && fset.Position(lit.End()).Line > fset.Position(lit.Pos()).Line {
+				mark(lit.Pos(), lit.End())
+			}
 		}
 		return true
 	})
 	return len(lines)
+
 }

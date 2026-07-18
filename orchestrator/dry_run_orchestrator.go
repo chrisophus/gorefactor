@@ -86,8 +86,20 @@ func (o *Orchestrator) simulateOperationChange(operation *RefactoringOperation) 
 
 	// Map real path → temp path.
 	pathMap := make(map[string]string, len(before))
-	if r0, r1, done := extractBlockL89(before, tempDir, pathMap); done {
-		return r0, r1
+	for realPath, content := range before {
+		// Preserve the base name so package-clause detection works.
+		tmpFile := filepath.Join(tempDir, filepath.Base(realPath))
+		// Disambiguate when two files share a basename.
+		for i := 1; ; i++ {
+			if _, exists := pathMap[tmpFile]; !exists {
+				break
+			}
+			tmpFile = filepath.Join(tempDir, fmt.Sprintf("%d_%s", i, filepath.Base(realPath)))
+		}
+		if err := os.WriteFile(tmpFile, []byte(content), 0600); err != nil {
+			return nil, fmt.Errorf("dry-run: write temp file: %w", err)
+		}
+		pathMap[realPath] = tmpFile
 	}
 
 	// Clone the operation, rewriting all file references to temp paths.
@@ -106,35 +118,9 @@ func (o *Orchestrator) simulateOperationChange(operation *RefactoringOperation) 
 
 	// Compare temp files to the original snapshots to produce per-file diffs.
 	var diffs []*FileDiff
-	diffs = extractBlockL109(pathMap, before, diffs, operation)
-
-	// Also capture files created by the operation (e.g. move destination).
-	if newFile, ok := operation.Parameters["newFile"].(string); ok && newFile != "" {
-		if tmpNewFile, ok := pathMap[newFile]; !ok {
-			// Destination was not in our snapshot (new file); look in temp dir.
-			tmpCreated := filepath.Join(tempDir, filepath.Base(newFile))
-			if content, err := os.ReadFile(tmpCreated); err == nil {
-				diffs = append(diffs, &FileDiff{
-					File:    newFile,
-					OldCode: "",
-					NewCode: string(content),
-					Summary: fmt.Sprintf("Created by %s", operation.Type),
-				})
-			}
-		} else {
-			// Already captured above via pathMap; ensure we didn't miss it.
-			_ = tmpNewFile
-		}
-	}
-
-	return diffs, nil
-}
-
-func extractBlockL109(pathMap map[string]string, before map[string]string, diffs []*FileDiff, operation *RefactoringOperation) []*FileDiff {
 	for realPath, tmpPath := range pathMap {
 		newContent, err := os.ReadFile(tmpPath)
 		if err != nil {
-
 			newContent = nil
 		}
 		oldContent := before[realPath]
@@ -149,26 +135,25 @@ func extractBlockL109(pathMap map[string]string, before map[string]string, diffs
 			Summary: fmt.Sprintf("Operation: %s", operation.Type),
 		})
 	}
-	return diffs
-}
 
-func extractBlockL89(before map[string]string, tempDir string, pathMap map[string]string) (r0 []*FileDiff, r1 error, done bool) {
-	for realPath, content := range before {
-		// Preserve the base name so package-clause detection works.
-		tmpFile := filepath.Join(tempDir, filepath.Base(realPath))
-		// Disambiguate when two files share a basename.
-		for i := 1; ; i++ {
-			if _, exists := pathMap[tmpFile]; !exists {
-				break
+	// Also capture files created by the operation (e.g. move destination).
+	// A destination already in pathMap was captured by the loop above.
+	if newFile, ok := operation.Parameters["newFile"].(string); ok && newFile != "" {
+		if _, snapshotted := pathMap[newFile]; !snapshotted {
+			// Destination was not in our snapshot (new file); look in temp dir.
+			tmpCreated := filepath.Join(tempDir, filepath.Base(newFile))
+			if content, err := os.ReadFile(tmpCreated); err == nil {
+				diffs = append(diffs, &FileDiff{
+					File:    newFile,
+					OldCode: "",
+					NewCode: string(content),
+					Summary: fmt.Sprintf("Created by %s", operation.Type),
+				})
 			}
-			tmpFile = filepath.Join(tempDir, fmt.Sprintf("%d_%s", i, filepath.Base(realPath)))
 		}
-		if err := os.WriteFile(tmpFile, []byte(content), 0600); err != nil {
-			return nil, fmt.Errorf("dry-run: write temp file: %w", err), true
-		}
-		pathMap[realPath] = tmpFile
 	}
-	return
+
+	return diffs, nil
 }
 
 // generateDryRunSummary creates a human-readable summary of what would change

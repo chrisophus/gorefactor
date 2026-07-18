@@ -13,7 +13,23 @@ func main() {
 	scenarioFlag := flag.String("scenario", "", "Run a specific scenario by name")
 	verboseFlag := flag.Bool("v", false, "Verbose output")
 
-	extractBlockL16()
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, `Phase 4 Pi Integration Testing
+
+Usage:
+  gorefactor-test [options]
+
+Options:
+  -list              List all scenarios
+  -scenario <name>   Run a specific scenario
+  -v                 Verbose output
+
+Examples:
+  gorefactor-test -list
+  gorefactor-test -scenario "Move Command - Target Not Found"
+  gorefactor-test                  # Run all scenarios
+`)
+	}
 
 	flag.Parse()
 
@@ -76,26 +92,6 @@ func main() {
 	} else {
 		fmt.Printf("\n❌ Some scenarios failed\n\n")
 		os.Exit(1)
-	}
-}
-
-func extractBlockL16() {
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, `Phase 4 Pi Integration Testing
-
-Usage:
-  gorefactor-test [options]
-
-Options:
-  -list              List all scenarios
-  -scenario <name>   Run a specific scenario
-  -v                 Verbose output
-
-Examples:
-  gorefactor-test -list
-  gorefactor-test -scenario "Move Command - Target Not Found"
-  gorefactor-test                  # Run all scenarios
-`)
 	}
 }
 

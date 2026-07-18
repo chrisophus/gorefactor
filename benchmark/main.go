@@ -72,20 +72,6 @@ func main() {
 	fmt.Println(strings.Repeat("-", 97))
 
 	var totalDirect, totalRefactor int
-	totalDirect, totalRefactor = extractBlockL75(scenarios, root, bin, verbose, totalDirect, totalRefactor)
-
-	totalRatio := 0.0
-	if totalRefactor > 0 {
-		totalRatio = float64(totalDirect) / float64(totalRefactor)
-	}
-	fmt.Println(strings.Repeat("-", 97))
-	fmt.Printf("%-42s  %9d  %9d  %5.0fx\n", "TOTAL", totalDirect, totalRefactor, totalRatio)
-	fmt.Printf("\ndirect_chars   = bytes LLM must read+write using only file I/O tools\n")
-	fmt.Printf("refactor_chars = bytes to invoke gorefactor command + receive its output\n")
-	fmt.Printf("ratio          = context-token savings when using gorefactor\n")
-}
-
-func extractBlockL75(scenarios []scenario, root string, bin string, verbose *bool, totalDirect int, totalRefactor int) (int, int) {
 	for _, s := range scenarios {
 		result := s.run(root, bin, *verbose)
 		totalDirect += result.directChars
@@ -105,7 +91,16 @@ func extractBlockL75(scenarios []scenario, root string, bin string, verbose *boo
 		fmt.Printf("%-42s  %9d  %9d  %5.0fx  %7s  %s\n",
 			s.Name, result.directChars, result.refactorChars, ratio, build, s.Category)
 	}
-	return totalDirect, totalRefactor
+
+	totalRatio := 0.0
+	if totalRefactor > 0 {
+		totalRatio = float64(totalDirect) / float64(totalRefactor)
+	}
+	fmt.Println(strings.Repeat("-", 97))
+	fmt.Printf("%-42s  %9d  %9d  %5.0fx\n", "TOTAL", totalDirect, totalRefactor, totalRatio)
+	fmt.Printf("\ndirect_chars   = bytes LLM must read+write using only file I/O tools\n")
+	fmt.Printf("refactor_chars = bytes to invoke gorefactor command + receive its output\n")
+	fmt.Printf("ratio          = context-token savings when using gorefactor\n")
 }
 
 type result struct {

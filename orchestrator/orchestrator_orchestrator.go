@@ -79,9 +79,6 @@ func (o *Orchestrator) ExecutePlan(planName string) (*ExecutionResult, error) {
 	return result, nil
 }
 
-// Only set Applied to true if it hasn't been explicitly set to false
-// (e.g., by create_file with skip fallback)
-
 func (o *Orchestrator) ExecuteOperations(ops []*RefactoringOperation) (*ExecutionResult, error) {
 	plan := &RefactoringPlan{
 		Version:    "1.0",
@@ -91,8 +88,6 @@ func (o *Orchestrator) ExecuteOperations(ops []*RefactoringOperation) (*Executio
 	o.plans["_exec"] = plan
 	return o.ExecutePlan("_exec")
 }
-
-// Execute the operation based on type
 
 func (o *Orchestrator) executeRemoveCodeBlock(operation *RefactoringOperation, result *OperationResult) error {
 	codePattern, _ := operation.Parameters["codePattern"].(string)

@@ -16,55 +16,6 @@ func applyOp(kind string, a map[string]any, cfg Config) string {
 	tgt := &orchestrator.TargetSpecification{}
 	params := map[string]any{}
 
-	extractBlockL19(kind, str, tgt, op, params)
-	if len(params) > 0 {
-		op.Parameters = params
-	}
-
-	// Deterministic file correction. The junior reliably names the
-	// symbol but guesses its file; for file-scoped symbol ops a wrong
-	// source file is fatal. Resolve the real file ourselves instead of
-	// relying on an LLM retry — the model only has to name the symbol.
-	corrected := ""
-	switch kind {
-	case "move_function", "move_method", "delete_declaration":
-		if sym := argSym(a); sym != "" {
-			if f, ok := resolveSymbolFile(sym, op.File); ok {
-				corrected = op.File + " -> " + f
-				op.File = f
-			}
-		}
-	}
-
-	o := orchestrator.NewOrchestrator()
-	res, err := o.ExecuteOperations([]*orchestrator.RefactoringOperation{op})
-	if err != nil {
-		return "ERROR: " + trim(err.Error(), 400)
-	}
-	if res == nil || !res.Success {
-		return "FAILED: " + trim(execErrors(res, nil), 600) + symbolDefHint(argSym(a), op.File)
-	}
-	if op.File != "" {
-		_, _ = runIn(".", "gofmt", "-w", op.File)
-	}
-	switch kind {
-	case "move_function", "move_method":
-		msg := fmt.Sprintf("moved %s from %s to %s", argSym(a), op.File, str("new_file"))
-		if corrected != "" {
-			msg += " (source auto-resolved: " + corrected + ")"
-		}
-		return msg
-	case "delete_declaration":
-		msg := fmt.Sprintf("deleted %s from %s", argSym(a), op.File)
-		if corrected != "" {
-			msg += " (file auto-resolved: " + corrected + ")"
-		}
-		return msg
-	}
-	return fmt.Sprintf("applied %s on %s", kind, op.File)
-}
-
-func extractBlockL19(kind string, str func(k string) string, tgt *orchestrator.TargetSpecification, op *orchestrator.RefactoringOperation, params map[string]any) {
 	switch kind {
 	case "rename_declaration":
 		if fn := str("function"); fn != "" {
@@ -118,4 +69,49 @@ func extractBlockL19(kind string, str func(k string) string, tgt *orchestrator.T
 		}
 		params["codePattern"] = str("code_pattern")
 	}
+	if len(params) > 0 {
+		op.Parameters = params
+	}
+
+	// Deterministic file correction. The junior reliably names the
+	// symbol but guesses its file; for file-scoped symbol ops a wrong
+	// source file is fatal. Resolve the real file ourselves instead of
+	// relying on an LLM retry — the model only has to name the symbol.
+	corrected := ""
+	switch kind {
+	case "move_function", "move_method", "delete_declaration":
+		if sym := argSym(a); sym != "" {
+			if f, ok := resolveSymbolFile(sym, op.File); ok {
+				corrected = op.File + " -> " + f
+				op.File = f
+			}
+		}
+	}
+
+	o := orchestrator.NewOrchestrator()
+	res, err := o.ExecuteOperations([]*orchestrator.RefactoringOperation{op})
+	if err != nil {
+		return "ERROR: " + trim(err.Error(), 400)
+	}
+	if res == nil || !res.Success {
+		return "FAILED: " + trim(execErrors(res, nil), 600) + symbolDefHint(argSym(a), op.File)
+	}
+	if op.File != "" {
+		_, _ = runIn(".", "gofmt", "-w", op.File)
+	}
+	switch kind {
+	case "move_function", "move_method":
+		msg := fmt.Sprintf("moved %s from %s to %s", argSym(a), op.File, str("new_file"))
+		if corrected != "" {
+			msg += " (source auto-resolved: " + corrected + ")"
+		}
+		return msg
+	case "delete_declaration":
+		msg := fmt.Sprintf("deleted %s from %s", argSym(a), op.File)
+		if corrected != "" {
+			msg += " (file auto-resolved: " + corrected + ")"
+		}
+		return msg
+	}
+	return fmt.Sprintf("applied %s on %s", kind, op.File)
 }

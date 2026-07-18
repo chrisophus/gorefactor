@@ -43,7 +43,19 @@ func (ci *CodeInserter) insertDeclarationsAtEnd(node *ast.File, declarations []a
 
 // insertDeclarationsAtBeginning inserts declarations at the beginning of the file
 func (ci *CodeInserter) insertDeclarationsAtBeginning(node *ast.File, declarations []ast.Decl) {
-	node.Decls = append(declarations, node.Decls...)
+	// Go requires every import declaration to precede all other declarations,
+	// so "beginning" means after the trailing import, not before it.
+	i := 0
+	for i < len(node.Decls) {
+		gd, ok := node.Decls[i].(*ast.GenDecl)
+		if !ok || gd.Tok != token.IMPORT {
+			break
+		}
+		i++
+	}
+	rest := append([]ast.Decl(nil), node.Decls[i:]...)
+	node.Decls = append(append(node.Decls[:i:i], declarations...), rest...)
+
 }
 
 func (ci *CodeInserter) insertBeforeFunction(filePath string, node *ast.File, fset *token.FileSet, location *InsertionLocation, codeSnippet string) (*InsertionResult, error) {

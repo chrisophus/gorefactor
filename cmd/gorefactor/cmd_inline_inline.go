@@ -70,15 +70,44 @@ func inlineCommand(args []string) error {
 
 	// Build per-file edit lists.
 	edits := map[string][]inlineTextEdit{}
-	extractBlockL86(sites, tmpl, edits)
+	for _, s := range sites {
+		argTexts := make([]string, len(s.call.Args))
+		for i := range s.call.Args {
+			argTexts[i] = string(s.src[s.argStart[i]:s.argEnd[i]])
+		}
+		text := tmpl.substitute(argTexts)
+		start, end := s.start, s.end
+		if tmpl.exprMode {
+			if s.stmtStart >= 0 {
+				start, end = s.stmtStart, s.stmtEnd
+				text = "_ = " + text
+			} else if !isSimpleExprText(tmpl.returnExpr) {
+				text = "(" + text + ")"
+			}
+		} else {
+			start, end = s.stmtStart, s.stmtEnd
+		}
+		edits[s.file] = append(edits[s.file], inlineTextEdit{start: start, end: end, text: text})
+	}
 
 	// Delete the declaration (including its doc comment).
 	edits[file] = append(edits[file], inlineDeclDeletionEdit(fset, target, declSrc))
 
 	// Apply edits in memory, parse-verify every file, then write.
 	results := map[string][]byte{}
-	if r0, done := extractBlockL120(edits, m, funcName, results); done {
-		return r0
+	for f, list := range edits {
+		src, err := os.ReadFile(f)
+		if err != nil {
+			return m.fail(err)
+		}
+		out, err := applyInlineEdits(src, list)
+		if err != nil {
+			return m.fail(err)
+		}
+		if _, perr := goparser.ParseFile(token.NewFileSet(), f, out, 0); perr != nil {
+			return m.fail(parseErrorf("inlining %s would produce a malformed file %s: %v", funcName, f, perr))
+		}
+		results[f] = out
 	}
 
 	return m.run(func() (string, error) {
@@ -143,46 +172,6 @@ func inlineDeclDeletionEdit(fset *token.FileSet, target *ast.FuncDecl, declSrc [
 	return inlineTextEdit{start: delStart, end: delEnd, text: ""}
 }
 
-func extractBlockL86(sites []inlineCallSite, tmpl *inlineTemplate, edits map[string][]inlineTextEdit) {
-	for _, s := range sites {
-		argTexts := make([]string, len(s.call.Args))
-		for i := range s.call.Args {
-			argTexts[i] = string(s.src[s.argStart[i]:s.argEnd[i]])
-		}
-		text := tmpl.substitute(argTexts)
-		start, end := s.start, s.end
-		if tmpl.exprMode {
-			if s.stmtStart >= 0 {
-
-				start, end = s.stmtStart, s.stmtEnd
-				text = "_ = " + text
-			} else if !isSimpleExprText(tmpl.returnExpr) {
-				text = "(" + text + ")"
-			}
-		} else {
-			start, end = s.stmtStart, s.stmtEnd
-		}
-		edits[s.file] = append(edits[s.file], inlineTextEdit{start: start, end: end, text: text})
-	}
-}
-
-func extractBlockL120(edits map[string][]inlineTextEdit, m *mutation, funcName string, results map[string][]byte) (r0 error, done bool) {
-	for f, list := range edits {
-		src, err := os.ReadFile(f)
-		if err != nil {
-			return m.fail(err), true
-		}
-		out, err := applyInlineEdits(src, list)
-		if err != nil {
-			return m.fail(err), true
-		}
-		if _, perr := goparser.ParseFile(token.NewFileSet(), f, out, 0); perr != nil {
-			return m.fail(parseErrorf("inlining %s would produce a malformed file %s: %v", funcName, f, perr)), true
-		}
-		results[f] = out
-	}
-	return
-}
 
 func buildInlineEdits(fset *token.FileSet, target *ast.FuncDecl) int {
 	delStart := fset.Position(target.Pos()).Offset

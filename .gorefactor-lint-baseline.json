@@ -98,6 +98,12 @@
       "count": 1
     },
     {
+      "fingerprint": "cmd/gorefactor/autofix_outcomes_test.go:25:1\u0000funcorder-function\u0000exported functions must be declared before unexported functions (excluding constructors and init)",
+      "file": "cmd/gorefactor/autofix_outcomes_test.go:25:1",
+      "rule": "funcorder-function",
+      "count": 1
+    },
+    {
       "fingerprint": "cmd/gorefactor/change_signature_calls_build.go\u0000data-clumps\u0000Parameter group [pkgs []*packages.Package, tgt *sigTarget, params []sigParam, action *sigAction, locator string] appears in # functions; consider creating a struct",
       "file": "cmd/gorefactor/change_signature_calls_build.go",
       "rule": "data-clumps",

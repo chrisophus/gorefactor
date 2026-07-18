@@ -85,6 +85,9 @@ func lintPrintIssuesAndFix(displayIssues []lintIssue, opts lintOptions, shouldFa
 		for _, iss := range displayIssues {
 			byRule[iss.Rule]++
 			fmt.Printf("%s [%s] %s: %s", iss.File, iss.Severity, iss.Rule, iss.Message)
+			if iss.Note != "" {
+				fmt.Printf("  [%s]", iss.Note)
+			}
 			if iss.AutoFix != "" {
 				fmt.Printf("  (autofix: %s)", iss.AutoFix)
 			}

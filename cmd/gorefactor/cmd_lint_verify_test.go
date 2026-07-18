@@ -243,7 +243,9 @@ func TestBisectAutoFixBatchIsolatesSingleBadFixEfficiently(t *testing.T) {
 	defer restore()
 
 	fixerByRule := map[string]FixableRule{"fake": rule}
-	applied, reverted, failed := bisectAutoFixBatch(issues, LintContext{Root: root}, fixerByRule)
+	var recs []autofixOutcome
+	applied, reverted, failed := bisectAutoFixBatch(issues, LintContext{Root: root}, fixerByRule, &recs)
+	_ = recs
 	if applied != n-1 || reverted != 1 || failed != 0 {
 		t.Fatalf("counts: applied=%d reverted=%d failed=%d", applied, reverted, failed)
 	}

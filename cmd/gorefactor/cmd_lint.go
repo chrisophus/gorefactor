@@ -23,6 +23,11 @@ type lintIssue struct {
 	Message    string `json:"message"`
 	AutoFix    string `json:"autofix,omitempty"`
 	AutoFixCmd string `json:"autofixCmd,omitempty"`
+	// Note carries context derived after the finding was produced (e.g. the
+	// recorded outcome of a previous autofix attempt). It is deliberately
+	// excluded from issueFingerprint so baseline entries and the autofix
+	// outcome journal stay keyed on the underlying finding.
+	Note string `json:"note,omitempty"`
 }
 
 func failingIssueCount(issues []lintIssue, failOn string) int {
@@ -143,6 +148,10 @@ func runLintRules(rules []LintRule, ctx LintContext, opts lintOptions) []lintIss
 	for _, res := range results {
 		issues = append(issues, res...)
 	}
+	// Fold in what past autofix attempts proved about these findings (a
+	// gate-reverted dead-code deletion falsifies the finding; a no-target
+	// extraction retires the "consider extracting" promise).
+	annotateIssuesWithOutcomes(ctx.Root, issues)
 
 	if opts.profileRules {
 		wall := time.Since(wallStart)
@@ -198,13 +207,24 @@ func applyAutoFixes(issues []lintIssue, ctx LintContext, rules []LintRule, verif
 		fixable = append(fixable, iss)
 	}
 
+	// A fix the gate already rejected will be rejected again until the code
+	// around it changes (which also changes the fingerprint); retrying it
+	// costs a build+test cycle to rediscover a recorded fact.
+	fixable, skipped := skipKnownReverted(ctx.Root, fixable)
+	failed += skipped
+
+	var outcomes []autofixOutcome
+	defer func() { appendAutofixOutcomes(ctx.Root, outcomes) }()
+
 	if !verify {
 		for _, iss := range fixable {
 			if err := fixerByRule[iss.Rule].AutoFix(iss, ctx); err != nil {
 				fmt.Fprintf(os.Stderr, "fix failed for %s: %v\n", iss.File, err)
+				outcomes = append(outcomes, recordOutcome(iss, outcomeNoTarget, err.Error()))
 				failed++
 				continue
 			}
+			outcomes = append(outcomes, recordOutcome(iss, outcomeApplied, ""))
 			applied++
 		}
 		return
@@ -215,7 +235,7 @@ func applyAutoFixes(issues []lintIssue, ctx LintContext, rules []LintRule, verif
 		if end > len(fixable) {
 			end = len(fixable)
 		}
-		a, r, f := bisectAutoFixBatch(fixable[i:end], ctx, fixerByRule)
+		a, r, f := bisectAutoFixBatch(fixable[i:end], ctx, fixerByRule, &outcomes)
 		applied += a
 		reverted += r
 		failed += f
@@ -231,7 +251,7 @@ func applyAutoFixes(issues []lintIssue, ctx LintContext, rules []LintRule, verif
 // the group is split in half, and each half is retried independently (binary search) — a clean
 // half resolves in a single gate call, a half that's still red keeps splitting until the exact
 // culprit(s) are isolated and reverted on their own.
-func bisectAutoFixBatch(pending []lintIssue, ctx LintContext, fixerByRule map[string]FixableRule) (applied, reverted, failed int) {
+func bisectAutoFixBatch(pending []lintIssue, ctx LintContext, fixerByRule map[string]FixableRule, outcomes *[]autofixOutcome) (applied, reverted, failed int) {
 	dirs := make([]string, 0, len(pending))
 	seen := map[string]bool{}
 	for _, iss := range pending {
@@ -254,6 +274,7 @@ func bisectAutoFixBatch(pending []lintIssue, ctx LintContext, fixerByRule map[st
 	for _, iss := range pending {
 		if err := fixerByRule[iss.Rule].AutoFix(iss, ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "fix failed for %s: %v\n", iss.File, err)
+			*outcomes = append(*outcomes, recordOutcome(iss, outcomeNoTarget, err.Error()))
 			failed++
 			continue
 		}
@@ -265,6 +286,9 @@ func bisectAutoFixBatch(pending []lintIssue, ctx LintContext, fixerByRule map[st
 
 	gerr := verifyGateFn(ctx.Root)
 	if gerr == nil {
+		for _, iss := range succeeded {
+			*outcomes = append(*outcomes, recordOutcome(iss, outcomeApplied, ""))
+		}
 		return len(succeeded), 0, failed
 	}
 
@@ -278,13 +302,15 @@ func bisectAutoFixBatch(pending []lintIssue, ctx LintContext, fixerByRule map[st
 
 	if len(succeeded) == 1 {
 		fmt.Fprintf(os.Stderr, "reverted %s [%s]: gate failed after fix\n%v\n", succeeded[0].File, succeeded[0].Rule, gerr)
+		*outcomes = append(*outcomes, recordOutcome(succeeded[0], outcomeReverted, truncateDetail(gerr.Error())))
 		return 0, 1, failed
 	}
 
 	mid := len(succeeded) / 2
-	a1, r1, f1 := bisectAutoFixBatch(succeeded[:mid], ctx, fixerByRule)
-	a2, r2, f2 := bisectAutoFixBatch(succeeded[mid:], ctx, fixerByRule)
+	a1, r1, f1 := bisectAutoFixBatch(succeeded[:mid], ctx, fixerByRule, outcomes)
+	a2, r2, f2 := bisectAutoFixBatch(succeeded[mid:], ctx, fixerByRule, outcomes)
 	return a1 + a2, r1 + r2, failed + f1 + f2
+
 }
 
 type LintContext struct {

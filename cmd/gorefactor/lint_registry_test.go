@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/chrisophus/gorefactor/analyzer"
+	"github.com/chrisophus/gorefactor/doctor"
 )
 
 func TestDefaultLintRules_ExpectedSet(t *testing.T) {
@@ -116,6 +117,18 @@ func TestFixableRule_ExpectedSet(t *testing.T) {
 	for name := range want {
 		if !got[name] {
 			t.Errorf("rule %s should implement FixableRule but does not", name)
+		}
+	}
+}
+
+func TestScoreClassifiedRulesExist(t *testing.T) {
+	known := map[string]bool{}
+	for _, r := range defaultLintRules() {
+		known[r.Name()] = true
+	}
+	for _, name := range doctor.ScoreClassifiedRules() {
+		if !known[name] {
+			t.Errorf("score layer classifies %q, which is not a registered lint rule", name)
 		}
 	}
 }

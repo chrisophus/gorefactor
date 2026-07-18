@@ -66,6 +66,38 @@ func TestComputeScore(t *testing.T) {
 	}
 }
 
+func TestScoreWeightTiers(t *testing.T) {
+	cases := []struct {
+		rule string
+		sev  Severity
+		want float64
+	}{
+		{"duplicate-block", SeverityWarning, 1},
+		{"error-not-wrapped", SeverityWarning, 1},
+		{"long-function", SeverityWarning, 0.5},
+		{"excessive-params", SeverityInfo, 0.125},
+		{"funcorder-function", SeverityWarning, 0},
+		{"high-blast-radius", SeverityInfo, 0},
+		{"untested-package", SeverityInfo, 1},
+		{"untested-function", SeverityInfo, 0},
+		{"golangci/dupl", SeverityWarning, 1},
+		{"govulncheck/GO-2024-0001", SeverityError, 3},
+	}
+	for _, c := range cases {
+		if got := scoreWeight(c.rule, c.sev); got != c.want {
+			t.Errorf("scoreWeight(%q, %s) = %v, want %v", c.rule, c.sev, got, c.want)
+		}
+	}
+
+	defect := &Report{Findings: []Finding{{Rule: "duplicate-block", Severity: SeverityWarning}}}
+	proxy := &Report{Findings: []Finding{{Rule: "long-function", Severity: SeverityWarning}}}
+	defect.ComputeScore()
+	proxy.ComputeScore()
+	if !(*proxy.Score > *defect.Score) {
+		t.Fatalf("proxy finding must cost less than defect finding: proxy=%v defect=%v", *proxy.Score, *defect.Score)
+	}
+}
+
 // gitRepo creates a temp dir with one committed Go file and chdirs into it.
 func gitRepo(t *testing.T, files map[string]string) string {
 	t.Helper()

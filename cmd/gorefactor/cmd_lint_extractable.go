@@ -58,30 +58,6 @@ func (r extractableRule) Run(ctx LintContext) []lintIssue {
 }
 
 func (r extractableRule) AutoFix(issue lintIssue, _ LintContext) error {
-	file, function, ok := parseReduceLengthAutoFixCmd(issue.AutoFixCmd)
-	if !ok {
-		return fmt.Errorf("malformed extract-candidate autofix command: %q", issue.AutoFixCmd)
-	}
-	metrics, err := analyzer.FunctionMetricsForFile(file)
-	if err != nil {
-		return fmt.Errorf("re-derive function length: %w", err)
-	}
-	lines := 0
-	for _, m := range metrics {
-		if m.Key() == function {
-			lines = m.Lines
-			break
-		}
-	}
-	if lines == 0 {
-		return fmt.Errorf("%s: function no longer present in %s", function, file)
-	}
-	applied, err := reduceLengthByExtraction(file, function, lines-1, true)
-	if err != nil {
-		return fmt.Errorf("reduce length by extraction: %w", err)
-	}
-	if applied == 0 {
-		return fmt.Errorf("%s: no extractable top-level blocks", function)
-	}
-	return nil
+	return reduceLengthAutoFix("extract-candidate", issue)
+
 }

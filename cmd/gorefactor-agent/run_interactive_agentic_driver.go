@@ -49,24 +49,19 @@ func RunInteractiveAgenticDriver(ctx context.Context, tc toolChatter, cfg Config
 	gateFails, noTool := 0, 0
 	autoRun := false
 	reader := bufio.NewReader(os.Stdin)
+	pause := func() bool {
+		return interactivePause(ctx, tc, cfg, tools, reader, &autoRun, &messages)
+	}
 
 	for step := 1; step <= cfg.MaxIter; step++ {
 		lastStep = step
-		if cfg.Budget > 0 {
-			if used := tokensUsed(tc); used >= cfg.Budget {
-				logFailure(".", failureEntry{Kind: failBudgetHit,
-					Reason:  fmt.Sprintf("token budget %d exhausted (used %d)", cfg.Budget, used),
-					Spec:    trim(cfg.Spec, 200),
-					Context: fmt.Sprintf("step %d", step)})
-				return doPunt(cfg, "autopunt:budget_exhausted",
-					fmt.Sprintf("token budget %d exhausted (used %d over %d step(s))",
-						cfg.Budget, used, step-1), trace, step)
-			}
+		if done, perr := agenticPuntOnBudget(cfg, tc, trace, step, ""); done {
+			return perr
 		}
 		fmt.Fprintf(cfg.Out, "\n── step %d/%d ──\n", step, cfg.MaxIter)
-		asst, err := tc.ChatTools(ctx, assembleHistory(messages, historyKeep), tools)
-		if err != nil {
-			return fmt.Errorf("provider call failed: %w", err)
+		asst, cerr := tc.ChatTools(ctx, assembleHistory(messages, historyKeep), tools)
+		if cerr != nil {
+			return fmt.Errorf("provider call failed: %w", cerr)
 		}
 		messages = append(messages, asst)
 
@@ -77,66 +72,34 @@ func RunInteractiveAgenticDriver(ctx context.Context, tc toolChatter, cfg Config
 		}
 
 		if len(asst.ToolCalls) == 0 {
-			noTool++
-			trace = addTrace(trace, traceEntry{Step: step, Tool: "(no tool call)",
-				Result: trim(asst.Content, 160)})
-			if noTool >= maxNoToolTurn {
-				return doPunt(cfg, "autopunt:no_tool_calls",
-					"model produced prose instead of tool calls repeatedly", trace, step)
+			if punted, perr := recordNoToolTurn(cfg, asst, step, &noTool, &trace); punted {
+				return perr
 			}
-			if !autoRun {
-				// Give the user a chance to redirect before nudging the model.
-				stopped, goAuto, newMsgs := chatPause(ctx, tc, cfg, messages, tools, reader)
-				messages = newMsgs
-				autoRun = goAuto
-				if stopped {
-					return doPunt(cfg, "user_stop", "user stopped interactively", trace, step)
-				}
+			// Give the user a chance to redirect before nudging the model.
+			if pause() {
+				return doPunt(cfg, "user_stop", "user stopped interactively", trace, step)
 			}
-			messages = append(messages, chatMessage{Role: "user",
-				Content: "Act via a tool. When the change is complete call finish. " +
-					"If it cannot be done with these tools call punt(reason)."})
+			messages = appendToolNudge(messages)
 			continue
 		}
 		noTool = 0
 
-		for _, call := range asst.ToolCalls {
-			content, status := dispatchTool(call, cfg, &gateFails)
-			recordRejectedOp(".", call.Function.Name, call.Function.Arguments, content, cfg.Spec)
-			logToolCall(cfg.Out, cfg.Verbose, call.Function.Name, call.Function.Arguments, content)
-			trace = addTrace(trace, traceEntry{Step: step, Tool: call.Function.Name,
-				Args: trim(call.Function.Arguments, 200), Result: trim(content, 200)})
-
-			// Append tool result now so the message history is valid before
-			// we open the chat pause (OpenAI requires tool results to follow
-			// their tool calls before any user message).
-			messages = append(messages, chatMessage{
-				Role: "tool", ToolCallID: call.ID, Content: content,
-			})
-
-			switch status {
-			case stSuccess:
-				fmt.Fprintf(cfg.Out, "  ✓ finished; gate green; changes kept\n")
-				return nil
-			case stPunt:
-				return doPunt(cfg, "explicit", content, trace, step, parseGap(call))
-			}
-
-			if !autoRun {
-				stopped, goAuto, newMsgs := chatPause(ctx, tc, cfg, messages, tools, reader)
-				messages = newMsgs
-				autoRun = goAuto
-				if stopped {
-					return doPunt(cfg, "user_stop", "user stopped interactively", trace, step)
-				}
-			}
-		}
-		if gateFails >= maxGateFails {
-			return doPunt(cfg, "autopunt:gate_fails",
-				fmt.Sprintf("gate failed %d times", gateFails), trace, step)
+		if done, rerr := agenticToolRound(cfg, asst, step, &gateFails, &trace, &messages, pause); done {
+			return rerr
 		}
 	}
 	return doPunt(cfg, "autopunt:budget", "tool-call budget exhausted", trace, cfg.MaxIter)
+
+}
+
+func interactivePause(ctx context.Context, tc toolChatter, cfg Config, tools []toolDef, reader *bufio.Reader, autoRun *bool, messages *[]chatMessage) bool {
+	if *autoRun {
+		return false
+	}
+	stopped, goAuto, newMsgs := chatPause(ctx, tc, cfg, *messages, tools, reader)
+	*messages = newMsgs
+	*autoRun = goAuto
+	return stopped
 }
 
 // chatPause opens a conversational pause after a tool step. The user can type

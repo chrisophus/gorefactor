@@ -3,7 +3,7 @@ package doctor
 import "testing"
 
 func TestNormalizeMessageCollapsesDigitRuns(t *testing.T) {
-	got := normalizeMessage("is 80 lines (threshold 75, line 98)")
+	got := NormalizeMessage("is 80 lines (threshold 75, line 98)")
 	want := "is # lines (threshold #, line #)"
 	if got != want {
 		t.Fatalf("normalizeMessage: got %q want %q", got, want)

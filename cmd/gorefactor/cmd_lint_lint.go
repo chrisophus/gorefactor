@@ -32,27 +32,12 @@ func lintCommand(args []string) error {
 	issues = applyConfigSeverity(issues, opts)
 	sortLintIssues(issues)
 
-	if opts.writeBaseline {
-		path := opts.baselineFilePath()
-		if err := writeBaseline(path, issues); err != nil {
-			return err
-		}
-		if !opts.quiet {
-			fmt.Printf("Wrote lint baseline: %d issue(s) recorded -> %s\n", len(issues), path)
-		}
-		return nil
+	issues, done, err := lintApplyBaselineMode(issues, opts)
+	if err != nil {
+		return err
 	}
-	if opts.baseline {
-		base, err := loadBaseline(opts.baselineFilePath())
-		if err != nil {
-			return err
-		}
-		before := len(issues)
-		issues = filterAgainstBaseline(issues, base)
-		if !opts.quiet && !opts.jsonOut {
-			fmt.Printf("Baseline: %d pre-existing issue(s) suppressed, %d new/worsened\n",
-				before-len(issues), len(issues))
-		}
+	if done {
+		return nil
 	}
 
 	shouldFail := lintShouldFail(issues, opts.failOn)
@@ -62,26 +47,7 @@ func lintCommand(args []string) error {
 	}
 
 	if opts.jsonOut {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		if err := enc.Encode(map[string]interface{}{
-			"issues": outputIssues,
-			"summary": map[string]int{
-				"total":   len(outputIssues),
-				"failing": failingIssueCount(issues, opts.failOn),
-			},
-		}); err != nil {
-			return err
-		}
-		if shouldFail {
-			return fmt.Errorf(
-				"lint: %d issue(s) at or above %s severity (%d total issue(s))",
-				failingIssueCount(issues, opts.failOn),
-				opts.failOn,
-				len(issues),
-			)
-		}
-		return nil
+		return lintOutputJSON(outputIssues, issues, opts, shouldFail)
 	}
 
 	if len(issues) == 0 {
@@ -98,7 +64,7 @@ func lintCommand(args []string) error {
 		}
 		return nil
 	}
-	extractBlockL72(displayIssues, opts, shouldFail, outputIssues, issues, ctx, rules)
+	lintPrintIssuesAndFix(displayIssues, opts, shouldFail, outputIssues, issues, ctx, rules)
 	if shouldFail {
 		return fmt.Errorf(
 			"lint: %d issue(s) at or above %s severity (%d total issue(s))",
@@ -108,9 +74,12 @@ func lintCommand(args []string) error {
 		)
 	}
 	return nil
+
 }
 
-func extractBlockL72(displayIssues []lintIssue, opts lintOptions, shouldFail bool, outputIssues []lintIssue, issues []lintIssue, ctx LintContext, rules []LintRule) {
+// lintPrintIssuesAndFix renders the human-readable issue list with a per-rule summary and, with
+// --fix, runs the autofix pass and prints its outcome.
+func lintPrintIssuesAndFix(displayIssues []lintIssue, opts lintOptions, shouldFail bool, outputIssues []lintIssue, issues []lintIssue, ctx LintContext, rules []LintRule) {
 	if len(displayIssues) > 0 && (!opts.quiet || shouldFail) {
 		byRule := map[string]int{}
 		for _, iss := range displayIssues {
@@ -141,4 +110,53 @@ func extractBlockL72(displayIssues []lintIssue, opts lintOptions, shouldFail boo
 			}
 		}
 	}
+}
+
+func lintApplyBaselineMode(issues []lintIssue, opts lintOptions) ([]lintIssue, bool, error) {
+	if opts.writeBaseline {
+		path := opts.baselineFilePath()
+		if err := writeBaseline(path, issues); err != nil {
+			return issues, false, err
+		}
+		if !opts.quiet {
+			fmt.Printf("Wrote lint baseline: %d issue(s) recorded -> %s\n", len(issues), path)
+		}
+		return issues, true, nil
+	}
+	if opts.baseline {
+		base, err := loadBaseline(opts.baselineFilePath())
+		if err != nil {
+			return issues, false, err
+		}
+		before := len(issues)
+		issues = filterAgainstBaseline(issues, base)
+		if !opts.quiet && !opts.jsonOut {
+			fmt.Printf("Baseline: %d pre-existing issue(s) suppressed, %d new/worsened\n",
+				before-len(issues), len(issues))
+		}
+	}
+	return issues, false, nil
+}
+
+func lintOutputJSON(outputIssues, issues []lintIssue, opts lintOptions, shouldFail bool) error {
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(map[string]interface{}{
+		"issues": outputIssues,
+		"summary": map[string]int{
+			"total":   len(outputIssues),
+			"failing": failingIssueCount(issues, opts.failOn),
+		},
+	}); err != nil {
+		return err
+	}
+	if shouldFail {
+		return fmt.Errorf(
+			"lint: %d issue(s) at or above %s severity (%d total issue(s))",
+			failingIssueCount(issues, opts.failOn),
+			opts.failOn,
+			len(issues),
+		)
+	}
+	return nil
 }

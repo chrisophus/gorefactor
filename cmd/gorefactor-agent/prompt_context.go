@@ -114,53 +114,63 @@ func relevantSource(spec, dir string, totalBudget, perFileCap int) string {
 	if len(tokens) == 0 {
 		return "(spec has no distinctive terms; rely on the code map)"
 	}
-
-	type scored struct {
-		rel   string
-		path  string
-		score int
-	}
-	var ranked []scored
-	for _, f := range goFiles(dir) {
-		rel, _ := filepath.Rel(dir, f)
-		relLower := strings.ToLower(rel)
-		score := 0
-		for _, t := range tokens {
-			if strings.Contains(relLower, t) {
-				score += 2
-			}
-		}
-		if info, err := parser.ParseFile(f); err == nil {
-			names := make([]string, 0, len(info.Functions)+len(info.Methods))
-			for _, fn := range info.Functions {
-				names = append(names, fn.Name)
-			}
-			for _, m := range info.Methods {
-				names = append(names, m.Name)
-			}
-			for _, n := range names {
-				nl := strings.ToLower(n)
-				for _, t := range tokens {
-					if strings.Contains(nl, t) || strings.Contains(t, nl) {
-						score += 3
-					}
-				}
-			}
-		}
-		if data, err := os.ReadFile(f); err == nil {
-			cl := strings.ToLower(string(data))
-			for _, t := range tokens {
-				if c := strings.Count(cl, t); c > 0 {
-					score += min(c, 3)
-				}
-			}
-		}
-		if score > 0 {
-			ranked = append(ranked, scored{rel, f, score})
-		}
-	}
+	ranked := rankFilesBySpec(dir, tokens)
 	if len(ranked) == 0 {
 		return "(no files matched the spec terms; rely on the code map)"
+	}
+	return inlineRankedSources(ranked, totalBudget, perFileCap)
+
+}
+
+type specScoredFile struct {
+	rel   string
+	path  string
+	score int
+}
+
+func scoreSpecFileMatch(f, rel string, tokens []string) int {
+	relLower := strings.ToLower(rel)
+	score := 0
+	for _, t := range tokens {
+		if strings.Contains(relLower, t) {
+			score += 2
+		}
+	}
+	if info, err := parser.ParseFile(f); err == nil {
+		names := make([]string, 0, len(info.Functions)+len(info.Methods))
+		for _, fn := range info.Functions {
+			names = append(names, fn.Name)
+		}
+		for _, m := range info.Methods {
+			names = append(names, m.Name)
+		}
+		for _, n := range names {
+			nl := strings.ToLower(n)
+			for _, t := range tokens {
+				if strings.Contains(nl, t) || strings.Contains(t, nl) {
+					score += 3
+				}
+			}
+		}
+	}
+	if data, err := os.ReadFile(f); err == nil {
+		cl := strings.ToLower(string(data))
+		for _, t := range tokens {
+			if c := strings.Count(cl, t); c > 0 {
+				score += min(c, 3)
+			}
+		}
+	}
+	return score
+}
+
+func rankFilesBySpec(dir string, tokens []string) []specScoredFile {
+	var ranked []specScoredFile
+	for _, f := range goFiles(dir) {
+		rel, _ := filepath.Rel(dir, f)
+		if score := scoreSpecFileMatch(f, rel, tokens); score > 0 {
+			ranked = append(ranked, specScoredFile{rel, f, score})
+		}
 	}
 	sort.Slice(ranked, func(i, j int) bool {
 		if ranked[i].score != ranked[j].score {
@@ -168,7 +178,10 @@ func relevantSource(spec, dir string, totalBudget, perFileCap int) string {
 		}
 		return ranked[i].rel < ranked[j].rel
 	})
+	return ranked
+}
 
+func inlineRankedSources(ranked []specScoredFile, totalBudget, perFileCap int) string {
 	var b strings.Builder
 	used := 0
 	for _, s := range ranked {

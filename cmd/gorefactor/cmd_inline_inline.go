@@ -44,12 +44,9 @@ func inlineCommand(args []string) error {
 		return m.fail(parseErrorf("failed to parse %s: %v", file, err))
 	}
 
-	target := findInlineTarget(node, funcName)
-	if target == nil {
-		funcs, _ := declNames(node)
-		return m.fail(notFoundError(
-			fmt.Sprintf("function %q not found in %s", funcName, file),
-			funcName, funcs))
+	target, err := inlineFindTargetDecl(node, file, funcName)
+	if err != nil {
+		return m.fail(err)
 	}
 
 	tmpl, err := buildInlineTemplate(fset, declSrc, target)
@@ -62,23 +59,13 @@ func inlineCommand(args []string) error {
 	if err != nil {
 		return m.fail(err)
 	}
-	if ast.IsExported(funcName) {
-		if loc := findCrossPackageUse(file, node.Name.Name, funcName); loc != "" {
-			return m.fail(notFoundErrorf(
-				"cannot inline %s: referenced outside its package at %s (all call sites must be in the same package)",
-				funcName, loc))
-		}
+	if xerr := inlineRefuseCrossPackageUse(file, node.Name.Name, funcName); xerr != nil {
+		return m.fail(xerr)
 	}
 
 	// Validate arguments and parameter usage per site.
-	for _, s := range sites {
-		for i, arg := range s.call.Args {
-			if !isPureExpr(arg) {
-				return m.fail(parseErrorf(
-					"cannot inline %s: argument %d at %s:%d may have side effects; temp vars are out of scope — simplify the argument first",
-					funcName, i+1, s.file, s.line))
-			}
-		}
+	if perr := inlineRefuseImpureArgs(sites, funcName); perr != nil {
+		return m.fail(perr)
 	}
 
 	// Build per-file edit lists.
@@ -86,15 +73,7 @@ func inlineCommand(args []string) error {
 	extractBlockL86(sites, tmpl, edits)
 
 	// Delete the declaration (including its doc comment).
-	delStart := buildInlineEdits(fset, target)
-	if target.Doc != nil {
-		delStart = fset.Position(target.Doc.Pos()).Offset
-	}
-	delEnd := fset.Position(target.End()).Offset
-	for delEnd < len(declSrc) && declSrc[delEnd] == '\n' {
-		delEnd++
-	}
-	edits[file] = append(edits[file], inlineTextEdit{start: delStart, end: delEnd, text: ""})
+	edits[file] = append(edits[file], inlineDeclDeletionEdit(fset, target, declSrc))
 
 	// Apply edits in memory, parse-verify every file, then write.
 	results := map[string][]byte{}
@@ -113,6 +92,55 @@ func inlineCommand(args []string) error {
 		}
 		return fmt.Sprintf("Inlined %s into %d call site(s) and deleted it from %s", funcName, len(sites), file), nil
 	})
+
+}
+
+func inlineFindTargetDecl(node *ast.File, file, funcName string) (*ast.FuncDecl, error) {
+	target := findInlineTarget(node, funcName)
+	if target == nil {
+		funcs, _ := declNames(node)
+		return nil, notFoundError(
+			fmt.Sprintf("function %q not found in %s", funcName, file),
+			funcName, funcs)
+	}
+	return target, nil
+}
+
+func inlineRefuseCrossPackageUse(file, pkgName, funcName string) error {
+	if !ast.IsExported(funcName) {
+		return nil
+	}
+	if loc := findCrossPackageUse(file, pkgName, funcName); loc != "" {
+		return notFoundErrorf(
+			"cannot inline %s: referenced outside its package at %s (all call sites must be in the same package)",
+			funcName, loc)
+	}
+	return nil
+}
+
+func inlineRefuseImpureArgs(sites []inlineCallSite, funcName string) error {
+	for _, s := range sites {
+		for i, arg := range s.call.Args {
+			if !isPureExpr(arg) {
+				return parseErrorf(
+					"cannot inline %s: argument %d at %s:%d may have side effects; temp vars are out of scope — simplify the argument first",
+					funcName, i+1, s.file, s.line)
+			}
+		}
+	}
+	return nil
+}
+
+func inlineDeclDeletionEdit(fset *token.FileSet, target *ast.FuncDecl, declSrc []byte) inlineTextEdit {
+	delStart := buildInlineEdits(fset, target)
+	if target.Doc != nil {
+		delStart = fset.Position(target.Doc.Pos()).Offset
+	}
+	delEnd := fset.Position(target.End()).Offset
+	for delEnd < len(declSrc) && declSrc[delEnd] == '\n' {
+		delEnd++
+	}
+	return inlineTextEdit{start: delStart, end: delEnd, text: ""}
 }
 
 func extractBlockL86(sites []inlineCallSite, tmpl *inlineTemplate, edits map[string][]inlineTextEdit) {

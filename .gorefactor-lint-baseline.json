@@ -8,75 +8,15 @@
       "count": 1
     },
     {
-      "fingerprint": "analyzer/api_diff.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): analyzer/api_diff.go:#-#, cmd/gorefactor/cmd_callgraph.go:#-#, orchestrator/targeting.go:#-#",
-      "file": "analyzer/api_diff.go",
-      "rule": "duplicate-block",
-      "count": 2
-    },
-    {
-      "fingerprint": "analyzer/block_naming.go\u0000low-gorefactor-adherence\u0000only #/# modified .go files went through gorefactor (#%); raw-edited: analyzer/block_naming.go, analyzer/fn_metrics.go, analyzer/fn_metrics_test.go, cmd/gorefactor/cmd_lint_long_function.go — prefer a gorefactor command (see CLAUDE.md) so edits are parse-checked and cheaper",
-      "file": "analyzer/block_naming.go",
-      "rule": "low-gorefactor-adherence",
-      "count": 1
-    },
-    {
-      "fingerprint": "analyzer/dead_code_detector.go\u0000deep-nesting\u0000DeadCodeDetector:DetectDeadFields has nesting depth # (threshold #, line #) — consider extracting inner blocks",
-      "file": "analyzer/dead_code_detector.go",
-      "rule": "deep-nesting",
-      "count": 1
-    },
-    {
-      "fingerprint": "analyzer/dead_code_detector.go\u0000deep-nesting\u0000extractFunctions has nesting depth # (threshold #, line #) — consider extracting inner blocks",
-      "file": "analyzer/dead_code_detector.go",
-      "rule": "deep-nesting",
-      "count": 1
-    },
-    {
-      "fingerprint": "analyzer/error_wrap_detector.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): analyzer/error_wrap_detector.go:#-#, cmd/gorefactor/cmd_wrap_errors.go:#-#",
-      "file": "analyzer/error_wrap_detector.go",
-      "rule": "duplicate-block",
-      "count": 1
-    },
-    {
       "fingerprint": "analyzer/funcorder.go\u0000data-clumps\u0000Parameter group [g *funcorderGroup, fset *token.FileSet, out []FuncorderIssue, filename string] appears in # functions; consider creating a struct",
       "file": "analyzer/funcorder.go",
       "rule": "data-clumps",
       "count": 1
     },
     {
-      "fingerprint": "analyzer/interface_signatures.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): analyzer/interface_signatures.go:#-#, analyzer/interface_signatures.go:#-#",
-      "file": "analyzer/interface_signatures.go",
-      "rule": "duplicate-block",
-      "count": 1
-    },
-    {
       "fingerprint": "analyzer/log_propagation.go\u0000data-clumps\u0000Parameter group [list []ast.Stmt, fset *token.FileSet, report logReportFn] appears in # functions; consider creating a struct",
       "file": "analyzer/log_propagation.go",
       "rule": "data-clumps",
-      "count": 1
-    },
-    {
-      "fingerprint": "analyzer/pattern_detector_smells.go\u0000deep-nesting\u0000PatternDetector:detectGodObjects has nesting depth # (threshold #, line #) — consider extracting inner blocks",
-      "file": "analyzer/pattern_detector_smells.go",
-      "rule": "deep-nesting",
-      "count": 1
-    },
-    {
-      "fingerprint": "analyzer/pattern_detector_smells.go\u0000deep-nesting\u0000PatternDetector:detectInterfaceSegregation has nesting depth # (threshold #, line #) — consider extracting inner blocks",
-      "file": "analyzer/pattern_detector_smells.go",
-      "rule": "deep-nesting",
-      "count": 1
-    },
-    {
-      "fingerprint": "analyzer/pattern_detector_smells.go\u0000deep-nesting\u0000PatternDetector:detectLargeClass has nesting depth # (threshold #, line #) — consider extracting inner blocks",
-      "file": "analyzer/pattern_detector_smells.go",
-      "rule": "deep-nesting",
-      "count": 1
-    },
-    {
-      "fingerprint": "analyzer/premature_abstraction_detector.go\u0000deep-nesting\u0000localInterfaceMethodsFromPackage has nesting depth # (threshold #, line #) — consider extracting inner blocks",
-      "file": "analyzer/premature_abstraction_detector.go",
-      "rule": "deep-nesting",
       "count": 1
     },
     {
@@ -104,18 +44,6 @@
       "count": 1
     },
     {
-      "fingerprint": "cmd/gorefactor-agent/campaign_run.go\u0000complexity\u0000RunCampaign has cyclomatic complexity # (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor-agent/campaign_run.go",
-      "rule": "complexity",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor-agent/campaign_run.go\u0000long-function\u0000RunCampaign is # lines (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor-agent/campaign_run.go",
-      "rule": "long-function",
-      "count": 1
-    },
-    {
       "fingerprint": "cmd/gorefactor-agent/dispatch_tool.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): cmd/gorefactor-agent/dispatch_tool.go:#-#, cmd/gorefactor-agent/dispatch_tool.go:#-#",
       "file": "cmd/gorefactor-agent/dispatch_tool.go",
       "rule": "duplicate-block",
@@ -124,18 +52,6 @@
     {
       "fingerprint": "cmd/gorefactor-agent/dispatch_tool.go\u0000long-function\u0000dispatchTool is # lines (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor-agent/dispatch_tool.go",
-      "rule": "long-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor-agent/loop.go\u0000complexity\u0000RunDriver has cyclomatic complexity # (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor-agent/loop.go",
-      "rule": "complexity",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor-agent/loop.go\u0000long-function\u0000RunDriver is # lines (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor-agent/loop.go",
       "rule": "long-function",
       "count": 1
     },
@@ -152,18 +68,6 @@
       "count": 1
     },
     {
-      "fingerprint": "cmd/gorefactor-agent/prompt_context.go\u0000complexity\u0000relevantSource has cyclomatic complexity # (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor-agent/prompt_context.go",
-      "rule": "complexity",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor-agent/prompt_context.go\u0000long-function\u0000relevantSource is # lines (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor-agent/prompt_context.go",
-      "rule": "long-function",
-      "count": 1
-    },
-    {
       "fingerprint": "cmd/gorefactor-agent/provider.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): cmd/gorefactor-agent/provider.go:#-#, cmd/gorefactor-agent/provider_anthropic_anthropic_provider.go:#-#",
       "file": "cmd/gorefactor-agent/provider.go",
       "rule": "duplicate-block",
@@ -172,36 +76,6 @@
     {
       "fingerprint": "cmd/gorefactor-agent/provider_anthropic_anthropic_provider.go\u0000long-function\u0000anthropicProvider:ChatTools is # lines (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor-agent/provider_anthropic_anthropic_provider.go",
-      "rule": "long-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor-agent/run_agentic_driver.go\u0000complexity\u0000RunAgenticDriver has cyclomatic complexity # (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor-agent/run_agentic_driver.go",
-      "rule": "complexity",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor-agent/run_agentic_driver.go\u0000long-function\u0000RunAgenticDriver is # lines (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor-agent/run_agentic_driver.go",
-      "rule": "long-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor-agent/run_interactive_agentic_driver.go\u0000complexity\u0000RunInteractiveAgenticDriver has cyclomatic complexity # (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor-agent/run_interactive_agentic_driver.go",
-      "rule": "complexity",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor-agent/run_interactive_agentic_driver.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): cmd/gorefactor-agent/run_interactive_agentic_driver.go:#-#, cmd/gorefactor-agent/run_interactive_agentic_driver.go:#-#",
-      "file": "cmd/gorefactor-agent/run_interactive_agentic_driver.go",
-      "rule": "duplicate-block",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor-agent/run_interactive_agentic_driver.go\u0000long-function\u0000RunInteractiveAgenticDriver is # lines (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor-agent/run_interactive_agentic_driver.go",
       "rule": "long-function",
       "count": 1
     },
@@ -242,18 +116,6 @@
       "count": 1
     },
     {
-      "fingerprint": "cmd/gorefactor/cmd_api_diff.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): cmd/gorefactor/cmd_api_diff.go:#-#, cmd/gorefactor/cmd_review.go:#-#",
-      "file": "cmd/gorefactor/cmd_api_diff.go",
-      "rule": "duplicate-block",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_blast_radius.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): cmd/gorefactor/cmd_blast_radius.go:#-#, cmd/gorefactor/cmd_callgraph.go:#-#",
-      "file": "cmd/gorefactor/cmd_blast_radius.go",
-      "rule": "duplicate-block",
-      "count": 1
-    },
-    {
       "fingerprint": "cmd/gorefactor/cmd_change_receiver.go\u0000deep-nesting\u0000samePackageInterfacesDeclaring has nesting depth # (threshold #, line #) — consider extracting inner blocks",
       "file": "cmd/gorefactor/cmd_change_receiver.go",
       "rule": "deep-nesting",
@@ -272,21 +134,9 @@
       "count": 1
     },
     {
-      "fingerprint": "cmd/gorefactor/cmd_change_signature.go\u0000complexity\u0000parseSignatureAction has cyclomatic complexity # (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor/cmd_change_signature.go",
-      "rule": "complexity",
-      "count": 1
-    },
-    {
       "fingerprint": "cmd/gorefactor/cmd_doctor.go\u0000data-clumps\u0000Parameter group [root string, fixLevel string, configPath string] appears in # functions; consider creating a struct",
       "file": "cmd/gorefactor/cmd_doctor.go",
       "rule": "data-clumps",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_extract.go\u0000complexity\u0000buildExtractedFunc has cyclomatic complexity # (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor/cmd_extract.go",
-      "rule": "complexity",
       "count": 1
     },
     {
@@ -302,30 +152,6 @@
       "count": 1
     },
     {
-      "fingerprint": "cmd/gorefactor/cmd_extract_extract.go\u0000complexity\u0000extractCommand has cyclomatic complexity # (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor/cmd_extract_extract.go",
-      "rule": "complexity",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_extract_extract.go\u0000long-function\u0000extractCommand is # lines (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor/cmd_extract_extract.go",
-      "rule": "long-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_extract_interface.go\u0000complexity\u0000extractInterfaceCommand has cyclomatic complexity # (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor/cmd_extract_interface.go",
-      "rule": "complexity",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_extract_interface.go\u0000long-function\u0000extractInterfaceCommand is # lines (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor/cmd_extract_interface.go",
-      "rule": "long-function",
-      "count": 1
-    },
-    {
       "fingerprint": "cmd/gorefactor/cmd_extract_var.go\u0000excessive-returns\u0000Function loadFuncTarget has # items (threshold exceeded); Create a result struct to group return values",
       "file": "cmd/gorefactor/cmd_extract_var.go",
       "rule": "excessive-returns",
@@ -335,12 +161,6 @@
       "fingerprint": "cmd/gorefactor/cmd_file_sizes.go\u0000long-function\u0000analyzeFileSizes is # lines (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor/cmd_file_sizes.go",
       "rule": "long-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_find.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): cmd/gorefactor/cmd_find.go:#-#, cmd/gorefactor/cmd_find.go:#-#, cmd/gorefactor/cmd_find.go:#-#, cmd/gorefactor/cmd_recommend_reduce.go:#-#, cmd/gorefactor/cmd_recommend_reduce_length.go:#-#, cmd/gorefactor/cmd_review.go:#-#",
-      "file": "cmd/gorefactor/cmd_find.go",
-      "rule": "duplicate-block",
       "count": 1
     },
     {
@@ -356,45 +176,9 @@
       "count": 1
     },
     {
-      "fingerprint": "cmd/gorefactor/cmd_inline_build.go\u0000complexity\u0000buildInlineTemplate has cyclomatic complexity # (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor/cmd_inline_build.go",
-      "rule": "complexity",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_inline_build.go\u0000long-function\u0000buildInlineTemplate is # lines (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor/cmd_inline_build.go",
-      "rule": "long-function",
-      "count": 1
-    },
-    {
       "fingerprint": "cmd/gorefactor/cmd_inline_call.go\u0000excessive-params\u0000Function extractBlockL# has # items (threshold exceeded); Create a parameter struct to group related arguments",
       "file": "cmd/gorefactor/cmd_inline_call.go",
       "rule": "excessive-params",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_inline_inline.go\u0000complexity\u0000inlineCommand has cyclomatic complexity # (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor/cmd_inline_inline.go",
-      "rule": "complexity",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_inline_inline.go\u0000long-function\u0000inlineCommand is # lines (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor/cmd_inline_inline.go",
-      "rule": "long-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_insert_map_entry.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): cmd/gorefactor/cmd_insert_map_entry.go:#-#, cmd/gorefactor/cmd_insert_switch_case.go:#-#",
-      "file": "cmd/gorefactor/cmd_insert_map_entry.go",
-      "rule": "duplicate-block",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_insert_map_entry.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): cmd/gorefactor/cmd_insert_map_entry.go:#-#, cmd/gorefactor/cmd_set_doc.go:#-#",
-      "file": "cmd/gorefactor/cmd_insert_map_entry.go",
-      "rule": "duplicate-block",
       "count": 1
     },
     {
@@ -404,39 +188,9 @@
       "count": 1
     },
     {
-      "fingerprint": "cmd/gorefactor/cmd_lint.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): cmd/gorefactor/cmd_lint.go:#-#, doctor/diagnose.go:#-#",
-      "file": "cmd/gorefactor/cmd_lint.go",
-      "rule": "duplicate-block",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_lint_baseline.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): cmd/gorefactor/cmd_lint_baseline.go:#-#, doctor/fingerprint.go:#-#",
-      "file": "cmd/gorefactor/cmd_lint_baseline.go",
-      "rule": "duplicate-block",
-      "count": 1
-    },
-    {
       "fingerprint": "cmd/gorefactor/cmd_lint_complexity_fix.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): cmd/gorefactor/cmd_lint_complexity_fix.go:#-#, cmd/gorefactor/cmd_recommend_reduce_length.go:#-#",
       "file": "cmd/gorefactor/cmd_lint_complexity_fix.go",
       "rule": "duplicate-block",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_lint_lint.go\u0000complexity\u0000lintCommand has cyclomatic complexity # (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor/cmd_lint_lint.go",
-      "rule": "complexity",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_lint_lint.go\u0000long-function\u0000lintCommand is # lines (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor/cmd_lint_lint.go",
-      "rule": "long-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_lint_options.go\u0000long-function\u0000parseLintOptions is # lines (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor/cmd_lint_options.go",
-      "rule": "long-function",
       "count": 1
     },
     {
@@ -446,27 +200,9 @@
       "count": 1
     },
     {
-      "fingerprint": "cmd/gorefactor/cmd_mcp_test.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): cmd/gorefactor/cmd_mcp_test.go:#-#, doctor/scope.go:#-#",
-      "file": "cmd/gorefactor/cmd_mcp_test.go",
-      "rule": "duplicate-block",
-      "count": 1
-    },
-    {
       "fingerprint": "cmd/gorefactor/cmd_recommend.go\u0000long-function\u0000recommendExtractions is # lines (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor/cmd_recommend.go",
       "rule": "long-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_recommend_reduce.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): cmd/gorefactor/cmd_recommend_reduce.go:#-#, cmd/gorefactor/index_cache_test.go:#-#",
-      "file": "cmd/gorefactor/cmd_recommend_reduce.go",
-      "rule": "duplicate-block",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_remove_log_return.go\u0000string-concat-in-loop\u0000string concatenation in loop (line #) — quadratic allocation; use strings.Builder",
-      "file": "cmd/gorefactor/cmd_remove_log_return.go",
-      "rule": "string-concat-in-loop",
       "count": 1
     },
     {
@@ -488,27 +224,9 @@
       "count": 1
     },
     {
-      "fingerprint": "cmd/gorefactor/cmd_set_doc.go\u0000string-concat-in-loop\u0000string concatenation in loop (line #) — quadratic allocation; use strings.Builder",
-      "file": "cmd/gorefactor/cmd_set_doc.go",
-      "rule": "string-concat-in-loop",
-      "count": 1
-    },
-    {
       "fingerprint": "cmd/gorefactor/cmd_skeleton.go\u0000data-clumps\u0000Parameter group [fset *token.FileSet, fn *ast.FuncDecl, src []byte] appears in # functions; consider creating a struct",
       "file": "cmd/gorefactor/cmd_skeleton.go",
       "rule": "data-clumps",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_split_split.go\u0000complexity\u0000splitCommand has cyclomatic complexity # (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor/cmd_split_split.go",
-      "rule": "complexity",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_split_split.go\u0000long-function\u0000splitCommand is # lines (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor/cmd_split_split.go",
-      "rule": "long-function",
       "count": 1
     },
     {
@@ -522,18 +240,6 @@
       "file": "cmd/gorefactor/cmd_txn_txn.go",
       "rule": "long-function",
       "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_wrap_errors.go\u0000complexity\u0000applyWrapErrors has cyclomatic complexity # (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor/cmd_wrap_errors.go",
-      "rule": "complexity",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_wrap_errors.go\u0000string-concat-in-loop\u0000string concatenation in loop (line #) — quadratic allocation; use strings.Builder",
-      "file": "cmd/gorefactor/cmd_wrap_errors.go",
-      "rule": "string-concat-in-loop",
-      "count": 2
     },
     {
       "fingerprint": "cmd/gorefactor/cmd_wrap_errors_process.go\u0000data-clumps\u0000Parameter group [fset *token.FileSet, fn *ast.FuncDecl, stmts []ast.Stmt, file string, result *wrapErrorResult] appears in # functions; consider creating a struct",
@@ -554,12 +260,6 @@
       "count": 1
     },
     {
-      "fingerprint": "doctor/deadcode.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): doctor/deadcode.go:#-#, doctor/govulncheck.go:#-#",
-      "file": "doctor/deadcode.go",
-      "rule": "duplicate-block",
-      "count": 1
-    },
-    {
       "fingerprint": "doctor/filter.go\u0000data-clumps\u0000Parameter group [findings []Finding, root string, walk analyzer.WalkOptions] appears in # functions; consider creating a struct",
       "file": "doctor/filter.go",
       "rule": "data-clumps",
@@ -569,618 +269,6 @@
       "fingerprint": "doctor/shape.go\u0000linear-search-in-loop\u0000linear search inside a loop (line #) — repeated O(n) scans; build a map keyed by the compared value before the outer loop",
       "file": "doctor/shape.go",
       "rule": "linear-search-in-loop",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/api_diff.go:38\u0000untested-function\u0000exported ComputeAPIDiff has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/api_diff.go:38",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/api_diff.go:98\u0000untested-function\u0000exported FuncReceiverName has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/api_diff.go:98",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/call_analyzer.go:70\u0000untested-function\u0000exported SeedASTs has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/call_analyzer.go:70",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/cross_file_analyzer.go:124\u0000untested-function\u0000exported FindDuplicateBlocksInDir has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/cross_file_analyzer.go:124",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/dead_code_detector.go:189\u0000untested-function\u0000exported DetectDeadFields has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/dead_code_detector.go:189",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/dead_code_detector.go:245\u0000untested-function\u0000exported Summary has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/dead_code_detector.go:245",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/dead_code_exported.go:17\u0000untested-function\u0000exported DetectDeadExportedFunctions has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/dead_code_exported.go:17",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/diff_analyzer.go:21\u0000untested-function\u0000exported AnalyzeDiffFile has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/diff_analyzer.go:21",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/file_size_analyzer.go:65\u0000untested-function\u0000exported FileFunctionComplexities has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/file_size_analyzer.go:65",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/interface_analyzer.go:148\u0000untested-function\u0000exported FindInterfaceUsers has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/interface_analyzer.go:148",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/interface_analyzer.go:70\u0000untested-function\u0000exported SeedASTs has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/interface_analyzer.go:70",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/log_propagation_sentinel_fix.go:13\u0000untested-function\u0000exported PackageErrorSentinels has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/log_propagation_sentinel_fix.go:13",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/log_propagation_sentinel_fix.go:26\u0000untested-function\u0000exported ApplySentinelWrapFixes has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/log_propagation_sentinel_fix.go:26",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/pattern_detector.go:128\u0000untested-function\u0000exported Summary has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/pattern_detector.go:128",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/pattern_detector_smells.go:245\u0000untested-function\u0000exported DetectCircularDependencies has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/pattern_detector_smells.go:245",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/pattern_detector_smells.go:251\u0000untested-function\u0000exported SuggestRefactorings has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/pattern_detector_smells.go:251",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/premature_abstraction_detector.go:29\u0000untested-function\u0000exported FindPrematureAbstractionsInDirs has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/premature_abstraction_detector.go:29",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/rename_validator.go:158\u0000untested-function\u0000exported SafetyReport has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/rename_validator.go:158",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/rename_validator.go:37\u0000untested-function\u0000exported NewExportedRenameValidator has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/rename_validator.go:37",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/rename_validator_exported_rename_validator.go:10\u0000untested-function\u0000exported ValidateRename has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/rename_validator_exported_rename_validator.go:10",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/search_ast.go:26\u0000untested-function\u0000exported SearchASTInDir has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/search_ast.go:26",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/search_ast.go:44\u0000untested-function\u0000exported ParseSearchPattern has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/search_ast.go:44",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/search_ast.go:64\u0000untested-function\u0000exported SearchFileAST has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/search_ast.go:64",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/analyzer/symbol_analyzer.go:138\u0000untested-function\u0000exported SeedASTs has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/analyzer/symbol_analyzer.go:138",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor-agent/completion_schema.go:8\u0000untested-function\u0000exported CompleteSchema has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor-agent/completion_schema.go:8",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor-agent/provider.go:56\u0000untested-function\u0000exported Complete has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor-agent/provider.go:56",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor-agent/provider_anthropic_anthropic_provider.go:16\u0000untested-function\u0000exported Complete has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor-agent/provider_anthropic_anthropic_provider.go:16",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor-agent/run_interactive_agentic_driver.go:17\u0000untested-function\u0000exported RunInteractiveAgenticDriver has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor-agent/run_interactive_agentic_driver.go:17",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor-agent/token_handling.go:3\u0000untested-function\u0000exported Tokens has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor-agent/token_handling.go:3",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/harness.go:101\u0000untested-function\u0000exported PrintResult has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/harness.go:101",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/harness.go:123\u0000untested-function\u0000exported CreateTestDir has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/harness.go:123",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/harness.go:142\u0000untested-function\u0000exported WriteGoFile has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/harness.go:142",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/harness.go:151\u0000untested-function\u0000exported FileExists has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/harness.go:151",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/harness.go:157\u0000untested-function\u0000exported FileContains has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/harness.go:157",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/harness.go:44\u0000untested-function\u0000exported RunScenario has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/harness.go:44",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/scenarios.go:10\u0000untested-function\u0000exported Scenario#MoveTargetNotFound has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/scenarios.go:10",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/scenarios.go:143\u0000untested-function\u0000exported Scenario#ReplacePatternNotFound has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/scenarios.go:143",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/scenarios.go:179\u0000untested-function\u0000exported AllScenarios has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/scenarios.go:179",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/scenarios.go:189\u0000untested-function\u0000exported GetScenarioByName has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/scenarios.go:189",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/scenarios.go:200\u0000untested-function\u0000exported PrintScenarios has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/scenarios.go:200",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/scenarios.go:49\u0000untested-function\u0000exported Scenario#ExtractReturnStatement has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/scenarios.go:49",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/scenarios.go:88\u0000untested-function\u0000exported Scenario#DeleteHasCallers has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor-test/scenarios.go:88",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_doctor_report.go:25\u0000untested-function\u0000exported Info has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_doctor_report.go:25",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_doctor_report.go:30\u0000untested-function\u0000exported Run has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_doctor_report.go:30",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_arch.go:13\u0000untested-function\u0000exported Name has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_arch.go:13",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_arch.go:15\u0000untested-function\u0000exported Run has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_arch.go:15",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_blast_radius.go:26\u0000untested-function\u0000exported Name has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_blast_radius.go:26",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_duplicates.go:53\u0000untested-function\u0000exported Name has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_duplicates.go:53",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_duplicates.go:55\u0000untested-function\u0000exported Run has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_duplicates.go:55",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_extractable.go:60\u0000untested-function\u0000exported AutoFix has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_extractable.go:60",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_filesize.go:40\u0000untested-function\u0000exported AutoFix has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_filesize.go:40",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_funcorder.go:17\u0000untested-function\u0000exported AutoFix has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_funcorder.go:17",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_funcorder.go:29\u0000untested-function\u0000exported AutoFix has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_funcorder.go:29",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_funcorder.go:68\u0000untested-function\u0000exported AutoFix has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_funcorder.go:68",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_golangci.go:25\u0000untested-function\u0000exported Name has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_golangci.go:25",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_log_propagation.go:144\u0000untested-function\u0000exported AutoFix has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_log_propagation.go:144",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_perf.go:136\u0000untested-function\u0000exported Name has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_perf.go:136",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_regexp_hoist.go:61\u0000untested-function\u0000exported AutoFix has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_regexp_hoist.go:61",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_smells.go:124\u0000untested-function\u0000exported Name has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_smells.go:124",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_smells.go:126\u0000untested-function\u0000exported Run has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_smells.go:126",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_smells.go:130\u0000untested-function\u0000exported AutoFix has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_lint_smells.go:130",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_repl.go:18\u0000untested-function\u0000exported NewREPLContext has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/cmd/gorefactor/cmd_repl.go:18",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/config/config.go:106\u0000untested-function\u0000exported Path has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/config/config.go:106",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/config/config.go:114\u0000untested-function\u0000exported HasRules has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/config/config.go:114",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/doctor/apidiff.go:18\u0000untested-function\u0000exported Info has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/doctor/apidiff.go:18",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/doctor/deadcode.go:20\u0000untested-function\u0000exported Info has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/doctor/deadcode.go:20",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/doctor/deadcode.go:25\u0000untested-function\u0000exported Probe has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/doctor/deadcode.go:25",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/doctor/deadcode.go:35\u0000untested-function\u0000exported Run has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/doctor/deadcode.go:35",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/doctor/golangci.go:20\u0000untested-function\u0000exported Info has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/doctor/golangci.go:20",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/doctor/golangci.go:25\u0000untested-function\u0000exported Run has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/doctor/golangci.go:25",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/doctor/govulncheck.go:21\u0000untested-function\u0000exported Info has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/doctor/govulncheck.go:21",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/doctor/govulncheck.go:27\u0000untested-function\u0000exported Probe has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/doctor/govulncheck.go:27",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/doctor/govulncheck.go:35\u0000untested-function\u0000exported Run has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/doctor/govulncheck.go:35",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/doctor/modtidy.go:28\u0000untested-function\u0000exported Info has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/doctor/modtidy.go:28",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/doctor/modtidy.go:33\u0000untested-function\u0000exported Run has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/doctor/modtidy.go:33",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/doctor/preflight.go:37\u0000untested-function\u0000exported Probe has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/doctor/preflight.go:37",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/doctor/preflight.go:59\u0000untested-function\u0000exported Probe has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/doctor/preflight.go:59",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/doctor/score.go:42\u0000untested-function\u0000exported ComputeScore has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/doctor/score.go:42",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/doctor/temporal.go:35\u0000untested-function\u0000exported Info has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/doctor/temporal.go:35",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/examples/complex_sample.go:13\u0000untested-function\u0000exported ProcessOrder has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/examples/complex_sample.go:13",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/orchestrator/cross_package.go:75\u0000untested-function\u0000exported String has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/orchestrator/cross_package.go:75",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/orchestrator/dry_run.go:17\u0000untested-function\u0000exported DiffPaths has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/orchestrator/dry_run.go:17",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/orchestrator/dry_run.go:50\u0000untested-function\u0000exported FormatDryRunDiff has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/orchestrator/dry_run.go:50",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/orchestrator/dry_run.go:91\u0000untested-function\u0000exported SaveDryRunReport has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/orchestrator/dry_run.go:91",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/orchestrator/imports.go:12\u0000untested-function\u0000exported FormatImports has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/orchestrator/imports.go:12",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/orchestrator/templates.go:116\u0000untested-function\u0000exported GenerateInsertCodeTemplate has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/orchestrator/templates.go:116",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/orchestrator/templates.go:15\u0000untested-function\u0000exported NewTemplateGenerator has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/orchestrator/templates.go:15",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/orchestrator/templates.go:150\u0000untested-function\u0000exported SaveTemplate has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/orchestrator/templates.go:150",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/orchestrator/templates.go:164\u0000untested-function\u0000exported GenerateAllTemplates has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/orchestrator/templates.go:164",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/orchestrator/templates.go:20\u0000untested-function\u0000exported GenerateBasicTemplate has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/orchestrator/templates.go:20",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/orchestrator/templates.go:223\u0000untested-function\u0000exported PrintTemplateHelp has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/orchestrator/templates.go:223",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/orchestrator/templates.go:36\u0000untested-function\u0000exported GenerateExtractionTemplate has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/orchestrator/templates.go:36",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/orchestrator/templates.go:66\u0000untested-function\u0000exported GenerateInlineTemplate has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/orchestrator/templates.go:66",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/orchestrator/templates.go:82\u0000untested-function\u0000exported GenerateRenameTemplate has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/orchestrator/templates.go:82",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/orchestrator/templates.go:99\u0000untested-function\u0000exported GenerateMoveTemplate has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/orchestrator/templates.go:99",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/orchestrator/test_runner.go:151\u0000untested-function\u0000exported Summary has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/orchestrator/test_runner.go:151",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/orchestrator/test_runner.go:16\u0000untested-function\u0000exported NewTestRunner has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/orchestrator/test_runner.go:16",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/orchestrator/test_runner.go:174\u0000untested-function\u0000exported OutputLines has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/orchestrator/test_runner.go:174",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/orchestrator/test_runner.go:24\u0000untested-function\u0000exported RunTests has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/orchestrator/test_runner.go:24",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/orchestrator/test_runner.go:55\u0000untested-function\u0000exported RunTestsForPackage has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/orchestrator/test_runner.go:55",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/orchestrator/test_runner.go:84\u0000untested-function\u0000exported CanTestAll has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/orchestrator/test_runner.go:84",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
-      "fingerprint": "github.com/chrisophus/gorefactor/version/version.go:14\u0000untested-function\u0000exported Version has #% coverage",
-      "file": "github.com/chrisophus/gorefactor/version/version.go:14",
-      "rule": "untested-function",
       "count": 1
     },
     {
@@ -1226,18 +314,6 @@
       "count": 1
     },
     {
-      "fingerprint": "orchestrator/cross_package_rewrite_package.go\u0000deep-nesting\u0000packageLevelSymbols has nesting depth # (threshold #, line #) — consider extracting inner blocks",
-      "file": "orchestrator/cross_package_rewrite_package.go",
-      "rule": "deep-nesting",
-      "count": 1
-    },
-    {
-      "fingerprint": "orchestrator/dry_run_orchestrator.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): orchestrator/dry_run_orchestrator.go:#-#, orchestrator/orchestrator_orchestrator.go:#-#, orchestrator/result.go:#-#",
-      "file": "orchestrator/dry_run_orchestrator.go",
-      "rule": "duplicate-block",
-      "count": 1
-    },
-    {
       "fingerprint": "orchestrator/op_helpers.go\u0000excessive-returns\u0000Function findDeclInRange has # items (threshold exceeded); Create a result struct to group return values",
       "file": "orchestrator/op_helpers.go",
       "rule": "excessive-returns",
@@ -1247,12 +323,6 @@
       "fingerprint": "orchestrator/orchestrator_orchestrator.go\u0000data-clumps\u0000Parameter group [operation *RefactoringOperation, target *TargetLocation, result *OperationResult] appears in # functions; consider creating a struct",
       "file": "orchestrator/orchestrator_orchestrator.go",
       "rule": "data-clumps",
-      "count": 1
-    },
-    {
-      "fingerprint": "parser/parser.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): parser/parser.go:#-#, parser/parser.go:#-#",
-      "file": "parser/parser.go",
-      "rule": "duplicate-block",
       "count": 1
     },
     {

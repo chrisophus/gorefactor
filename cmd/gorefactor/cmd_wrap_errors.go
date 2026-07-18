@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/chrisophus/gorefactor/analyzer"
 	"github.com/chrisophus/gorefactor/orchestrator"
 )
 
@@ -110,10 +111,9 @@ func applyWrapErrors(file, funcFilter string) (string, error) {
 	if result.Transformed == 0 {
 		summary := fmt.Sprintf("wrap-errors: %d transformed, %d skipped — nothing changed", 0, result.Skipped)
 		if result.Skipped > 0 && len(result.Reasons) > 0 {
-			for _, r := range result.Reasons {
-				summary += fmt.Sprintf("\n  skip %s:%d (%s): %s", r.File, r.Line, r.Function, r.Reason)
-			}
+			summary = appendSkipReasons(summary, result.Reasons)
 		}
+
 		return summary, nil
 	}
 
@@ -130,24 +130,25 @@ func applyWrapErrors(file, funcFilter string) (string, error) {
 	}
 	summary := fmt.Sprintf("wrap-errors: %d transformed, %d skipped", result.Transformed, result.Skipped)
 	if result.Skipped > 0 && len(result.Reasons) > 0 {
-		for _, r := range result.Reasons {
-			summary += fmt.Sprintf("\n  skip %s:%d (%s): %s", r.File, r.Line, r.Function, r.Reason)
-		}
+		summary = appendSkipReasons(summary, result.Reasons)
 	}
+
 	return summary, nil
+}
+
+func appendSkipReasons(summary string, reasons []wrapSkipReason) string {
+	var sb strings.Builder
+	sb.WriteString(summary)
+	for _, r := range reasons {
+		fmt.Fprintf(&sb, "\n  skip %s:%d (%s): %s", r.File, r.Line, r.Function, r.Reason)
+	}
+	return sb.String()
 }
 
 // funcReturnsError checks if a function declaration has an error return type.
 func funcReturnsError(fn *ast.FuncDecl) bool {
-	if fn.Type.Results == nil {
-		return false
-	}
-	for _, field := range fn.Type.Results.List {
-		if ident, ok := field.Type.(*ast.Ident); ok && ident.Name == "error" {
-			return true
-		}
-	}
-	return false
+	return analyzer.FuncReturnsError(fn)
+
 }
 
 // isErrNotNil reports whether the if-stmt's condition is `err != nil`.

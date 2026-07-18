@@ -74,6 +74,21 @@ func TestPackageFuncNames(t *testing.T) {
 	}
 }
 
+func TestIsGeneratedFallbackName(t *testing.T) {
+	fallback := []string{"extractBlockL98", "extractBlockL982", "extractBlockL1"}
+	meaningful := []string{"processStmts", "handleFunctionName", "computeTotal", "extractBlock", "extractBlockLX", "extract"}
+	for _, n := range fallback {
+		if !IsGeneratedFallbackName(n) {
+			t.Errorf("%q should be a fallback name", n)
+		}
+	}
+	for _, n := range meaningful {
+		if IsGeneratedFallbackName(n) {
+			t.Errorf("%q should NOT be a fallback name", n)
+		}
+	}
+}
+
 // blockStmtFromSrc parses a function body and returns its first statement plus
 // a comment map, so naming heuristics can be exercised on realistic AST input.
 func blockStmtFromSrc(t *testing.T, src string) (ast.Stmt, ast.CommentMap) {
@@ -89,19 +104,4 @@ func blockStmtFromSrc(t *testing.T, src string) (ast.Stmt, ast.CommentMap) {
 		t.Fatalf("no statements parsed from %q", src)
 	}
 	return fn.Body.List[0], cmap
-}
-
-func TestIsGeneratedFallbackName(t *testing.T) {
-	fallback := []string{"extractBlockL98", "extractBlockL982", "extractBlockL1"}
-	meaningful := []string{"processStmts", "handleFunctionName", "computeTotal", "extractBlock", "extractBlockLX", "extract"}
-	for _, n := range fallback {
-		if !IsGeneratedFallbackName(n) {
-			t.Errorf("%q should be a fallback name", n)
-		}
-	}
-	for _, n := range meaningful {
-		if IsGeneratedFallbackName(n) {
-			t.Errorf("%q should NOT be a fallback name", n)
-		}
-	}
 }

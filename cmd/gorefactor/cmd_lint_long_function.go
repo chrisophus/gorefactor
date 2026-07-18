@@ -59,9 +59,24 @@ func (r longFunctionRule) Run(ctx LintContext) []lintIssue {
 // mirrors extract-candidate's fixer and shares its reduction path; it is only
 // wired at the aggressive fix level, so it is always verify-gated.
 func (r longFunctionRule) AutoFix(issue lintIssue, _ LintContext) error {
+	return reduceLengthAutoFix("long-function", issue)
+
+}
+
+func parseReduceLengthAutoFixCmd(cmd string) (file, function string, ok bool) {
+	fields := strings.Fields(cmd)
+	for i, f := range fields {
+		if f == "--reduce-length" && i+2 < len(fields) {
+			return fields[i+1], fields[i+2], true
+		}
+	}
+	return "", "", false
+}
+
+func reduceLengthAutoFix(ruleName string, issue lintIssue) error {
 	file, function, ok := parseReduceLengthAutoFixCmd(issue.AutoFixCmd)
 	if !ok {
-		return fmt.Errorf("malformed long-function autofix command: %q", issue.AutoFixCmd)
+		return fmt.Errorf("malformed %s autofix command: %q", ruleName, issue.AutoFixCmd)
 	}
 	metrics, err := analyzer.FunctionMetricsForFile(file)
 	if err != nil {
@@ -85,14 +100,4 @@ func (r longFunctionRule) AutoFix(issue lintIssue, _ LintContext) error {
 		return fmt.Errorf("%s: no extractable top-level blocks", function)
 	}
 	return nil
-}
-
-func parseReduceLengthAutoFixCmd(cmd string) (file, function string, ok bool) {
-	fields := strings.Fields(cmd)
-	for i, f := range fields {
-		if f == "--reduce-length" && i+2 < len(fields) {
-			return fields[i+1], fields[i+2], true
-		}
-	}
-	return "", "", false
 }

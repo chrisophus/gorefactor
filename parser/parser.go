@@ -137,21 +137,18 @@ func parseMethod(fn *ast.FuncDecl, fset *token.FileSet) Method {
 }
 
 func parseStruct(name string, st *ast.StructType) Struct {
+	// Reuse parseFieldList for the name/type walk; structs just relabel the
+	// result as fields.
 	fields := make([]Field, 0)
-	for _, f := range st.Fields.List {
-		fieldName := ""
-		if len(f.Names) > 0 {
-			fieldName = f.Names[0].Name
-		}
-		fields = append(fields, Field{
-			Name: fieldName,
-			Type: exprToString(f.Type),
-		})
+	for _, p := range parseFieldList(st.Fields) {
+		fields = append(fields, Field(p))
+
 	}
 	return Struct{
 		Name:   name,
 		Fields: fields,
 	}
+
 }
 
 func parseInterface(name string, it *ast.InterfaceType) Interface {

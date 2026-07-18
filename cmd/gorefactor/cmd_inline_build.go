@@ -25,39 +25,9 @@ func buildInlineTemplate(fset *token.FileSet, src []byte, fd *ast.FuncDecl) (*in
 	}
 
 	tmpl := &inlineTemplate{params: params}
-	var region ast.Node
-	if len(fd.Body.List) == 1 {
-		if ret, ok := fd.Body.List[0].(*ast.ReturnStmt); ok {
-			if len(ret.Results) != 1 {
-				return nil, parseErrorf("cannot inline %s: only single-value returns are supported (got %d results)", name, len(ret.Results))
-			}
-			tmpl.exprMode = true
-			tmpl.returnExpr = ret.Results[0]
-			region = ret.Results[0]
-		}
-	}
-	if region == nil {
-		// Statement mode: no return statements allowed anywhere.
-		hasReturn := false
-		ast.Inspect(fd.Body, func(n ast.Node) bool {
-			if _, ok := n.(*ast.ReturnStmt); ok {
-				hasReturn = true
-			}
-			return true
-		})
-		if hasReturn {
-			return nil, parseErrorf("cannot inline %s: bodies with return statements are only supported as a single `return <expr>`", name)
-		}
-		if fd.Type.Results != nil && len(fd.Type.Results.List) > 0 {
-			return nil, parseErrorf("cannot inline %s: function declares results but has no single return", name)
-		}
-		if err := refuseStmtModeHazards(fd, name); err != nil {
-			return nil, err
-		}
-		if len(fd.Body.List) == 0 {
-			return nil, parseErrorf("cannot inline %s: empty body (use delete --safe instead)", name)
-		}
-		region = bodyRegion{fd.Body.List[0].Pos(), fd.Body.List[len(fd.Body.List)-1].End()}
+	region, err := inlineDetermineRegion(fd, tmpl, name)
+	if err != nil {
+		return nil, err
 	}
 
 	regStart := fset.Position(region.Pos()).Offset
@@ -98,6 +68,41 @@ func buildInlineTemplate(fset *token.FileSet, src []byte, fd *ast.FuncDecl) (*in
 	}
 	sort.Slice(tmpl.uses, func(i, j int) bool { return tmpl.uses[i].start < tmpl.uses[j].start })
 	return tmpl, nil
+
+}
+
+func inlineDetermineRegion(fd *ast.FuncDecl, tmpl *inlineTemplate, name string) (ast.Node, error) {
+	if len(fd.Body.List) == 1 {
+		if ret, ok := fd.Body.List[0].(*ast.ReturnStmt); ok {
+			if len(ret.Results) != 1 {
+				return nil, parseErrorf("cannot inline %s: only single-value returns are supported (got %d results)", name, len(ret.Results))
+			}
+			tmpl.exprMode = true
+			tmpl.returnExpr = ret.Results[0]
+			return ret.Results[0], nil
+		}
+	}
+
+	hasReturn := false
+	ast.Inspect(fd.Body, func(n ast.Node) bool {
+		if _, ok := n.(*ast.ReturnStmt); ok {
+			hasReturn = true
+		}
+		return true
+	})
+	if hasReturn {
+		return nil, parseErrorf("cannot inline %s: bodies with return statements are only supported as a single `return <expr>`", name)
+	}
+	if fd.Type.Results != nil && len(fd.Type.Results.List) > 0 {
+		return nil, parseErrorf("cannot inline %s: function declares results but has no single return", name)
+	}
+	if err := refuseStmtModeHazards(fd, name); err != nil {
+		return nil, err
+	}
+	if len(fd.Body.List) == 0 {
+		return nil, parseErrorf("cannot inline %s: empty body (use delete --safe instead)", name)
+	}
+	return bodyRegion{fd.Body.List[0].Pos(), fd.Body.List[len(fd.Body.List)-1].End()}, nil
 }
 
 func extractBlockL77(fd *ast.FuncDecl, tmpl *inlineTemplate, skip map[*ast.Ident]bool, paramSet map[string]int, counts []int, fset *token.FileSet, regStart int) {

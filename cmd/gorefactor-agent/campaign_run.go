@@ -49,12 +49,7 @@ func RunCampaign(ctx context.Context, tc toolChatter, cfg Config) error {
 			// Phase 2: aggregate token budget across the whole campaign.
 			// Stop cleanly rather than churning every remaining finding
 			// into a budget-exhaustion punt.
-			if cfg.Budget > 0 && tokensUsed(tc) >= cfg.Budget {
-				fmt.Fprintf(cfg.Out, "  (campaign token budget %d reached at %d tokens; stopping)\n",
-					cfg.Budget, tokensUsed(tc))
-				logFailure(".", failureEntry{Kind: failBudgetHit,
-					Reason:  fmt.Sprintf("campaign token budget %d exhausted", cfg.Budget),
-					Context: "campaign"})
+			if campaignBudgetReached(tc, cfg) {
 				budgetHit = true
 				break
 			}
@@ -63,39 +58,62 @@ func RunCampaign(ctx context.Context, tc toolChatter, cfg Config) error {
 				break
 			}
 			handled++
-			fmt.Fprintf(cfg.Out, "\n▶ %s: %s — %s\n", f.kind, f.path, f.detail)
-
-			fcfg := cfg
-			fcfg.Spec = f.spec
-			fcfg.MaxIter = campaignStepBudget
-			fcfg.AllowDirty = false // clean each time: committed wins / rolled-back punts
-
-			err := RunAgenticDriver(ctx, tc, fcfg)
-			switch {
-			case err == nil:
-				if cerr := commitFinding(f); cerr != nil {
-					return fmt.Errorf("commit after fixing %s: %w", f.path, cerr)
-				}
-				fixed++
-				progressed = true
-				fmt.Fprintf(cfg.Out, "  ✓ fixed & committed: %s\n", f.path)
-			case isPunt(err):
-				punted++ // RunAgenticDriver already rolled back clean
-				fmt.Fprintf(cfg.Out, "  ⮌ punted (left for the senior): %s\n", f.path)
-			default:
-				return fmt.Errorf("campaign infrastructure failure on %s: %w", f.path, err)
+			if ferr := runCampaignFinding(ctx, tc, cfg, f, &fixed, &punted, &progressed); ferr != nil {
+				return ferr
 			}
+
 		}
 		if !progressed {
 			fmt.Fprintf(cfg.Out, "\n(no progress this pass; stopping)\n")
 			break
 		}
 	}
+	return reportCampaignSummary(tc, cfg, fixed, punted, passesRun, handled, t0)
 
+}
+
+func campaignBudgetReached(tc toolChatter, cfg Config) bool {
+	if cfg.Budget <= 0 || tokensUsed(tc) < cfg.Budget {
+		return false
+	}
+	fmt.Fprintf(cfg.Out, "  (campaign token budget %d reached at %d tokens; stopping)\n",
+		cfg.Budget, tokensUsed(tc))
+	logFailure(".", failureEntry{Kind: failBudgetHit,
+		Reason:  fmt.Sprintf("campaign token budget %d exhausted", cfg.Budget),
+		Context: "campaign"})
+	return true
+}
+
+func runCampaignFinding(ctx context.Context, tc toolChatter, cfg Config, f finding, fixed, punted *int, progressed *bool) error {
+	fmt.Fprintf(cfg.Out, "\n▶ %s: %s — %s\n", f.kind, f.path, f.detail)
+
+	fcfg := cfg
+	fcfg.Spec = f.spec
+	fcfg.MaxIter = campaignStepBudget
+	fcfg.AllowDirty = false
+
+	err := RunAgenticDriver(ctx, tc, fcfg)
+	switch {
+	case err == nil:
+		if cerr := commitFinding(f); cerr != nil {
+			return fmt.Errorf("commit after fixing %s: %w", f.path, cerr)
+		}
+		*fixed++
+		*progressed = true
+		fmt.Fprintf(cfg.Out, "  ✓ fixed & committed: %s\n", f.path)
+	case isPunt(err):
+		*punted++
+		fmt.Fprintf(cfg.Out, "  ⮌ punted (left for the senior): %s\n", f.path)
+	default:
+		return fmt.Errorf("campaign infrastructure failure on %s: %w", f.path, err)
+	}
+	return nil
+}
+
+func reportCampaignSummary(tc toolChatter, cfg Config, fixed, punted, passesRun, handled int, t0 time.Time) error {
 	ok, out := runGate(".")
 	if ok && doctorGateMode == "hard" {
-		// Campaign completion additionally requires a full-repo doctor pass
-		// with no new error-severity findings (design plan gate section).
+
 		if blocking, _ := runDoctorGate(".", true); blocking != "" {
 			ok, out = false, "campaign full-repo doctor pass:\n"+blocking
 		}

@@ -112,20 +112,22 @@ func liftResultNames(stmts []ast.Stmt, params []paramSpec, nResults int) (result
 	return resultNames, pick("done")
 }
 
-// buildReturnLiftedFunc synthesizes the helper for a block that contains
-// direct return statements. The helper's results are the enclosing function's
-// result types plus a trailing done flag, all named so the final naked return
-// yields zero values with done=false when the block falls through. Every
-// direct return in the block gets `, true` appended (or becomes `return true`
-// when the enclosing function has no results). The body is spliced from the
-// original source bytes, so comments and formatting inside the block survive.
-// The call site propagates a taken return:
-//
-//	if r0, done := helper(args); done {
-//		return r0
-//	}
-// blockIsFuncTail reports whether the extracted block ends the enclosing
-// function body (its last statement is the function's last statement).
+// returnLiftSpec bundles the inputs for synthesizing a return-lifting helper: parsed positions, the
+// block's statements, the inferred params/results, and the raw source bytes the body is spliced
+// from.
+type returnLiftSpec struct {
+	fset        *token.FileSet
+	methodName  string
+	stmts       []ast.Stmt
+	params      []paramSpec
+	rets        []*ast.ReturnStmt
+	resultTypes []string
+	src         []byte
+	isTail      bool
+}
+
+// blockIsFuncTail reports whether the extracted block ends the enclosing function body (its last
+// statement is the function's last statement).
 func blockIsFuncTail(blockStmts []ast.Stmt, fn *ast.FuncDecl) bool {
 	if fn.Body == nil || len(fn.Body.List) == 0 || len(blockStmts) == 0 {
 		return false
@@ -133,7 +135,17 @@ func blockIsFuncTail(blockStmts []ast.Stmt, fn *ast.FuncDecl) bool {
 	return fn.Body.List[len(fn.Body.List)-1] == blockStmts[len(blockStmts)-1]
 }
 
-func buildReturnLiftedFunc(fset *token.FileSet, methodName string, stmts []ast.Stmt, params []paramSpec, rets []*ast.ReturnStmt, resultTypes []string, src []byte, isTail bool) (newFunc, callSite string, err error) {
+// buildReturnLiftedFunc synthesizes the helper for a block that contains direct return statements.
+// The helper's results are the enclosing function's result types plus a trailing done flag, all
+// named so the final naked return yields zero values with done=false when the block falls through.
+// Every direct return in the block gets `, true` appended (or becomes `return true` when the
+// enclosing function has no results). The body is spliced from the original source bytes, so
+// comments and formatting inside the block survive. The call site propagates a taken return:
+//
+// if r0, done := helper(args); done { return r0 }
+func buildReturnLiftedFunc(spec returnLiftSpec) (newFunc, callSite string, err error) {
+	fset, stmts, src := spec.fset, spec.stmts, spec.src
+	methodName, params, rets, resultTypes, isTail := spec.methodName, spec.params, spec.rets, spec.resultTypes, spec.isTail
 	startOff := fset.Position(stmts[0].Pos()).Offset
 	endOff := fset.Position(stmts[len(stmts)-1].End()).Offset
 	if startOff < 0 || endOff > len(src) || startOff >= endOff {

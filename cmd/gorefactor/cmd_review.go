@@ -1,9 +1,7 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -59,7 +57,7 @@ func printReview(res *reviewResult) {
 }
 
 func computeReview(ref string) (*reviewResult, error) {
-	prefix, err := reviewGitShowPrefix()
+	prefix, err := gitShowPrefix()
 	if err != nil {
 		return nil, fmt.Errorf("review requires a git repository: %w", err)
 	}
@@ -89,16 +87,6 @@ func computeReview(ref string) (*reviewResult, error) {
 		return a.Rule < b.Rule
 	})
 	return res, nil
-}
-
-// reviewGitShowPrefix returns the path prefix of the current directory relative
-// to the git repo root, e.g. "cmd/gorefactor/" or "".
-func reviewGitShowPrefix() (string, error) {
-	out, err := exec.Command("git", "rev-parse", "--show-prefix").Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(out)), nil
 }
 
 // reviewChangedGoFiles returns .go files changed vs ref, relative to cwd.
@@ -223,10 +211,9 @@ func reviewCommand(args []string) error {
 		return err
 	}
 	if jsonOut {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(res)
+		return printJSON(res)
 	}
+
 	printReview(res)
 	return nil
 }

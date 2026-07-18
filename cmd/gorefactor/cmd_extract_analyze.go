@@ -98,28 +98,7 @@ func analyzeBlockTypes(pkg *packages.Package, fileAST *ast.File, enclosing *ast.
 			mutatedOuter[obj] = true
 		}
 	}
-	for _, stmt := range stmts {
-		ast.Inspect(stmt, func(n ast.Node) bool {
-			switch s := n.(type) {
-			case *ast.AssignStmt:
-				for _, lhs := range s.Lhs {
-					markRoot(lhs)
-				}
-			case *ast.IncDecStmt:
-				markRoot(s.X)
-			case *ast.RangeStmt:
-				if s.Tok == token.ASSIGN {
-					if s.Key != nil {
-						markRoot(s.Key)
-					}
-					if s.Value != nil {
-						markRoot(s.Value)
-					}
-				}
-			}
-			return true
-		})
-	}
+	processStmts(stmts, markRoot)
 
 	appendReturn := func(obj types.Object, outer bool) {
 		returns = append(returns, paramSpec{
@@ -147,6 +126,31 @@ func analyzeBlockTypes(pkg *packages.Package, fileAST *ast.File, enclosing *ast.
 	sort.Slice(returns, func(i, j int) bool { return returns[i].object.Pos() < returns[j].object.Pos() })
 	return params, returns, nil
 
+}
+
+func processStmts(stmts []ast.Stmt, markRoot func(e ast.Expr)) {
+	for _, stmt := range stmts {
+		ast.Inspect(stmt, func(n ast.Node) bool {
+			switch s := n.(type) {
+			case *ast.AssignStmt:
+				for _, lhs := range s.Lhs {
+					markRoot(lhs)
+				}
+			case *ast.IncDecStmt:
+				markRoot(s.X)
+			case *ast.RangeStmt:
+				if s.Tok == token.ASSIGN {
+					if s.Key != nil {
+						markRoot(s.Key)
+					}
+					if s.Value != nil {
+						markRoot(s.Value)
+					}
+				}
+			}
+			return true
+		})
+	}
 }
 
 func lhsRootIfValuePath(info *types.Info, e ast.Expr) *ast.Ident {

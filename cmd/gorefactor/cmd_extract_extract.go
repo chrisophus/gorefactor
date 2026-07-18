@@ -39,19 +39,9 @@ func extractCommand(args []string) error {
 	if err != nil {
 		return m.fail(err)
 	}
-	cfg := &packages.Config{
-		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax |
-			packages.NeedTypes | packages.NeedTypesInfo | packages.NeedCompiledGoFiles,
-		Dir:   filepath.Dir(absFile),
-		Tests: false,
-	}
-	pkgs, err := packages.Load(cfg, "./...")
+	pkg, fileAST, err := extractLoadTargetPackage(file, absFile)
 	if err != nil {
-		return m.fail(fmt.Errorf("load package: %w", err))
-	}
-	pkg, fileAST := findFileInPackages(pkgs, absFile)
-	if pkg == nil {
-		return m.fail(notFoundErrorf("file %s not in any loaded package", file))
+		return m.fail(err)
 	}
 	fset := pkg.Fset
 
@@ -65,13 +55,8 @@ func extractCommand(args []string) error {
 	// would change behavior. With --allow-returns they are lifted into a
 	// (results..., done bool) helper instead of refused.
 	rets := directReturns(blockStmts)
-	allowReturns := flags["--allow-returns"] != ""
-	if len(rets) > 0 && !allowReturns {
-		returnLines := make([]int, 0, len(rets))
-		for _, r := range rets {
-			returnLines = append(returnLines, fset.Position(r.Pos()).Line)
-		}
-		return m.fail(ExampleReturnStatementError(file, startLine, endLine, returnLines))
+	if rerr := extractRefuseDirectReturns(fset, file, startLine, endLine, rets, flags["--allow-returns"] != ""); rerr != nil {
+		return m.fail(rerr)
 	}
 
 	// Improvement plan item 8: continue/break/goto that target an enclosing
@@ -82,57 +67,10 @@ func extractCommand(args []string) error {
 
 	params, returns, err := analyzeBlockTypes(pkg, fileAST, enclosing, blockStmts)
 	if err != nil {
-		// Wrap type analysis errors with DetailedError
-		stderr := err.Error()
-
-		// Check if it's an undefined variable/type error
-		if strings.Contains(stderr, "undefined") || strings.Contains(stderr, "not defined") {
-			detErr := NewDetailedError(ErrVariableOutOfScope, fmt.Sprintf("Cannot extract: %v", err)).
-				WithContext(file, startLine, endLine, "Type analysis failed - undefined variables in extraction range").
-				WithRootCause(stderr).
-				WithSuggestion("expand_range",
-					"Include variable definitions in extraction range (expand start line)",
-					0.85).
-				WithSuggestion("make_global",
-					"Promote undefined variables to package level",
-					0.30).
-				WithDetail("error", stderr)
-			return m.fail(detErr)
-		}
-
-		// Generic type error
-		detErr := NewDetailedError(ErrTypeConflict, fmt.Sprintf("Cannot extract: %v", err)).
-			WithContext(file, startLine, endLine, "Type analysis failed").
-			WithRootCause(stderr).
-			WithSuggestion("review_types",
-				"Review variable types in extraction range",
-				0.70).
-			WithDetail("error", stderr)
-		return m.fail(detErr)
+		return m.fail(extractWrapTypeAnalysisError(err, file, startLine, endLine))
 	}
 
-	var newFunc, callSite string
-	if len(rets) > 0 {
-		resultTypes, rerr := enclosingResultTypes(fset, enclosing)
-		if rerr != nil {
-			return m.fail(rerr)
-		}
-		if verr := validateReturnLift(fset, rets, len(resultTypes), returns); verr != nil {
-			return m.fail(notFoundErrorf("cannot lift returns in lines %d-%d: %v", startLine, endLine, verr))
-		}
-		src, rerr := os.ReadFile(absFile)
-		if rerr != nil {
-			return m.fail(rerr)
-		}
-		// If the block is the function's tail, the original compiled only
-		// because every path through the block returns, so `done` is always
-		// true — the call site must unconditionally return the helper's values,
-		// else the outer function falls off the end (missing return).
-		isTail := blockIsFuncTail(blockStmts, enclosing)
-		newFunc, callSite, err = buildReturnLiftedFunc(fset, methodName, blockStmts, params, rets, resultTypes, src, isTail)
-	} else {
-		newFunc, callSite, err = buildExtractedFunc(fset, methodName, blockStmts, params, returns)
-	}
+	newFunc, callSite, err := extractBuildReplacement(fset, absFile, methodName, enclosing, blockStmts, params, returns, rets, startLine, endLine)
 	if err != nil {
 		return m.fail(err)
 	}
@@ -150,6 +88,81 @@ func extractCommand(args []string) error {
 		}
 		return msg, nil
 	})
+
+}
+
+func extractLoadTargetPackage(file, absFile string) (*packages.Package, *ast.File, error) {
+	cfg := &packages.Config{
+		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax |
+			packages.NeedTypes | packages.NeedTypesInfo | packages.NeedCompiledGoFiles,
+		Dir:   filepath.Dir(absFile),
+		Tests: false,
+	}
+	pkgs, err := packages.Load(cfg, "./...")
+	if err != nil {
+		return nil, nil, fmt.Errorf("load package: %w", err)
+	}
+	pkg, fileAST := findFileInPackages(pkgs, absFile)
+	if pkg == nil {
+		return nil, nil, notFoundErrorf("file %s not in any loaded package", file)
+	}
+	return pkg, fileAST, nil
+}
+
+func extractRefuseDirectReturns(fset *token.FileSet, file string, startLine, endLine int, rets []*ast.ReturnStmt, allowReturns bool) error {
+	if len(rets) == 0 || allowReturns {
+		return nil
+	}
+	returnLines := make([]int, 0, len(rets))
+	for _, r := range rets {
+		returnLines = append(returnLines, fset.Position(r.Pos()).Line)
+	}
+	return ExampleReturnStatementError(file, startLine, endLine, returnLines)
+}
+
+func extractWrapTypeAnalysisError(err error, file string, startLine, endLine int) error {
+	stderr := err.Error()
+
+	if strings.Contains(stderr, "undefined") || strings.Contains(stderr, "not defined") {
+		return NewDetailedError(ErrVariableOutOfScope, fmt.Sprintf("Cannot extract: %v", err)).
+			WithContext(file, startLine, endLine, "Type analysis failed - undefined variables in extraction range").
+			WithRootCause(stderr).
+			WithSuggestion("expand_range",
+				"Include variable definitions in extraction range (expand start line)",
+				0.85).
+			WithSuggestion("make_global",
+				"Promote undefined variables to package level",
+				0.30).
+			WithDetail("error", stderr)
+	}
+
+	return NewDetailedError(ErrTypeConflict, fmt.Sprintf("Cannot extract: %v", err)).
+		WithContext(file, startLine, endLine, "Type analysis failed").
+		WithRootCause(stderr).
+		WithSuggestion("review_types",
+			"Review variable types in extraction range",
+			0.70).
+		WithDetail("error", stderr)
+}
+
+func extractBuildReplacement(fset *token.FileSet, absFile, methodName string, enclosing *ast.FuncDecl, blockStmts []ast.Stmt, params, returns []paramSpec, rets []*ast.ReturnStmt, startLine, endLine int) (string, string, error) {
+	if len(rets) == 0 {
+		return buildExtractedFunc(fset, methodName, blockStmts, params, returns)
+	}
+	resultTypes, err := enclosingResultTypes(fset, enclosing)
+	if err != nil {
+		return "", "", err
+	}
+	if verr := validateReturnLift(fset, rets, len(resultTypes), returns); verr != nil {
+		return "", "", notFoundErrorf("cannot lift returns in lines %d-%d: %v", startLine, endLine, verr)
+	}
+	src, err := os.ReadFile(absFile)
+	if err != nil {
+		return "", "", err
+	}
+
+	isTail := blockIsFuncTail(blockStmts, enclosing)
+	return buildReturnLiftedFunc(returnLiftSpec{fset: fset, methodName: methodName, stmts: blockStmts, params: params, rets: rets, resultTypes: resultTypes, src: src, isTail: isTail})
 
 }
 

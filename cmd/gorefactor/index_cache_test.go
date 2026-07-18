@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"testing"
 	"time"
@@ -235,12 +236,8 @@ func eqStrings(a, b []string) bool {
 }
 
 func contains(xs []string, want string) bool {
-	for _, x := range xs {
-		if x == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(xs, want)
+
 }
 
 // --- Benchmarks: validate the cache actually saves work in server mode. ---

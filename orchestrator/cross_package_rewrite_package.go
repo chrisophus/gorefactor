@@ -38,25 +38,30 @@ func packageLevelSymbols(fset *token.FileSet, dir, pkgName string) (map[string]b
 		if err != nil || node.Name.Name != pkgName {
 			continue
 		}
-		for _, decl := range node.Decls {
-			switch d := decl.(type) {
-			case *ast.FuncDecl:
-				if d.Recv == nil {
-					symbols[d.Name.Name] = ast.IsExported(d.Name.Name)
-				}
-			case *ast.GenDecl:
-				for _, spec := range d.Specs {
-					switch s := spec.(type) {
-					case *ast.TypeSpec:
-						symbols[s.Name.Name] = ast.IsExported(s.Name.Name)
-					case *ast.ValueSpec:
-						for _, nm := range s.Names {
-							symbols[nm.Name] = ast.IsExported(nm.Name)
-						}
+		collectPackageLevelSymbols(node, symbols)
+	}
+	return symbols, nil
+
+}
+
+func collectPackageLevelSymbols(node *ast.File, symbols map[string]bool) {
+	for _, decl := range node.Decls {
+		switch d := decl.(type) {
+		case *ast.FuncDecl:
+			if d.Recv == nil {
+				symbols[d.Name.Name] = ast.IsExported(d.Name.Name)
+			}
+		case *ast.GenDecl:
+			for _, spec := range d.Specs {
+				switch s := spec.(type) {
+				case *ast.TypeSpec:
+					symbols[s.Name.Name] = ast.IsExported(s.Name.Name)
+				case *ast.ValueSpec:
+					for _, nm := range s.Names {
+						symbols[nm.Name] = ast.IsExported(nm.Name)
 					}
 				}
 			}
 		}
 	}
-	return symbols, nil
 }

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
-	"strings"
 )
 
 // Govulncheck is the call-graph-aware vulnerability substrate (design plan
@@ -36,21 +35,14 @@ func (g Govulncheck) Run(ctx RunContext) ([]Finding, error) {
 	if err := g.Probe(ctx.Root); err != nil {
 		return nil, fmt.Errorf("probe: %w", err)
 	}
-	cmd := exec.Command("govulncheck", "-json", "./...")
-	cmd.Dir = ctx.Root
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	out, runErr := cmd.Output()
-	if runErr != nil && len(bytes.TrimSpace(out)) == 0 {
-		// No JSON stream at all: the tool could not run (offline vuln DB,
-		// broken toolchain) — a dark sensor, not a clean pass.
-		msg := strings.TrimSpace(stderr.String())
-		if msg == "" {
-			msg = runErr.Error()
-		}
-		return nil, unavailablef("govulncheck failed to run: %s", msg)
+	// No JSON stream at all means the tool could not run (offline vuln DB,
+	// broken toolchain); runSubstrateBinary reports that as unavailable.
+	out, err := runSubstrateBinary(ctx.Root, "govulncheck", "-json", "./...")
+	if err != nil {
+		return nil, fmt.Errorf("run substrate binary: %w", err)
 	}
 	return parseGovulncheckJSON(out)
+
 }
 
 // govulnFrame is one frame of a govulncheck finding trace. Frame 0 is the

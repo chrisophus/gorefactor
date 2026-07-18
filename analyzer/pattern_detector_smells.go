@@ -19,44 +19,64 @@ func (pd *PatternDetector) DetectPatterns() []ArchitecturalPattern {
 	return patterns
 }
 
-// detectGodObjects finds large structs that do too much: many fields *and*
-// non-trivial method count. A Go struct with many fields and zero methods is
-// a record/DTO (idiomatic in Go — cf. http.Request, tls.Config), not a god
-// object.
-func (pd *PatternDetector) detectGodObjects() []ArchitecturalPattern {
-	var patterns []ArchitecturalPattern
-	classMethods := make(map[string]int)
+func (pd *PatternDetector) forEachTypeSpec(visit func(ts *ast.TypeSpec)) {
 	for _, decl := range pd.file.Decls {
-		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv != nil && len(fn.Recv.List) > 0 {
-			classMethods[getReceiverTypeName(fn.Recv.List[0])]++
+		gd, ok := decl.(*ast.GenDecl)
+		if !ok || gd.Tok != token.TYPE {
+			continue
 		}
-	}
-
-	for _, decl := range pd.file.Decls {
-		if gd, ok := decl.(*ast.GenDecl); ok && gd.Tok == token.TYPE {
-			for _, spec := range gd.Specs {
-				if ts, ok := spec.(*ast.TypeSpec); ok {
-					if st, ok := ts.Type.(*ast.StructType); ok {
-						fieldCount := len(st.Fields.List)
-						methodCount := classMethods[ts.Name.Name]
-						if fieldCount > 25 && methodCount > 0 {
-							pattern := ArchitecturalPattern{
-								Name:        "God Object",
-								Type:        "smell",
-								Severity:    "medium",
-								Description: fmt.Sprintf("Struct %s has %d fields (>25) and %d methods; consider breaking into smaller types", ts.Name.Name, fieldCount, methodCount),
-								Affected:    []string{ts.Name.Name},
-								Suggestion:  "Extract fields into logical sub-types or group by responsibility",
-							}
-							patterns = append(patterns, pattern)
-						}
-					}
-				}
+		for _, spec := range gd.Specs {
+			if ts, ok := spec.(*ast.TypeSpec); ok {
+				visit(ts)
 			}
 		}
 	}
+}
+
+func (pd *PatternDetector) methodCountByReceiver() map[string]int {
+	counts := make(map[string]int)
+	for
+
+	// detectGodObjects finds large structs that do too much: many fields *and*
+	// non-trivial method count. A Go struct with many fields and zero methods is
+	// a record/DTO (idiomatic in Go — cf. http.Request, tls.Config), not a god
+	// object.
+	_, decl := range pd.file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Recv == nil || len(fn.Recv.List) == 0 {
+			continue
+		}
+		counts[getReceiverTypeName(fn.Recv.List[0])]++
+	}
+	return counts
+}
+
+func (pd *PatternDetector) detectGodObjects() []ArchitecturalPattern {
+	var patterns []ArchitecturalPattern
+	classMethods := pd.methodCountByReceiver()
+
+	pd.forEachTypeSpec(func(ts *ast.TypeSpec) {
+		st, ok := ts.Type.(*ast.StructType)
+		if !ok {
+			return
+		}
+		fieldCount := len(st.Fields.List)
+		methodCount := classMethods[ts.Name.Name]
+		if fieldCount <= 25 || methodCount == 0 {
+			return
+		}
+		patterns = append(patterns, ArchitecturalPattern{
+			Name:        "God Object",
+			Type:        "smell",
+			Severity:    "medium",
+			Description: fmt.Sprintf("Struct %s has %d fields (>25) and %d methods; consider breaking into smaller types", ts.Name.Name, fieldCount, methodCount),
+			Affected:    []string{ts.Name.Name},
+			Suggestion:  "Extract fields into logical sub-types or group by responsibility",
+		})
+	})
 
 	return patterns
+
 }
 
 // detectExcessiveParameters finds functions with too many parameters
@@ -113,34 +133,30 @@ func (pd *PatternDetector) detectCountSmell(checker func(*ast.FuncDecl) (int, st
 func (pd *PatternDetector) detectInterfaceSegregation() []ArchitecturalPattern {
 	var patterns []ArchitecturalPattern
 
-	for _, decl := range pd.file.Decls {
-		if gd, ok := decl.(*ast.GenDecl); ok && gd.Tok == token.TYPE {
-			for _, spec := range gd.Specs {
-				if ts, ok := spec.(*ast.TypeSpec); ok {
-					if it, ok := ts.Type.(*ast.InterfaceType); ok {
-						methodCount := 0
-						if it.Methods != nil {
-							methodCount = len(it.Methods.List)
-						}
-
-						if methodCount > 5 {
-							pattern := ArchitecturalPattern{
-								Name:        "Fat Interface",
-								Type:        "smell",
-								Severity:    "medium",
-								Description: fmt.Sprintf("Interface %s has %d methods (>5); idiomatic Go declares interfaces at the consumer side — move to the package that uses %s and narrow to just the methods that package needs", ts.Name.Name, methodCount, ts.Name.Name),
-								Affected:    []string{ts.Name.Name},
-								Suggestion:  "Relocate to consumer side and narrow, rather than splitting at the declaration site",
-							}
-							patterns = append(patterns, pattern)
-						}
-					}
-				}
-			}
+	pd.forEachTypeSpec(func(ts *ast.TypeSpec) {
+		it, ok := ts.Type.(*ast.InterfaceType)
+		if !ok {
+			return
 		}
-	}
+		methodCount := 0
+		if it.Methods != nil {
+			methodCount = len(it.Methods.List)
+		}
+		if methodCount <= 5 {
+			return
+		}
+		patterns = append(patterns, ArchitecturalPattern{
+			Name:        "Fat Interface",
+			Type:        "smell",
+			Severity:    "medium",
+			Description: fmt.Sprintf("Interface %s has %d methods (>5); idiomatic Go declares interfaces at the consumer side — move to the package that uses %s and narrow to just the methods that package needs", ts.Name.Name, methodCount, ts.Name.Name),
+			Affected:    []string{ts.Name.Name},
+			Suggestion:  "Relocate to consumer side and narrow, rather than splitting at the declaration site",
+		})
+	})
 
 	return patterns
+
 }
 
 // detectLargeClass finds structs with substantial behavior — many methods, or
@@ -148,49 +164,35 @@ func (pd *PatternDetector) detectInterfaceSegregation() []ArchitecturalPattern {
 // are records and shouldn't trip this rule, regardless of field count.
 func (pd *PatternDetector) detectLargeClass() []ArchitecturalPattern {
 	var patterns []ArchitecturalPattern
-	classMethods := make(map[string]int)
+	classMethods := pd.methodCountByReceiver()
 
-	// Count methods per receiver type
-	for _, decl := range pd.file.Decls {
-		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv != nil {
-			if len(fn.Recv.List) > 0 {
-				recvType := getReceiverTypeName(fn.Recv.List[0])
-				classMethods[recvType]++
-			}
+	pd.forEachTypeSpec(func(ts *ast.TypeSpec) {
+		st, ok := ts.Type.(*ast.StructType)
+		if !ok {
+			return
 		}
-	}
-
-	// Check structs: field count + method count
-	for _, decl := range pd.file.Decls {
-		if gd, ok := decl.(*ast.GenDecl); ok && gd.Tok == token.TYPE {
-			for _, spec := range gd.Specs {
-				if ts, ok := spec.(*ast.TypeSpec); ok {
-					if st, ok := ts.Type.(*ast.StructType); ok {
-						fieldCount := 0
-						if st.Fields != nil {
-							fieldCount = len(st.Fields.List)
-						}
-						methodCount := classMethods[ts.Name.Name]
-						totalMembers := fieldCount + methodCount
-
-						if methodCount > 20 || (totalMembers > 30 && methodCount > 0) {
-							pattern := ArchitecturalPattern{
-								Name:        "Large Class",
-								Type:        "smell",
-								Severity:    "medium",
-								Description: fmt.Sprintf("Type %s has %d fields + %d methods = %d total members; consider extraction", ts.Name.Name, fieldCount, methodCount, totalMembers),
-								Affected:    []string{ts.Name.Name},
-								Suggestion:  "Extract cohesive methods into a new type or extract related fields into a sub-type",
-							}
-							patterns = append(patterns, pattern)
-						}
-					}
-				}
-			}
+		fieldCount := 0
+		if st.Fields != nil {
+			fieldCount = len(st.Fields.List)
 		}
-	}
+		methodCount := classMethods[ts.Name.Name]
+		totalMembers := fieldCount + methodCount
+
+		if methodCount <= 20 && (totalMembers <= 30 || methodCount == 0) {
+			return
+		}
+		patterns = append(patterns, ArchitecturalPattern{
+			Name:        "Large Class",
+			Type:        "smell",
+			Severity:    "medium",
+			Description: fmt.Sprintf("Type %s has %d fields + %d methods = %d total members; consider extraction", ts.Name.Name, fieldCount, methodCount, totalMembers),
+			Affected:    []string{ts.Name.Name},
+			Suggestion:  "Extract cohesive methods into a new type or extract related fields into a sub-type",
+		})
+	})
 
 	return patterns
+
 }
 
 // detectSwitchStatements finds type-switch dispatch repeated across many

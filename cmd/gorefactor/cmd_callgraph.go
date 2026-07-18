@@ -94,18 +94,9 @@ func callgraphCommand(args []string) error {
 		return err
 	}
 
-	name, recv := splitNameReceiver(target)
-	def := idx.lookup(name, recv)
-	if def == nil {
-		keys := make([]string, 0, len(idx.defs))
-		for k := range idx.defs {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		if len(keys) > 30 {
-			keys = keys[:30]
-		}
-		return notFoundError(fmt.Sprintf("function %q not found", target), target, keys)
+	def, err := idx.lookupTargetOrSuggest(target)
+	if err != nil {
+		return err
 	}
 
 	tree := idx.buildTree(def, direction, depth, map[string]bool{def.key(): true})
@@ -160,6 +151,23 @@ func (idx *cgIndex) lookup(name, recv string) *cgDef {
 	return found
 }
 
+func (idx *cgIndex) lookupTargetOrSuggest(target string) (*cgDef, error) {
+	name, recv := splitNameReceiver(target)
+	def := idx.lookup(name, recv)
+	if def != nil {
+		return def, nil
+	}
+	keys := make([]string, 0, len(idx.defs))
+	for k := range idx.defs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	if len(keys) > 30 {
+		keys = keys[:30]
+	}
+	return nil, notFoundError(fmt.Sprintf("function %q not found", target), target, keys)
+}
+
 // buildTree renders the call tree in the requested direction. visited holds
 // the keys on the current root-to-node path, so revisits are marked [cycle]
 // and not expanded further.
@@ -206,24 +214,6 @@ func resolveCallee(idx *cgIndex, name string, selector bool) []*cgDef {
 }
 
 func cgReceiver(fn *ast.FuncDecl) string {
-	if fn.Recv == nil || len(fn.Recv.List) == 0 {
-		return ""
-	}
-	t := fn.Recv.List[0].Type
-	if star, ok := t.(*ast.StarExpr); ok {
-		t = star.X
-	}
-	switch tt := t.(type) {
-	case *ast.Ident:
-		return tt.Name
-	case *ast.IndexExpr:
-		if id, ok := tt.X.(*ast.Ident); ok {
-			return id.Name
-		}
-	case *ast.IndexListExpr:
-		if id, ok := tt.X.(*ast.Ident); ok {
-			return id.Name
-		}
-	}
-	return ""
+	return analyzer.FuncReceiverName(fn)
+
 }

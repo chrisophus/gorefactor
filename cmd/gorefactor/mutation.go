@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	goparser "go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,10 +31,15 @@ type mutationResult struct {
 	Candidates   []string       `json:"candidates,omitempty"`
 }
 
-func emitJSON(v interface{}) {
+func printJSON(v any) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	_ = enc.Encode(v)
+	return enc.Encode(v)
+}
+
+func emitJSON(v interface{}) {
+	_ = printJSON(v)
+
 }
 
 // mutation runs a mutating command with universal snapshot/journal support,
@@ -51,6 +58,21 @@ func (m *mutation) setCommonFlags(flags map[string]string) {
 	m.jsonOut = flags["--json"] != ""
 	m.dryRun = flags["--dry-run"] != ""
 	m.gate = flags["--gate"] != ""
+}
+
+func (m *mutation) validateAndWrite(file string, out []byte, what, successMsg string) error {
+	if _, perr := goparser.ParseFile(token.NewFileSet(), file, out, 0); perr != nil {
+		return m.fail(parseErrorf("%s would produce a malformed file: %v", what, perr))
+	}
+	return m.run(func() (string, error) {
+		if err := os.WriteFile(file, out, 0644); err != nil {
+			return "", err
+		}
+		if err := orchestrator.FormatImports(file); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", file, err)
+		}
+		return successMsg, nil
+	})
 }
 
 // fail renders an error for --json consumers and returns it unchanged so

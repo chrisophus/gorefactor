@@ -2,8 +2,10 @@ package doctor
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -112,9 +114,6 @@ func modulePath(root string) string {
 }
 
 func keys(m map[string]bool) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	return out
+	return slices.Collect(maps.Keys(m))
+
 }

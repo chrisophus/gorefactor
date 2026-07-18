@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/format"
 	"os"
+	"strings"
 
 	"github.com/chrisophus/gorefactor/analyzer"
 	"github.com/chrisophus/gorefactor/orchestrator"
@@ -71,9 +72,11 @@ func applyRemoveLogReturn(file, rule string, aggressive bool) (string, error) {
 	if err := orchestrator.FormatImports(file); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", file, err)
 	}
-	summary := fmt.Sprintf("remove-log-return: %d fixed", len(sites))
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "remove-log-return: %d fixed", len(sites))
 	for _, s := range sites {
-		summary += fmt.Sprintf("\n  %s:%d (%s) [%s]", file, s.Line, s.Function, s.Rule)
+		fmt.Fprintf(&sb, "\n  %s:%d (%s) [%s]", file, s.Line, s.Function, s.Rule)
 	}
-	return summary, nil
+	return sb.String(), nil
+
 }

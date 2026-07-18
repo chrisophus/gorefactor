@@ -50,109 +50,19 @@ func parseLintOptions(args []string) (lintOptions, error) {
 		skipRules: make(map[string]bool),
 	}
 	for i := 0; i < len(args); i++ {
-		a := args[i]
-		switch {
-		case a == "--baseline":
-			opts.baseline = true
-		case a == "--baseline-ratchet":
-			if i+1 >= len(args) {
-				return opts, fmt.Errorf("--baseline-ratchet requires a git ref")
-			}
-			opts.baselineRatchetRef = args[i+1]
-			i++
-		case a == "--write-baseline":
-			opts.writeBaseline = true
-		case a == "--baseline-file":
-			if i+1 >= len(args) {
-				return opts, fmt.Errorf("--baseline-file requires a path")
-			}
-			opts.baselineFile = args[i+1]
-			i++
-		case a == "--fix":
-			opts.fix = true
-		case a == "--verify":
-			opts.verify = true
-		case a == "--fix-level":
-			if i+1 >= len(args) {
-				return opts, fmt.Errorf("--fix-level requires safe or aggressive")
-			}
-			switch args[i+1] {
-			case fixLevelSafe, fixLevelAggressive:
-				opts.fixLevel = args[i+1]
-			default:
-				return opts, fmt.Errorf("--fix-level must be safe or aggressive")
-			}
-			i++
-		case a == "--json":
-			opts.jsonOut = true
-		case a == "--quiet":
-			opts.quiet = true
-		case a == "--fail-only":
-			opts.failOnly = true
-		case a == "--info":
-			opts.info = true
-		case a == "--verbose":
-			opts.verbose = true
-			opts.info = true
-		case a == "--cpuprofile":
-			if i+1 >= len(args) {
-				return opts, fmt.Errorf("--cpuprofile requires a path")
-			}
-			opts.cpuProfile = args[i+1]
-			i++
-		case a == "--profile-rules":
-			opts.profileRules = true
-		case a == "--config":
-			if i+1 >= len(args) {
-				return opts, fmt.Errorf("--config requires a value")
-			}
-			opts.configPath = args[i+1]
-			i++
-		case a == "--profile":
-			if i+1 >= len(args) {
-				return opts, fmt.Errorf("--profile requires a value")
-			}
-			opts.profile = args[i+1]
-			i++
-		case a == "--max":
-			if i+1 >= len(args) {
-				return opts, fmt.Errorf("--max requires a value")
-			}
-			var n int
-			if _, err := fmt.Sscanf(args[i+1], "%d", &n); err != nil || n <= 0 {
-				return opts, fmt.Errorf("--max requires a positive integer")
-			}
-			opts.maxSize = n
-			opts.maxSet = true
-			i++
-		case a == "--rule":
-			if i+1 >= len(args) {
-				return opts, fmt.Errorf("--rule requires a value")
-			}
-			opts.onlyRules[args[i+1]] = true
-			i++
-		case a == "--skip-rule":
-			if i+1 >= len(args) {
-				return opts, fmt.Errorf("--skip-rule requires a value")
-			}
-			opts.skipRules[args[i+1]] = true
-			i++
-		case a == "--fail-on":
-			if i+1 >= len(args) {
-				return opts, fmt.Errorf("--fail-on requires error or warning")
-			}
-			switch args[i+1] {
-			case "error", "warning":
-				opts.failOn = args[i+1]
-			default:
-				return opts, fmt.Errorf("--fail-on must be error or warning")
-			}
-			i++
-		case strings.HasPrefix(a, "--"):
-			return opts, fmt.Errorf("unknown lint flag: %s", a)
-		default:
-			opts.root = a
+		n, ok, err := opts.parseFlagAt(args, i)
+
+		if err != nil {
+			return opts, err
 		}
+		if ok {
+			i += n
+			continue
+		}
+		if strings.HasPrefix(args[i], "--") {
+			return opts, fmt.Errorf("unknown lint flag: %s", args[i])
+		}
+		opts.root = args[i]
 	}
 	if opts.fixLevel == fixLevelAggressive && (!opts.fix || !opts.verify) {
 		return opts, fmt.Errorf("--fix-level aggressive requires --fix --verify: every aggressive fix must be build+test gated and revertible")
@@ -164,6 +74,146 @@ func parseLintOptions(args []string) (lintOptions, error) {
 		return opts, err
 	}
 	return opts, nil
+
+}
+
+func (opts *lintOptions) parseFlagAt(args []string, i int) (int, bool, error) {
+	for _, group := range []func([]string, int) (int, bool, error){
+		opts.parseBaselineFlags,
+		opts.parseFixFlags,
+		opts.parseOutputFlags,
+		opts.parseConfigFlags,
+	} {
+		if n, ok, err := group(args, i); ok || err != nil {
+			return n, ok, err
+		}
+	}
+	return 0, false, nil
+
+}
+
+func (opts *lintOptions) parseBaselineFlags(args []string, i int) (int, bool, error) {
+	switch args[i] {
+	case "--baseline":
+		opts.baseline = true
+	case "--baseline-ratchet":
+		if i+1 >= len(args) {
+			return 0, true, fmt.Errorf("--baseline-ratchet requires a git ref")
+		}
+		opts.baselineRatchetRef = args[i+1]
+		return 1, true, nil
+	case "--write-baseline":
+		opts.writeBaseline = true
+	case "--baseline-file":
+		if i+1 >= len(args) {
+			return 0, true, fmt.Errorf("--baseline-file requires a path")
+		}
+		opts.baselineFile = args[i+1]
+		return 1, true, nil
+	default:
+		return 0, false, nil
+	}
+	return 0, true, nil
+}
+
+func (opts *lintOptions) parseFixFlags(args []string, i int) (int, bool, error) {
+	switch args[i] {
+	case "--fix":
+		opts.fix = true
+	case "--verify":
+		opts.verify = true
+	case "--fix-level":
+		if i+1 >= len(args) {
+			return 0, true, fmt.Errorf("--fix-level requires safe or aggressive")
+		}
+		switch args[i+1] {
+		case fixLevelSafe, fixLevelAggressive:
+			opts.fixLevel = args[i+1]
+		default:
+			return 0, true, fmt.Errorf("--fix-level must be safe or aggressive")
+		}
+		return 1, true, nil
+	case "--rule":
+		if i+1 >= len(args) {
+			return 0, true, fmt.Errorf("--rule requires a value")
+		}
+		opts.onlyRules[args[i+1]] = true
+		return 1, true, nil
+	case "--skip-rule":
+		if i+1 >= len(args) {
+			return 0, true, fmt.Errorf("--skip-rule requires a value")
+		}
+		opts.skipRules[args[i+1]] = true
+		return 1, true, nil
+	default:
+		return 0, false, nil
+	}
+	return 0, true, nil
+}
+
+func (opts *lintOptions) parseOutputFlags(args []string, i int) (int, bool, error) {
+	switch args[i] {
+	case "--json":
+		opts.jsonOut = true
+	case "--quiet":
+		opts.quiet = true
+	case "--fail-only":
+		opts.failOnly = true
+	case "--info":
+		opts.info = true
+	case "--verbose":
+		opts.verbose = true
+		opts.info = true
+	case "--cpuprofile":
+		if i+1 >= len(args) {
+			return 0, true, fmt.Errorf("--cpuprofile requires a path")
+		}
+		opts.cpuProfile = args[i+1]
+		return 1, true, nil
+	case "--profile-rules":
+		opts.profileRules = true
+	default:
+		return 0, false, nil
+	}
+	return 0, true, nil
+}
+
+func (opts *lintOptions) parseConfigFlags(args []string, i int) (int, bool, error) {
+	switch args[i] {
+	case "--config":
+		if i+1 >= len(args) {
+			return 0, true, fmt.Errorf("--config requires a value")
+		}
+		opts.configPath = args[i+1]
+	case "--profile":
+		if i+1 >= len(args) {
+			return 0, true, fmt.Errorf("--profile requires a value")
+		}
+		opts.profile = args[i+1]
+	case "--max":
+		if i+1 >= len(args) {
+			return 0, true, fmt.Errorf("--max requires a value")
+		}
+		var n int
+		if _, err := fmt.Sscanf(args[i+1], "%d", &n); err != nil || n <= 0 {
+			return 0, true, fmt.Errorf("--max requires a positive integer")
+		}
+		opts.maxSize = n
+		opts.maxSet = true
+	case "--fail-on":
+		if i+1 >= len(args) {
+			return 0, true, fmt.Errorf("--fail-on requires error or warning")
+		}
+		switch args[i+1] {
+		case "error", "warning":
+			opts.failOn = args[i+1]
+		default:
+			return 0, true, fmt.Errorf("--fail-on must be error or warning")
+		}
+	default:
+		return 0, false, nil
+	}
+	return 1, true, nil
 }
 
 func (opts *lintOptions) loadConfig() error {

@@ -40,7 +40,7 @@ func (o *Orchestrator) dryRunOperation(operation *RefactoringOperation) *DryRunO
 
 	diffs, err := o.simulateOperationChange(operation)
 	if err != nil {
-		opResult.Success = false
+
 		opResult.Error = err.Error()
 		return opResult
 	}

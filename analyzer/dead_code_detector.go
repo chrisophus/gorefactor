@@ -144,30 +144,36 @@ func extractFunctions(filePath string) []FuncDef {
 	}
 
 	for _, decl := range f.Decls {
-		if fn, ok := decl.(*ast.FuncDecl); ok {
-			def := FuncDef{
-				Name:       fn.Name.Name,
-				File:       filePath,
-				Line:       fset.Position(fn.Pos()).Line,
-				IsExported: fn.Name.IsExported(),
-			}
-
-			// Check if it's a method (has receiver)
-			if fn.Recv != nil && len(fn.Recv.List) > 0 {
-				if ident, ok := fn.Recv.List[0].Type.(*ast.Ident); ok {
-					def.Receiver = ident.Name
-				} else if star, ok := fn.Recv.List[0].Type.(*ast.StarExpr); ok {
-					if ident, ok := star.X.(*ast.Ident); ok {
-						def.Receiver = ident.Name
-					}
-				}
-			}
-
-			funcs = append(funcs, def)
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok {
+			continue
 		}
+		funcs = append(funcs, FuncDef{
+			Name:       fn.Name.Name,
+			Receiver:   receiverIdentName(fn),
+			File:       filePath,
+			Line:       fset.Position(fn.Pos()).Line,
+			IsExported: fn.Name.IsExported(),
+		})
 	}
 
 	return funcs
+
+}
+
+func receiverIdentName(fn *ast.FuncDecl) string {
+	if fn.Recv == nil || len(fn.Recv.List) == 0 {
+		return ""
+	}
+	switch t := fn.Recv.List[0].Type.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.StarExpr:
+		if ident, ok := t.X.(*ast.Ident); ok {
+			return ident.Name
+		}
+	}
+	return ""
 }
 
 // readFileContent reads a file's contents
@@ -188,56 +194,71 @@ func parseGoFile(fset *token.FileSet, filePath, content string) (*ast.File, erro
 // Note: This is a simplified implementation that catches obvious cases
 func (dcd *DeadCodeDetector) DetectDeadFields() []DeadCodeIssue {
 	var issues []DeadCodeIssue
-
 	for _, f := range dcd.files {
-		content, err := readFileContent(f)
-		if err != nil {
-			continue
-		}
+		issues = append(issues, dcd.deadFieldsInFile(f)...)
+	}
+	return issues
 
-		fset := token.NewFileSet()
-		astFile, err := parseGoFile(fset, f, content)
-		if err != nil {
-			continue
-		}
+}
 
-		// Look for struct types
-		for _, decl := range astFile.Decls {
-			if gd, ok := decl.(*ast.GenDecl); ok && gd.Tok == token.TYPE {
-				for _, spec := range gd.Specs {
-					if ts, ok := spec.(*ast.TypeSpec); ok {
-						if st, ok := ts.Type.(*ast.StructType); ok && st.Fields != nil {
-							// Check each field
-							for _, field := range st.Fields.List {
-								for _, name := range field.Names {
-									// Check if field is used
-									uses, _ := NewUseAnalyzer(dcd.files).FindAllUses(SymbolQuery{
-										Name:     name.Name,
-										Receiver: ts.Name.Name,
-									})
-
-									if len(uses) == 0 && !name.IsExported() {
-										issue := DeadCodeIssue{
-											Type:        "field",
-											Name:        name.Name,
-											Receiver:    ts.Name.Name,
-											File:        f,
-											Line:        fset.Position(name.Pos()).Line,
-											CallerCount: 0,
-											IsExported:  name.IsExported(),
-											Reason:      "Never read",
-										}
-										issues = append(issues, issue)
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
+func (dcd *DeadCodeDetector) deadFieldsInFile(f string) []DeadCodeIssue {
+	content, err := readFileContent(f)
+	if err != nil {
+		return nil
 	}
 
+	fset := token.NewFileSet()
+	astFile, err := parseGoFile(fset, f, content)
+	if err != nil {
+		return nil
+	}
+
+	var issues []DeadCodeIssue
+	for _, decl := range astFile.Decls {
+		gd, ok := decl.(*ast.GenDecl)
+		if !ok || gd.Tok != token.TYPE {
+			continue
+		}
+		for _, spec := range gd.Specs {
+			ts, ok := spec.(*ast.TypeSpec)
+			if !ok {
+				continue
+			}
+			st, ok := ts.Type.(*ast.StructType)
+			if !ok || st.Fields == nil {
+				continue
+			}
+			issues = append(issues, dcd.deadFieldsInStruct(fset, f, ts, st)...)
+		}
+	}
+	return issues
+}
+
+func (dcd *DeadCodeDetector) deadFieldsInStruct(fset *token.FileSet, f string, ts *ast.TypeSpec, st *ast.StructType) []DeadCodeIssue {
+	var issues []DeadCodeIssue
+	for _, field := range st.Fields.List {
+		for _, name := range field.Names {
+
+			uses, _ := NewUseAnalyzer(dcd.files).FindAllUses(SymbolQuery{
+				Name:     name.Name,
+				Receiver: ts.Name.Name,
+			})
+
+			if len(uses) != 0 || name.IsExported() {
+				continue
+			}
+			issues = append(issues, DeadCodeIssue{
+				Type:        "field",
+				Name:        name.Name,
+				Receiver:    ts.Name.Name,
+				File:        f,
+				Line:        fset.Position(name.Pos()).Line,
+				CallerCount: 0,
+				IsExported:  name.IsExported(),
+				Reason:      "Never read",
+			})
+		}
+	}
 	return issues
 }
 

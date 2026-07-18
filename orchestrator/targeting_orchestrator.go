@@ -56,7 +56,7 @@ func (o *Orchestrator) matchFuncDecl(funcDecl *ast.FuncDecl, target *TargetSpeci
 		EndLine:   fset.Position(funcDecl.End()).Line,
 		Function:  funcDecl.Name.Name,
 	}
-	loc.Method = receiverTypeName(funcDecl)
+	loc.Method = ReceiverTypeName(funcDecl)
 	return loc, score
 }
 

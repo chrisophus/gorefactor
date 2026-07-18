@@ -7,8 +7,6 @@ import (
 	"go/token"
 	"os"
 	"strings"
-
-	"github.com/chrisophus/gorefactor/orchestrator"
 )
 
 var insertMapEntryFlags = mutFlagSpec(nil)
@@ -90,19 +88,8 @@ func insertMapEntryCommand(args []string) error {
 	out = append(out, []byte(insertText)...)
 	out = append(out, src[insertOff:]...)
 
-	if _, perr := goparser.ParseFile(token.NewFileSet(), file, out, 0); perr != nil {
-		return m.fail(parseErrorf("inserting the element would produce a malformed file: %v", perr))
-	}
-
-	return m.run(func() (string, error) {
-		if err := os.WriteFile(file, out, 0644); err != nil {
-			return "", err
-		}
-		if err := orchestrator.FormatImports(file); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", file, err)
-		}
-		return fmt.Sprintf("Appended an element to %s in %s", target, file), nil
-	})
+	return m.validateAndWrite(file, out, "inserting the element",
+		fmt.Sprintf("Appended an element to %s in %s", target, file))
 }
 
 // findCompositeLit locates the composite literal to extend. It first looks for
@@ -134,17 +121,7 @@ func findCompositeLit(node *ast.File, target string) *ast.CompositeLit {
 		if !ok || fd.Name.Name != target || fd.Body == nil {
 			continue
 		}
-		var found *ast.CompositeLit
-		ast.Inspect(fd.Body, func(n ast.Node) bool {
-			if found != nil {
-				return false
-			}
-			if cl, ok := n.(*ast.CompositeLit); ok {
-				found = cl
-				return false
-			}
-			return true
-		})
+		found := firstNodeOf[*ast.CompositeLit](fd.Body)
 		return found
 	}
 	return nil

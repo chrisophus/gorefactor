@@ -36,8 +36,17 @@ func (d Deadcode) Run(ctx RunContext) ([]Finding, error) {
 	if err := d.Probe(ctx.Root); err != nil {
 		return nil, fmt.Errorf("probe: %w", err)
 	}
-	cmd := exec.Command("deadcode", "-json", "-test", "./...")
-	cmd.Dir = ctx.Root
+	out, err := runSubstrateBinary(ctx.Root, "deadcode", "-json", "-test", "./...")
+	if err != nil {
+		return nil, fmt.Errorf("run substrate binary: %w", err)
+	}
+	return parseDeadcodeJSON(out)
+
+}
+
+func runSubstrateBinary(root, name string, args ...string) ([]byte, error) {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = root
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, runErr := cmd.Output()
@@ -46,9 +55,9 @@ func (d Deadcode) Run(ctx RunContext) ([]Finding, error) {
 		if msg == "" {
 			msg = runErr.Error()
 		}
-		return nil, unavailablef("deadcode failed to run: %s", msg)
+		return nil, unavailablef("%s failed to run: %s", name, msg)
 	}
-	return parseDeadcodeJSON(out)
+	return out, nil
 }
 
 // parseDeadcodeJSON maps deadcode's -json output ([]package with dead funcs)

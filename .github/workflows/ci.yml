@@ -60,7 +60,11 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           git fetch -q origin "${{ github.base_ref }}" --depth=1
-          if git log -1 --format=%B | grep -qF '[baseline-growth]'; then
+          # On pull_request events the checkout is the synthetic merge
+          # commit, whose message is "Merge <sha> into <base>" — reading
+          # `git log -1` there can never see the marker. Read the real PR
+          # head commit instead.
+          if git log -1 --format=%B "${{ github.event.pull_request.head.sha }}" | grep -qF '[baseline-growth]'; then
             echo "skipped: [baseline-growth] marker in head commit"
           else
             ./gorefactor lint . --baseline-ratchet "origin/${{ github.base_ref }}"

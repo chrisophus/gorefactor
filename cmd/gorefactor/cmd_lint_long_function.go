@@ -51,6 +51,12 @@ func (r longFunctionRule) Run(ctx LintContext) []lintIssue {
 				Severity: "warning",
 				Message:  fmt.Sprintf("%s is %d lines (threshold %d, line %d) — consider extracting", m.Key(), m.Lines, threshold, m.Line),
 			}
+			// Live no-target check: if the reducer has no nameable,
+			// non-vacuous block to offer, say so up front instead of
+			// implying extraction will help.
+			if !hasViableLengthExtraction(f, m.Key(), threshold) {
+				iss.Note = "no mechanical extraction applies — needs restructuring, not extraction"
+			}
 			// Extraction autofix is aggressive-only (needs generated helper
 			// names) and therefore always verify-gated. The extractor now names
 			// blocks from their leading comment/structure and correctly handles
@@ -84,6 +90,41 @@ func parseReduceLengthAutoFixCmd(cmd string) (file, function string, ok bool) {
 		}
 	}
 	return "", "", false
+}
+
+func suggestionsOf[E any](xs []E, name func(E) string) []string {
+	out := make([]string, 0, len(xs))
+	for _, x := range xs {
+		out = append(out, name(x))
+	}
+	return out
+}
+
+func anyNameable(names []string) bool {
+	for _, n := range names {
+		if !analyzer.IsGeneratedFallbackName(n) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasViableLengthExtraction reports whether the length reducer can propose at least one nameable,
+// non-vacuous block for the function — the same filter the autofix applies. Cheap (single-file
+// analysis, no mutation); the size rules use it to stop advertising "consider extracting" on
+// findings the fixer has nothing to offer. An analysis error keeps the default message: unknown is
+// not hopeless.
+func hasViableLengthExtraction(file, function string, maxLines int) bool {
+	res, err := analyzer.RecommendLengthReduction(file, function, maxLines)
+	return err != nil || anyNameable(suggestionsOf(res.Extractions, func(e analyzer.LengthExtraction) string { return e.Suggestion }))
+
+}
+
+// hasViableComplexityExtraction is the complexity analog of hasViableLengthExtraction.
+func hasViableComplexityExtraction(file, function string, threshold int) bool {
+	res, err := analyzer.RecommendComplexityReduction(file, function, threshold)
+	return err != nil || anyNameable(suggestionsOf(res.Extractions, func(e analyzer.ComplexityExtraction) string { return e.Suggestion }))
+
 }
 
 func reduceLengthAutoFix(ruleName string, issue lintIssue) error {

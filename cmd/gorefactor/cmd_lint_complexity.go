@@ -49,6 +49,11 @@ func (r complexityRule) Run(ctx LintContext) []lintIssue {
 				Severity: sev,
 				Message:  fmt.Sprintf("%s has cyclomatic complexity %d (threshold %d, line %d) — consider extracting", c.Name, c.Complexity, threshold, c.Line),
 			}
+			// Live no-target check, mirroring long-function's: don't imply
+			// extraction will help when the reducer has nothing to offer.
+			if !hasViableComplexityExtraction(f, c.Name, threshold) {
+				iss.Note = "no mechanical extraction applies — needs restructuring, not extraction"
+			}
 			// Only offer the autofix when there is at least one block to shed;
 			// a function whose complexity is pure straight-line branching has no
 			// extractable top-level block (RecommendComplexityReduction returns

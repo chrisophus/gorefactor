@@ -169,7 +169,7 @@ func TestLogPropagationAutoFixEndToEnd(t *testing.T) {
 	for _, r := range rules {
 		issues = append(issues, r.Run(ctx)...)
 	}
-	applied, reverted, failed := applyAutoFixes(issues, ctx, rules, false)
+	applied, reverted, failed := applyAutoFixes(issues, ctx, rules, false, false)
 	if failed > 0 || reverted > 0 {
 		t.Fatalf("applyAutoFixes: applied=%d reverted=%d failed=%d", applied, reverted, failed)
 	}
@@ -200,7 +200,7 @@ func TestDuplicateBareSentinelAttachesAutofix(t *testing.T) {
 		}
 	}
 	rules := []LintRule{duplicateBareSentinelRule{}}
-	applied, _, failed := applyAutoFixes(issues, ctx, rules, false)
+	applied, _, failed := applyAutoFixes(issues, ctx, rules, false, false)
 	if failed > 0 || applied == 0 {
 		t.Fatalf("applyAutoFixes: applied=%d failed=%d", applied, failed)
 	}

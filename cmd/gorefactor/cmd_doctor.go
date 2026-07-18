@@ -254,7 +254,9 @@ func reportDoctorStages(stages []doctorStage, jsonOut bool) {
 // `lint --fix --verify`, but silent and always verified, since doctor is
 // itself the trust gate. Used by `doctor --fix`.
 func doctorAutoFix(root, fixLevel, configPath string) (applied, reverted, failed int, err error) {
-	opts := lintOptions{root: root, fix: true, verify: true, fixLevel: fixLevel, configPath: configPath}
+	opts := lintOptions{root: root, configPath: configPath,
+		lintFixOptions: lintFixOptions{fix: true, verify: true, fixLevel: fixLevel}}
+
 	if err := opts.loadConfig(); err != nil {
 		return 0, 0, 0, err
 	}
@@ -268,7 +270,7 @@ func doctorAutoFix(root, fixLevel, configPath string) (applied, reverted, failed
 	rules := filterLintRules(defaultLintRules(), opts)
 	issues := runLintRules(rules, ctx, opts)
 	issues = applyConfigSeverity(issues, opts)
-	applied, reverted, failed = applyAutoFixes(issues, ctx, rules, true)
+	applied, reverted, failed = applyAutoFixes(issues, ctx, rules, true, false)
 
 	// Whole-tree gofmt+goimports sweep: individual mutation ops already format
 	// the files they touch, but this catches files no autofix rule reached.

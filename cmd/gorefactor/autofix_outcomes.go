@@ -22,6 +22,7 @@ const (
 	outcomeApplied  = "applied"
 	outcomeReverted = "reverted"
 	outcomeNoTarget = "no_target"
+	outcomeVerified = "verified" // probe: fix applied cleanly and passed the gate, then was restored
 )
 
 // autofixOutcome is one journal record: what happened when the autofix for
@@ -123,6 +124,9 @@ func annotateIssuesWithOutcomes(root string, issues []lintIssue) {
 		return
 	}
 	for i := range issues {
+		if issues[i].Note != "" {
+			continue // a live, fresher signal (e.g. the rule's own no-target check) wins
+		}
 		switch outcomes[issueFingerprint(issues[i])] {
 		case outcomeReverted:
 			switch issues[i].Rule {
@@ -139,6 +143,8 @@ func annotateIssuesWithOutcomes(root string, issues []lintIssue) {
 			case "long-function", "complexity", "extract-candidate":
 				issues[i].Note = "no mechanical extraction applies — needs restructuring, not extraction"
 			}
+		case outcomeVerified:
+			issues[i].Note = "autofix verified safe by probe (gate passed)"
 		}
 	}
 }

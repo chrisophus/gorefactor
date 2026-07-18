@@ -184,7 +184,7 @@ const defaultAutoFixBatchSize = 8
 // together — see bisectAutoFixBatch for how a red batch is resolved down to
 // the exact fix(es) that broke it. Without verify it is the original
 // apply-and-hope behavior, ungated and one at a time.
-func applyAutoFixes(issues []lintIssue, ctx LintContext, rules []LintRule, verify bool) (applied, reverted, failed int) {
+func applyAutoFixes(issues []lintIssue, ctx LintContext, rules []LintRule, verify, probe bool) (applied, reverted, failed int) {
 	rulesByName := make(map[string]LintRule, len(rules))
 	for _, r := range rules {
 		rulesByName[r.Name()] = r
@@ -235,13 +235,23 @@ func applyAutoFixes(issues []lintIssue, ctx LintContext, rules []LintRule, verif
 		if end > len(fixable) {
 			end = len(fixable)
 		}
-		a, r, f := bisectAutoFixBatch(fixable[i:end], ctx, fixerByRule, &outcomes)
+		a, r, f := bisectAutoFixBatch(fixable[i:end], ctx, fixerByRule, &outcomes, probe)
 		applied += a
 		reverted += r
 		failed += f
 	}
 	return
 
+}
+
+func restoreSnapshots(dirs []string, snaps map[string]dirSnapshot, context string) {
+	for _, d := range dirs {
+		if s, ok := snaps[d]; ok {
+			if rerr := s.restore(); rerr != nil {
+				fmt.Fprintf(os.Stderr, "%s: restore of %s failed: %v\n", context, d, rerr)
+			}
+		}
+	}
 }
 
 // bisectAutoFixBatch applies every issue in pending, snapshotting each distinct package directory
@@ -251,7 +261,7 @@ func applyAutoFixes(issues []lintIssue, ctx LintContext, rules []LintRule, verif
 // the group is split in half, and each half is retried independently (binary search) — a clean
 // half resolves in a single gate call, a half that's still red keeps splitting until the exact
 // culprit(s) are isolated and reverted on their own.
-func bisectAutoFixBatch(pending []lintIssue, ctx LintContext, fixerByRule map[string]FixableRule, outcomes *[]autofixOutcome) (applied, reverted, failed int) {
+func bisectAutoFixBatch(pending []lintIssue, ctx LintContext, fixerByRule map[string]FixableRule, outcomes *[]autofixOutcome, probe bool) (applied, reverted, failed int) {
 	dirs := make([]string, 0, len(pending))
 	seen := map[string]bool{}
 	for _, iss := range pending {
@@ -286,19 +296,21 @@ func bisectAutoFixBatch(pending []lintIssue, ctx LintContext, fixerByRule map[st
 
 	gerr := verifyGateFn(ctx.Root)
 	if gerr == nil {
+		outcome := outcomeApplied
+		if probe {
+			// Probe mode is a pure sensor run: the gate's verdict is the
+			// product, the mutation is not. Restore everything and record
+			// that the fix is verified safe.
+			outcome = outcomeVerified
+			restoreSnapshots(dirs, snaps, "probe")
+		}
 		for _, iss := range succeeded {
-			*outcomes = append(*outcomes, recordOutcome(iss, outcomeApplied, ""))
+			*outcomes = append(*outcomes, recordOutcome(iss, outcome, ""))
 		}
 		return len(succeeded), 0, failed
 	}
 
-	for _, d := range dirs {
-		if s, ok := snaps[d]; ok {
-			if rerr := s.restore(); rerr != nil {
-				fmt.Fprintf(os.Stderr, "verify: revert of %s failed: %v\n", d, rerr)
-			}
-		}
-	}
+	restoreSnapshots(dirs, snaps, "verify")
 
 	if len(succeeded) == 1 {
 		fmt.Fprintf(os.Stderr, "reverted %s [%s]: gate failed after fix\n%v\n", succeeded[0].File, succeeded[0].Rule, gerr)
@@ -307,8 +319,8 @@ func bisectAutoFixBatch(pending []lintIssue, ctx LintContext, fixerByRule map[st
 	}
 
 	mid := len(succeeded) / 2
-	a1, r1, f1 := bisectAutoFixBatch(succeeded[:mid], ctx, fixerByRule, outcomes)
-	a2, r2, f2 := bisectAutoFixBatch(succeeded[mid:], ctx, fixerByRule, outcomes)
+	a1, r1, f1 := bisectAutoFixBatch(succeeded[:mid], ctx, fixerByRule, outcomes, probe)
+	a2, r2, f2 := bisectAutoFixBatch(succeeded[mid:], ctx, fixerByRule, outcomes, probe)
 	return a1 + a2, r1 + r2, failed + f1 + f2
 
 }

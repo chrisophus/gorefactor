@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -88,17 +89,14 @@ func filterDisplayIssues(issues []lintIssue, opts lintOptions) []lintIssue {
 func sortLintIssues(issues []lintIssue) {
 	sort.SliceStable(issues, func(i, j int) bool {
 		a, b := issues[i], issues[j]
-		if a.File != b.File {
-			return a.File < b.File
-		}
-		if a.Rule != b.Rule {
-			return a.Rule < b.Rule
-		}
-		if a.Severity != b.Severity {
-			return a.Severity < b.Severity
-		}
-		return a.Message < b.Message
+		return cmp.Or(
+			strings.Compare(a.File, b.File),
+			strings.Compare(a.Rule, b.Rule),
+			strings.Compare(a.Severity, b.Severity),
+			strings.Compare(a.Message, b.Message),
+		) < 0
 	})
+
 }
 
 // runLintRules executes the given rules and aggregates their issues. It honors

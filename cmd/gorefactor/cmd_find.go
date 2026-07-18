@@ -1,9 +1,7 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/chrisophus/gorefactor/analyzer"
 )
@@ -38,10 +36,9 @@ func findCallersCommand(args []string) error {
 		return err
 	}
 	if jsonOut {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(res)
+		return printJSON(res)
 	}
+
 	fmt.Printf("Target: %s%s (defined at %s:%d, exported=%v)\n", recvPrefix(recv), name, res.TargetFile, res.TargetLine, res.IsExported)
 	fmt.Printf("Total callers: %d  (direct=%d  indirect=%d  test=%d)\n",
 		res.TotalCallCount, len(res.DirectCallers), len(res.IndirectCallers), len(res.TestCallers))
@@ -96,10 +93,9 @@ func findUsesCommand(args []string) error {
 		return err
 	}
 	if jsonOut {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(uses)
+		return printJSON(uses)
 	}
+
 	fmt.Printf("%d use(s) of %s%s:\n", len(uses), recvPrefix(recv), name)
 	for _, u := range uses {
 		fmt.Printf("  %s:%d  [%s]  %s\n", u.File, u.Line, u.Context, u.Snippet)
@@ -136,10 +132,9 @@ func findImplementationsCommand(args []string) error {
 		return err
 	}
 	if jsonOut {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(res)
+		return printJSON(res)
 	}
+
 	fmt.Printf("Interface %s (%d methods, defined at %s:%d):\n", res.Interface.Name, len(res.Interface.Methods), res.Interface.File, res.Interface.Line)
 	for _, m := range res.Interface.Methods {
 		fmt.Printf("  %s%s\n", m.Name, m.Signature)
@@ -189,9 +184,7 @@ func findPackageDepsCommand(args []string) error {
 			"packages": graph.AllPackages(),
 			"summary":  graph.Summary(),
 		}
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(result)
+		return printJSON(result)
 	}
 
 	fmt.Println(graph.Summary())

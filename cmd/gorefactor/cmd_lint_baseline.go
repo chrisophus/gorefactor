@@ -6,7 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
+
+	"github.com/chrisophus/gorefactor/doctor"
 )
 
 // defaultBaselinePath is where --write-baseline / --baseline read and write
@@ -49,21 +50,8 @@ func issueFingerprint(iss lintIssue) string {
 // resilient to line drift and small size changes in an otherwise-identical
 // finding.
 func normalizeLintMessage(msg string) string {
-	var b strings.Builder
-	inDigits := false
-	for i := 0; i < len(msg); i++ {
-		c := msg[i]
-		if c >= '0' && c <= '9' {
-			if !inDigits {
-				b.WriteByte('#')
-				inDigits = true
-			}
-			continue
-		}
-		inDigits = false
-		b.WriteByte(c)
-	}
-	return b.String()
+	return doctor.NormalizeMessage(msg)
+
 }
 
 // writeBaseline records the full current issue set (every severity, so nothing

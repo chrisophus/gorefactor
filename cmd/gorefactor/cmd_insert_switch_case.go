@@ -109,21 +109,27 @@ func insertSwitchCaseCommand(args []string) error {
 	})
 }
 
-// firstExprSwitch returns the first expression switch statement (in source
-// order) found anywhere inside body, or nil if there is none.
-func firstExprSwitch(body *ast.BlockStmt) *ast.SwitchStmt {
-	var found *ast.SwitchStmt
-	ast.Inspect(body, func(n ast.Node) bool {
-		if found != nil {
+func firstNodeOf[T ast.Node](root ast.Node) T {
+	var found T
+	var ok bool
+	ast.Inspect(root, func(n ast.Node) bool {
+		if ok {
 			return false
 		}
-		if sw, ok := n.(*ast.SwitchStmt); ok {
-			found = sw
+		if t, isT := n.(T); isT {
+			found, ok = t, true
 			return false
 		}
 		return true
 	})
 	return found
+}
+
+// firstExprSwitch returns the first expression switch statement (in source
+// order) found anywhere inside body, or nil if there is none.
+func firstExprSwitch(body *ast.BlockStmt) *ast.SwitchStmt {
+	return firstNodeOf[*ast.SwitchStmt](body)
+
 }
 
 // defaultClause returns the switch's default clause, or nil when it has none.

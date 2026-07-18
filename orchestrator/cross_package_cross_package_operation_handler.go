@@ -50,7 +50,7 @@ func (h *CrossPackageOperationHandler) planCrossPackageMove(sourceFile, destFile
 	if fn.Recv != nil {
 		return nil, fmt.Errorf(
 			"cannot move method %s:%s across packages: cross-package moves support only top-level functions; move the receiver type or convert the method to a function first",
-			receiverTypeName(fn), funcName)
+			ReceiverTypeName(fn), funcName)
 	}
 
 	srcDir, err := filepath.Abs(filepath.Dir(sourceFile))

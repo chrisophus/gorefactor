@@ -109,7 +109,7 @@ func (o *Orchestrator) evaluateFunctionExistsCondition(condition *Condition, ope
 		if !ok || fn.Name.Name != name {
 			continue
 		}
-		if receiver != "" && receiverTypeName(fn) != receiver {
+		if receiver != "" && ReceiverTypeName(fn) != receiver {
 			continue
 		}
 		exists = true

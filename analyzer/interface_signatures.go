@@ -59,39 +59,14 @@ func (ia *InterfaceAnalyzer) extractMethodSignature(fn *ast.FuncDecl) string {
 
 	sig.WriteString(fn.Name.Name)
 	sig.WriteString("(")
-
-	// Parameters
 	if fn.Type.Params != nil {
-		for i, param := range fn.Type.Params.List {
-			if i > 0 {
-				sig.WriteString(", ")
-			}
-			sig.WriteString(ia.symbolAnalyzer.typeExprToString(param.Type))
-		}
+		ia.writeTypeList(&sig, fn.Type.Params.List)
 	}
-
 	sig.WriteString(")")
-
-	// Return types
-	if fn.Type.Results != nil && len(fn.Type.Results.List) > 0 {
-		sig.WriteString(" ")
-		if len(fn.Type.Results.List) > 1 {
-			sig.WriteString("(")
-		}
-
-		for i, result := range fn.Type.Results.List {
-			if i > 0 {
-				sig.WriteString(", ")
-			}
-			sig.WriteString(ia.symbolAnalyzer.typeExprToString(result.Type))
-		}
-
-		if len(fn.Type.Results.List) > 1 {
-			sig.WriteString(")")
-		}
-	}
+	ia.writeResultTypes(&sig, fn.Type.Results)
 
 	return sig.String()
+
 }
 
 // extractFuncTypeSignature extracts signature from a func type
@@ -99,35 +74,35 @@ func (ia *InterfaceAnalyzer) extractFuncTypeSignature(fn *ast.FuncType) string {
 	var sig strings.Builder
 
 	sig.WriteString("(")
-
 	if fn.Params != nil {
-		for i, param := range fn.Params.List {
-			if i > 0 {
-				sig.WriteString(", ")
-			}
-			sig.WriteString(ia.symbolAnalyzer.typeExprToString(param.Type))
-		}
+		ia.writeTypeList(&sig, fn.Params.List)
 	}
-
 	sig.WriteString(")")
-
-	if fn.Results != nil && len(fn.Results.List) > 0 {
-		sig.WriteString(" ")
-		if len(fn.Results.List) > 1 {
-			sig.WriteString("(")
-		}
-
-		for i, result := range fn.Results.List {
-			if i > 0 {
-				sig.WriteString(", ")
-			}
-			sig.WriteString(ia.symbolAnalyzer.typeExprToString(result.Type))
-		}
-
-		if len(fn.Results.List) > 1 {
-			sig.WriteString(")")
-		}
-	}
+	ia.writeResultTypes(&sig, fn.Results)
 
 	return sig.String()
+
+}
+
+func (ia *InterfaceAnalyzer) writeTypeList(sig *strings.Builder, fields []*ast.Field) {
+	for i, field := range fields {
+		if i > 0 {
+			sig.WriteString(", ")
+		}
+		sig.WriteString(ia.symbolAnalyzer.typeExprToString(field.Type))
+	}
+}
+
+func (ia *InterfaceAnalyzer) writeResultTypes(sig *strings.Builder, results *ast.FieldList) {
+	if results == nil || len(results.List) == 0 {
+		return
+	}
+	sig.WriteString(" ")
+	if len(results.List) > 1 {
+		sig.WriteString("(")
+	}
+	ia.writeTypeList(sig, results.List)
+	if len(results.List) > 1 {
+		sig.WriteString(")")
+	}
 }

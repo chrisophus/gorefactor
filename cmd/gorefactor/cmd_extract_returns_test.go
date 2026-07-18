@@ -8,18 +8,6 @@ import (
 	"testing"
 )
 
-// mustBuildModule compiles the temp module containing path, failing the test on
-// any compile error — the extraction regressions produced build errors, so
-// parse-validity alone would not catch them.
-func mustBuildModule(t *testing.T, path string) {
-	t.Helper()
-	cmd := exec.Command("go", "build", "./...")
-	cmd.Dir = filepath.Dir(path)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("module did not build after extraction: %v\n%s", err, out)
-	}
-}
-
 // Without --allow-returns a return-bearing block is refused, exactly as before.
 func TestExtract_ReturnsRefusedWithoutFlag(t *testing.T) {
 	path := writeComplexityModule(t, liftableSrc)
@@ -31,25 +19,6 @@ func TestExtract_ReturnsRefusedWithoutFlag(t *testing.T) {
 		t.Fatalf("expected return-statement refusal, got: %v", err)
 	}
 }
-
-const liftableSrc = `package cxmod
-
-import "errors"
-
-func Process(items []string) (int, error) {
-	if len(items) == 0 {
-		return 0, errors.New("no items")
-	}
-	if len(items) > 100 {
-		return 0, errors.New("too many items")
-	}
-	count := 0
-	for _, it := range items {
-		count += len(it)
-	}
-	return count, nil
-}
-`
 
 // With --allow-returns the returns are lifted into a (results..., done bool)
 // helper and the call site propagates a taken return.
@@ -71,6 +40,25 @@ func TestExtract_AllowReturnsLiftsBlock(t *testing.T) {
 		}
 	}
 }
+
+const liftableSrc = `package cxmod
+
+import "errors"
+
+func Process(items []string) (int, error) {
+	if len(items) == 0 {
+		return 0, errors.New("no items")
+	}
+	if len(items) > 100 {
+		return 0, errors.New("too many items")
+	}
+	count := 0
+	for _, it := range items {
+		count += len(it)
+	}
+	return count, nil
+}
+`
 
 // A block that both returns and assigns an outer variable used later cannot be
 // lifted mechanically; it must be refused, not silently miscompiled.
@@ -164,14 +152,33 @@ func Order(xs []int) {
 	}
 }
 
-// readBack returns the rewritten file content, failing the test on error.
-func readBack(t *testing.T, path string) string {
-	t.Helper()
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
+func TestExtract_TailReturnLiftUsesUnconditionalReturn(t *testing.T) {
+	path := writeComplexityModule(t, tailReturnSrc)
+	if err := extractCommand([]string{path, "7", "12", "classifyRest", "--allow-returns"}); err != nil {
+		t.Fatalf("extract tail block: %v", err)
 	}
-	return string(b)
+	got := readBack(t, path)
+	if strings.Contains(got, "if r0, r1, done := classifyRest") {
+		t.Errorf("tail block should not use conditional return (falls off end)\n---\n%s", got)
+	}
+	for _, want := range []string{"r0, r1, _ := classifyRest(n)", "return r0, r1"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q\n---\n%s", want, got)
+		}
+	}
+	mustBuildModule(t, path)
+}
+
+func TestExtract_TypeSwitchBindingNotLiftedToParam(t *testing.T) {
+	path := writeComplexityModule(t, typeSwitchSrc)
+	if err := extractCommand([]string{path, "5", "11", "describeKind"}); err != nil {
+		t.Fatalf("extract type-switch block: %v", err)
+	}
+	got := readBack(t, path)
+	if strings.Contains(got, "s any") || strings.Contains(got, ", s ") {
+		t.Errorf("type-switch var s wrongly lifted to a parameter\n---\n%s", got)
+	}
+	mustBuildModule(t, path)
 }
 
 // A return-bearing block that is the function's tail must return the helper's
@@ -192,21 +199,16 @@ func Classify(n int) (string, error) {
 }
 `
 
-func TestExtract_TailReturnLiftUsesUnconditionalReturn(t *testing.T) {
-	path := writeComplexityModule(t, tailReturnSrc)
-	if err := extractCommand([]string{path, "7", "12", "classifyRest", "--allow-returns"}); err != nil {
-		t.Fatalf("extract tail block: %v", err)
+// mustBuildModule compiles the temp module containing path, failing the test on
+// any compile error — the extraction regressions produced build errors, so
+// parse-validity alone would not catch them.
+func mustBuildModule(t *testing.T, path string) {
+	t.Helper()
+	cmd := exec.Command("go", "build", "./...")
+	cmd.Dir = filepath.Dir(path)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("module did not build after extraction: %v\n%s", err, out)
 	}
-	got := readBack(t, path)
-	if strings.Contains(got, "if r0, r1, done := classifyRest") {
-		t.Errorf("tail block should not use conditional return (falls off end)\n---\n%s", got)
-	}
-	for _, want := range []string{"r0, r1, _ := classifyRest(n)", "return r0, r1"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("missing %q\n---\n%s", want, got)
-		}
-	}
-	mustBuildModule(t, path)
 }
 
 // A type-switch case variable (`switch s := x.(type)`) is declared in the block
@@ -226,14 +228,12 @@ func Describe(n any) string {
 }
 `
 
-func TestExtract_TypeSwitchBindingNotLiftedToParam(t *testing.T) {
-	path := writeComplexityModule(t, typeSwitchSrc)
-	if err := extractCommand([]string{path, "5", "11", "describeKind"}); err != nil {
-		t.Fatalf("extract type-switch block: %v", err)
+// readBack returns the rewritten file content, failing the test on error.
+func readBack(t *testing.T, path string) string {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
 	}
-	got := readBack(t, path)
-	if strings.Contains(got, "s any") || strings.Contains(got, ", s ") {
-		t.Errorf("type-switch var s wrongly lifted to a parameter\n---\n%s", got)
-	}
-	mustBuildModule(t, path)
+	return string(b)
 }

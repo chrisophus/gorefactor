@@ -1,21 +1,16 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
+	"slices"
 
 	"github.com/chrisophus/gorefactor/analyzer"
 )
 
 // hasFlag reports whether flag appears anywhere in args.
 func hasFlag(args []string, flag string) bool {
-	for _, a := range args {
-		if a == flag {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(args, flag)
+
 }
 
 // runReduceComplexity implements `gorefactor recommend --reduce-complexity <file>
@@ -50,11 +45,8 @@ func runReduceComplexity(args []string) error {
 	if err != nil {
 		return err
 	}
-
 	if rf.jsonOut {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(res)
+		return printJSON(res)
 	}
 
 	if res.Complexity <= res.Threshold {

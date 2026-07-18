@@ -1,9 +1,7 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/chrisophus/gorefactor/analyzer"
 )
@@ -42,10 +40,9 @@ func runReduceLength(args []string) error {
 		return err
 	}
 	if rf.jsonOut {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(res)
+		return printJSON(res)
 	}
+
 	if len(res.Extractions) == 0 {
 		fmt.Printf("%s is %d lines (threshold %d) — nothing to extract.\n", res.Function, res.Lines, res.Threshold)
 		return nil

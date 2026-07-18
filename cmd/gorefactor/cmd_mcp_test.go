@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -195,11 +197,8 @@ func schemaProperties(t *testing.T, schema any) map[string]map[string]interface{
 }
 
 func keysOf(m map[string]map[string]interface{}) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	return out
+	return slices.Collect(maps.Keys(m))
+
 }
 
 func toolText(t *testing.T, res *mcp.CallToolResult) string {

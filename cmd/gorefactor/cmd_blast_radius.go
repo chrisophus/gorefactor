@@ -147,18 +147,9 @@ func blastRadiusCommand(args []string) error {
 		return err
 	}
 
-	name, recv := splitNameReceiver(target)
-	def := idx.lookup(name, recv)
-	if def == nil {
-		keys := make([]string, 0, len(idx.defs))
-		for k := range idx.defs {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		if len(keys) > 30 {
-			keys = keys[:30]
-		}
-		return notFoundError(fmt.Sprintf("function %q not found", target), target, keys)
+	def, err := idx.lookupTargetOrSuggest(target)
+	if err != nil {
+		return err
 	}
 
 	br := computeBlastRadius(idx, def)

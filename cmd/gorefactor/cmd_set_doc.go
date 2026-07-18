@@ -7,8 +7,6 @@ import (
 	"go/token"
 	"os"
 	"strings"
-
-	"github.com/chrisophus/gorefactor/orchestrator"
 )
 
 var setDocFlags = mutFlagSpec(nil)
@@ -83,19 +81,8 @@ func setDocCommand(args []string) error {
 	out = append(out, []byte(comment)...)
 	out = append(out, src[declStart:]...)
 
-	if _, perr := goparser.ParseFile(token.NewFileSet(), file, out, 0); perr != nil {
-		return m.fail(parseErrorf("doc comment would produce a malformed file: %v", perr))
-	}
-
-	return m.run(func() (string, error) {
-		if err := os.WriteFile(file, out, 0644); err != nil {
-			return "", err
-		}
-		if err := orchestrator.FormatImports(file); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", file, err)
-		}
-		return fmt.Sprintf("Set doc comment on %s in %s", locator, file), nil
-	})
+	return m.validateAndWrite(file, out, "the doc comment",
+		fmt.Sprintf("Set doc comment on %s in %s", locator, file))
 }
 
 // findTopLevelDecl locates a top-level declaration by name. Functions are
@@ -167,17 +154,28 @@ func formatDocComment(name, text string) string {
 		if pi == 0 && (len(words) == 0 || words[0] != name) {
 			words = append([]string{name}, words...)
 		}
-		line := "//"
-		for _, w := range words {
-			if len(line)+1+len(w) > docCommentWidth && line != "//" {
-				b.WriteString(line)
-				b.WriteString("\n")
-				line = "//"
+		// Wrap by tracking the pending line's words and width instead of
+		// concatenating into a string in the loop.
+		var cur []string
+		curLen := len("//")
+		writeLine := func() {
+			b.WriteString("//")
+			for _, w := range cur {
+				b.WriteString(" ")
+				b.WriteString(w)
 			}
-			line += " " + w
+			b.WriteString("\n")
 		}
-		b.WriteString(line)
-		b.WriteString("\n")
+		for _, w := range words {
+			if curLen+1+len(w) > docCommentWidth && len(cur) > 0 {
+				writeLine()
+				cur = cur[:0]
+				curLen = len("//")
+			}
+			cur = append(cur, w)
+			curLen += 1 + len(w)
+		}
+		writeLine()
 	}
 	return b.String()
 

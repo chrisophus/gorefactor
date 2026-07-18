@@ -140,7 +140,13 @@ func buildExtractedFunc(fset *token.FileSet, methodName string, stmts []ast.Stmt
 			return "", "", err
 		}
 	}
+	newFunc = buildExtractedFuncDecl(methodName, body.String(), params, returns)
+	callSite = buildExtractedCallSite(methodName, params, returns)
+	return newFunc, callSite, nil
 
+}
+
+func buildExtractedFuncDecl(methodName, body string, params, returns []paramSpec) string {
 	var sb strings.Builder
 	sb.WriteString("\nfunc ")
 	sb.WriteString(methodName)
@@ -165,7 +171,7 @@ func buildExtractedFunc(fset *token.FileSet, methodName string, stmts []ast.Stmt
 		sb.WriteString(")")
 	}
 	sb.WriteString(" {\n")
-	sb.WriteString(body.String())
+	sb.WriteString(body)
 	if len(returns) > 0 {
 		sb.WriteString("\n\treturn ")
 		for i, r := range returns {
@@ -176,32 +182,31 @@ func buildExtractedFunc(fset *token.FileSet, methodName string, stmts []ast.Stmt
 		}
 	}
 	sb.WriteString("\n}\n")
+	return sb.String()
+}
 
+func buildExtractedCallSite(methodName string, params, returns []paramSpec) string {
 	var args []string
 	for _, p := range params {
 		args = append(args, p.name)
 	}
 	if len(returns) == 0 {
-		callSite = fmt.Sprintf("%s(%s)", methodName, strings.Join(args, ", "))
-	} else {
-		var names []string
-		allOuter := true
-		for _, r := range returns {
-			names = append(names, r.name)
-			if !r.outer {
-				allOuter = false
-			}
-		}
-		// When every returned variable already exists before the block the
-		// call site is a plain write-back; := would shadow (or fail to
-		// compile with no new variables on the left).
-		assign := ":="
-		if allOuter {
-			assign = "="
-		}
-		callSite = fmt.Sprintf("%s %s %s(%s)", strings.Join(names, ", "), assign, methodName, strings.Join(args, ", "))
+		return fmt.Sprintf("%s(%s)", methodName, strings.Join(args, ", "))
 	}
-	return sb.String(), callSite, nil
+	var names []string
+	allOuter := true
+	for _, r := range returns {
+		names = append(names, r.name)
+		if !r.outer {
+			allOuter = false
+		}
+	}
+
+	assign := ":="
+	if allOuter {
+		assign = "="
+	}
+	return fmt.Sprintf("%s %s %s(%s)", strings.Join(names, ", "), assign, methodName, strings.Join(args, ", "))
 }
 
 func rewriteExtraction(filePath string, fset *token.FileSet, enclosing *ast.FuncDecl, stmts []ast.Stmt, newFunc, callSite string) error {

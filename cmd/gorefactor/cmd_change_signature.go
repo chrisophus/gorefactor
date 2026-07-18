@@ -57,15 +57,8 @@ func parseSignatureAction(flags map[string]string, pos []string) (*sigAction, er
 	count := 0
 	if v := flags["--add-param"]; v != "" {
 		count++
-		a.kind = "add"
-		fields := strings.Fields(v)
-		if len(fields) < 2 {
-			return nil, usageErrorf(`--add-param wants "name type" (e.g. --add-param "ctx context.Context")`)
-		}
-		a.paramName = fields[0]
-		a.paramType = strings.Join(fields[1:], " ")
-		if !token.IsIdentifier(a.paramName) {
-			return nil, usageErrorf("invalid parameter name %q", a.paramName)
+		if err := parseSigAddParam(a, v); err != nil {
+			return nil, err
 		}
 	}
 	if v := flags["--remove-param"]; v != "" {
@@ -75,45 +68,74 @@ func parseSignatureAction(flags map[string]string, pos []string) (*sigAction, er
 	}
 	if v := flags["--rename-param"]; v != "" {
 		count++
-		a.kind = "rename"
-		old, newName := v, ""
-		for _, sep := range []string{"=", ",", " "} {
-			if i := strings.Index(v, sep); i >= 0 {
-				old, newName = v[:i], v[i+len(sep):]
-				break
-			}
+		if err := parseSigRenameParam(a, v, pos); err != nil {
+			return nil, err
 		}
-		if newName == "" && len(pos) >= 3 {
-			newName = pos[2] // --rename-param old new (two-token form)
-		}
-		if old == "" || newName == "" {
-			return nil, usageErrorf("--rename-param wants <old> <new> (or \"old=new\")")
-		}
-		if !token.IsIdentifier(newName) {
-			return nil, usageErrorf("invalid parameter name %q", newName)
-		}
-		a.oldName, a.newName = strings.TrimSpace(old), strings.TrimSpace(newName)
 	}
 	if count != 1 {
 		return nil, usageErrorf("change-signature wants exactly one of --add-param, --remove-param, --rename-param")
 	}
+	if err := parseSigActionModifiers(a, flags); err != nil {
+		return nil, err
+	}
+	return a, nil
+
+}
+
+func parseSigAddParam(a *sigAction, v string) error {
+	a.kind = "add"
+	fields := strings.Fields(v)
+	if len(fields) < 2 {
+		return usageErrorf(`--add-param wants "name type" (e.g. --add-param "ctx context.Context")`)
+	}
+	a.paramName = fields[0]
+	a.paramType = strings.Join(fields[1:], " ")
+	if !token.IsIdentifier(a.paramName) {
+		return usageErrorf("invalid parameter name %q", a.paramName)
+	}
+	return nil
+}
+
+func parseSigRenameParam(a *sigAction, v string, pos []string) error {
+	a.kind = "rename"
+	old, newName := v, ""
+	for _, sep := range []string{"=", ",", " "} {
+		if i := strings.Index(v, sep); i >= 0 {
+			old, newName = v[:i], v[i+len(sep):]
+			break
+		}
+	}
+	if newName == "" && len(pos) >= 3 {
+		newName = pos[2]
+	}
+	if old == "" || newName == "" {
+		return usageErrorf("--rename-param wants <old> <new> (or \"old=new\")")
+	}
+	if !token.IsIdentifier(newName) {
+		return usageErrorf("invalid parameter name %q", newName)
+	}
+	a.oldName, a.newName = strings.TrimSpace(old), strings.TrimSpace(newName)
+	return nil
+}
+
+func parseSigActionModifiers(a *sigAction, flags map[string]string) error {
 	if v, ok := flags["--position"]; ok {
 		if a.kind != "add" {
-			return nil, usageErrorf("--position only applies to --add-param")
+			return usageErrorf("--position only applies to --add-param")
 		}
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 0 {
-			return nil, usageErrorf("--position wants a non-negative integer, got %q", v)
+			return usageErrorf("--position wants a non-negative integer, got %q", v)
 		}
 		a.position = n
 	}
 	if v, ok := flags["--call-value"]; ok {
 		if a.kind != "add" {
-			return nil, usageErrorf("--call-value only applies to --add-param")
+			return usageErrorf("--call-value only applies to --add-param")
 		}
 		a.callValue = v
 	}
-	return a, nil
+	return nil
 }
 
 func changeSignatureCommand(args []string) error {

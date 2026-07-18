@@ -28,7 +28,7 @@ func FileErrorWrapIssues(file string) ([]ErrorWrapIssue, error) {
 	var out []ErrorWrapIssue
 	for _, decl := range astFile.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Body == nil || !fn.Name.IsExported() || !returnsError(fn) {
+		if !ok || fn.Body == nil || !fn.Name.IsExported() || !FuncReturnsError(fn) {
 			continue
 		}
 		ast.Inspect(fn.Body, func(n ast.Node) bool {
@@ -63,7 +63,7 @@ func FileErrorWrapIssues(file string) ([]ErrorWrapIssue, error) {
 	return out, nil
 }
 
-func returnsError(fn *ast.FuncDecl) bool {
+func FuncReturnsError(fn *ast.FuncDecl) bool {
 	if fn.Type.Results == nil {
 		return false
 	}

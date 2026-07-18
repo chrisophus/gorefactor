@@ -19,155 +19,10 @@ type TargetLocation struct {
 	Method    string `json:"method,omitempty"`
 }
 
-// findTargetBySemantics uses semantic information to find the target
-
-// Check function declarations
-
-// Check type declarations
-
-// First check if the entire GenDecl matches (for code patterns)
-
-// Will be set below if we find a specific spec
-
-// Reuse Function field for type name
-
-// Check const/var declarations
-
-// Reuse Function field for const/var name
-
-// calculateSemanticScore calculates how well a node matches the target specification
-
-// Check function name match
-
-// Check method name match
-
-// Check type name match
-
-// Check const name match
-
-// Check var name match
-
-// Check code pattern match with regex support
-
-// Try regex first, fall back to simple contains
-
-// Lower score for non-regex match
-
-// Check variable names
-
-// Check function calls
-
-// nodeToString converts an AST node to a string representation
-
-// Fallback to simple string representation
-
-func nodeToString(node ast.Node, fset *token.FileSet) string {
-	var buf bytes.Buffer
-	if err := format.Node(&buf, fset, node); err != nil {
-		return fmt.Sprintf("%v", node)
-	}
-	return buf.String()
-}
-func scoreFuncName(node ast.Node, target *TargetSpecification) int {
-	funcDecl, ok := node.(*ast.FuncDecl)
-	if !ok {
-		return 0
-	}
-	score := 0
-	if target.FunctionName != "" && funcDecl.Name.Name == target.FunctionName {
-		score += 10
-	}
-	if target.MethodName != "" && funcDecl.Name.Name == target.MethodName {
-		score += 10
-	}
-	return score
-}
-func scoreTypeName(node ast.Node, target *TargetSpecification) int {
-	if target.TypeName == "" {
-		return 0
-	}
-	if typeSpec, ok := node.(*ast.TypeSpec); ok && typeSpec.Name.Name == target.TypeName {
-		return 10
-	}
-	return 0
-}
-func scoreValueSpec(node ast.Node, target *TargetSpecification) int {
-	if target.ConstName == "" && target.VarName == "" {
-		return 0
-	}
-	valueSpec, ok := node.(*ast.ValueSpec)
-	if !ok {
-		return 0
-	}
-	for _, name := range valueSpec.Names {
-		if name.Name == target.ConstName || name.Name == target.VarName {
-			return 10
-		}
-	}
-	return 0
-}
-func scoreCodePattern(node ast.Node, target *TargetSpecification, fset *token.FileSet) int {
-	if target.CodePattern == "" {
-		return 0
-	}
-	code := nodeToString(node, fset)
-	matched, err := regexp.MatchString(target.CodePattern, code)
-	if err == nil && matched {
-		return 5
-	}
-	if strings.Contains(code, target.CodePattern) {
-		return 3
-	}
-	return 0
-}
-func scoreVariableNames(node ast.Node, target *TargetSpecification) int {
-	if len(target.VariableNames) == 0 {
-		return 0
-	}
-	score := 0
-	ast.Inspect(node, func(n ast.Node) bool {
-		if ident, ok := n.(*ast.Ident); ok {
-			for _, varName := range target.VariableNames {
-				if ident.Name == varName {
-					score += 2
-				}
-			}
-		}
-		return true
-	})
-	return score
-}
-func scoreFunctionCalls(node ast.Node, target *TargetSpecification) int {
-	if len(target.FunctionCalls) == 0 {
-		return 0
-	}
-	score := 0
-	ast.Inspect(node, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		if ident, ok := call.Fun.(*ast.Ident); ok {
-			for _, funcName := range target.FunctionCalls {
-				if ident.Name == funcName {
-					score += 3
-				}
-			}
-		}
-		return true
-	})
-	return score
-}
-
-// ReceiverNone is the TargetSpecification.ReceiverType value that restricts
-// matching to plain functions (no receiver). It disambiguates a top-level
-// function from a method of the same name.
-const ReceiverNone = "-"
-
 // receiverTypeName returns the receiver type name of a method declaration
 // ("" for plain functions). Pointer receivers are reported without the '*';
 // generic receivers without their type arguments.
-func receiverTypeName(fn *ast.FuncDecl) string {
+func ReceiverTypeName(fn *ast.FuncDecl) string {
 	if fn.Recv == nil || len(fn.Recv.List) == 0 {
 		return ""
 	}
@@ -190,6 +45,117 @@ func receiverTypeName(fn *ast.FuncDecl) string {
 	return ""
 }
 
+// Fallback to simple string representation
+
+func nodeToString(node ast.Node, fset *token.FileSet) string {
+	var buf bytes.Buffer
+	if err := format.Node(&buf, fset, node); err != nil {
+		return fmt.Sprintf("%v", node)
+	}
+	return buf.String()
+}
+
+func scoreFuncName(node ast.Node, target *TargetSpecification) int {
+	funcDecl, ok := node.(*ast.FuncDecl)
+	if !ok {
+		return 0
+	}
+	score := 0
+	if target.FunctionName != "" && funcDecl.Name.Name == target.FunctionName {
+		score += 10
+	}
+	if target.MethodName != "" && funcDecl.Name.Name == target.MethodName {
+		score += 10
+	}
+	return score
+}
+
+func scoreTypeName(node ast.Node, target *TargetSpecification) int {
+	if target.TypeName == "" {
+		return 0
+	}
+	if typeSpec, ok := node.(*ast.TypeSpec); ok && typeSpec.Name.Name == target.TypeName {
+		return 10
+	}
+	return 0
+}
+
+func scoreValueSpec(node ast.Node, target *TargetSpecification) int {
+	if target.ConstName == "" && target.VarName == "" {
+		return 0
+	}
+	valueSpec, ok := node.(*ast.ValueSpec)
+	if !ok {
+		return 0
+	}
+	for _, name := range valueSpec.Names {
+		if name.Name == target.ConstName || name.Name == target.VarName {
+			return 10
+		}
+	}
+	return 0
+}
+
+func scoreCodePattern(node ast.Node, target *TargetSpecification, fset *token.FileSet) int {
+	if target.CodePattern == "" {
+		return 0
+	}
+	code := nodeToString(node, fset)
+	matched, err := regexp.MatchString(target.CodePattern, code)
+	if err == nil && matched {
+		return 5
+	}
+	if strings.Contains(code, target.CodePattern) {
+		return 3
+	}
+	return 0
+}
+
+func scoreVariableNames(node ast.Node, target *TargetSpecification) int {
+	if len(target.VariableNames) == 0 {
+		return 0
+	}
+	score := 0
+	ast.Inspect(node, func(n ast.Node) bool {
+		if ident, ok := n.(*ast.Ident); ok {
+			for _, varName := range target.VariableNames {
+				if ident.Name == varName {
+					score += 2
+				}
+			}
+		}
+		return true
+	})
+	return score
+}
+
+// ReceiverNone is the TargetSpecification.ReceiverType value that restricts
+// matching to plain functions (no receiver). It disambiguates a top-level
+// function from a method of the same name.
+const ReceiverNone = "-"
+
+func scoreFunctionCalls(node ast.Node, target *TargetSpecification) int {
+	if len(target.FunctionCalls) == 0 {
+		return 0
+	}
+	score := 0
+	ast.Inspect(node, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		if ident, ok := call.Fun.(*ast.Ident); ok {
+			for _, funcName := range target.FunctionCalls {
+				if ident.Name == funcName {
+					score += 3
+				}
+			}
+		}
+		return true
+	})
+	return score
+}
+
 // receiverMatches reports whether a function declaration satisfies the
 // receiverType constraint of a target specification. An empty constraint
 // matches anything; ReceiverNone matches only plain functions.
@@ -197,7 +163,7 @@ func receiverMatches(fn *ast.FuncDecl, target *TargetSpecification) bool {
 	if target.ReceiverType == "" {
 		return true
 	}
-	recv := receiverTypeName(fn)
+	recv := ReceiverTypeName(fn)
 	if target.ReceiverType == ReceiverNone {
 		return recv == ""
 	}

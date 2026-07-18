@@ -163,19 +163,25 @@ func localInterfaceMethodsFromPackage(pkg *packages.Package) map[string]map[stri
 				if !ok {
 					continue
 				}
-				methods := make(map[string]bool)
-				if it.Methods != nil {
-					for _, m := range it.Methods.List {
-						for _, n := range m.Names {
-							methods[n.Name] = true
-						}
-					}
-				}
-				out[ts.Name.Name] = methods
+				out[ts.Name.Name] = interfaceMethodNames(it)
 			}
 		}
 	}
 	return out
+
+}
+
+func interfaceMethodNames(it *ast.InterfaceType) map[string]bool {
+	methods := make(map[string]bool)
+	if it.Methods == nil {
+		return methods
+	}
+	for _, m := range it.Methods.List {
+		for _, n := range m.Names {
+			methods[n.Name] = true
+		}
+	}
+	return methods
 }
 
 func returnedLocalInterface(fn *ast.FuncDecl, localIfaces map[string]map[string]bool) string {

@@ -222,10 +222,9 @@ func (o *Orchestrator) executeOperation(operation *RefactoringOperation) *Operat
 	}
 	target, fallbackUsed, err := o.resolveTarget(operation)
 	if err != nil {
-		result.Success = false
-		result.Error = err.Error()
-		return result
+		return o.finalizeResult(result, err)
 	}
+
 	if fallbackUsed {
 		result.FallbackUsed = true
 	}

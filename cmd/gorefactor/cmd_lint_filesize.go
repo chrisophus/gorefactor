@@ -38,5 +38,10 @@ func (r fileSizeRule) Run(ctx LintContext) []lintIssue {
 }
 
 func (r fileSizeRule) AutoFix(issue lintIssue, ctx LintContext) error {
-	return splitCommand([]string{issue.File, "--max", fmt.Sprintf("%d", ctx.MaxSize)})
+	// Use the same effective threshold as Run: a caller that never set
+	// MaxSize (e.g. doctor --fix constructing options directly) would
+	// otherwise pass --max 0 to split.
+	max := effectiveMaxSizeForFile(issue.File, ctx)
+	return splitCommand([]string{issue.File, "--max", fmt.Sprintf("%d", max)})
+
 }

@@ -140,7 +140,7 @@ func doctorAutoFixStage(root, fixLevel, configPath string) (doctorStage, error) 
 	return doctorStage{
 		name: "autofix",
 		ok:   true,
-		info: fmt.Sprintf("%d applied, %d reverted (gate failed), %d failed to apply", applied, reverted, failed),
+		info: fmt.Sprintf("%d applied, %d reverted (gate failed), %d not applied (no target/previously reverted)", applied, reverted, failed),
 	}, nil
 }
 

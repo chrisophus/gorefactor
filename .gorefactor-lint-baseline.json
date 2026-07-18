@@ -366,12 +366,6 @@
       "file": "parser/parser.go",
       "rule": "high-blast-radius",
       "count": 1
-    },
-    {
-      "fingerprint": "version\u0000untested-package\u0000package version has no _test.go files",
-      "file": "version",
-      "rule": "untested-package",
-      "count": 1
     }
   ]
 }

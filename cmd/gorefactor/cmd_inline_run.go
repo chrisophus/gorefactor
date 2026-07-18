@@ -172,7 +172,6 @@ func inlineDeclDeletionEdit(fset *token.FileSet, target *ast.FuncDecl, declSrc [
 	return inlineTextEdit{start: delStart, end: delEnd, text: ""}
 }
 
-
 func buildInlineEdits(fset *token.FileSet, target *ast.FuncDecl) int {
 	delStart := fset.Position(target.Pos()).Offset
 	return delStart

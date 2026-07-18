@@ -26,6 +26,18 @@
       "count": 1
     },
     {
+      "fingerprint": "analyzer/package_graph.go\u0000low-gorefactor-adherence\u0000only #/# modified .go files went through gorefactor (#%); raw-edited: analyzer/package_graph.go, analyzer/rename_validator_exported.go, cmd/gorefactor-agent/provider_anthropic_methods.go, cmd/gorefactor/cmd_add_field_run.go, cmd/gorefactor/cmd_extract_run.go, cmd/gorefactor/cmd_inline_run.go, cmd/gorefactor/cmd_lint_run.go, cmd/gorefactor/cmd_orchestrate.go, cmd/gorefactor/cmd_split_run.go, cmd/gorefactor/cmd_suggest.go, cmd/gorefactor/cmd_test_affected.go, cmd/gorefactor/cmd_txn_run.go, cmd/gorefactor/cmd_wrap_errors_process.go, cmd/gorefactor/main.go, cmd/gorefactor/mutation.go, orchestrator/conditions_eval.go, orchestrator/cross_package_handler.go, orchestrator/cross_package_move.go, orchestrator/dry_run_execute.go, orchestrator/execute.go, orchestrator/targeting_resolve.go — prefer a gorefactor command (see CLAUDE.md) so edits are parse-checked and cheaper",
+      "file": "analyzer/package_graph.go",
+      "rule": "low-gorefactor-adherence",
+      "count": 1
+    },
+    {
+      "fingerprint": "benchmark/main.go\u0000long-function\u0000main is # lines (threshold #, line #) — consider extracting",
+      "file": "benchmark/main.go",
+      "rule": "long-function",
+      "count": 1
+    },
+    {
       "fingerprint": "benchmark/oracle.go\u0000complexity\u0000declOf has cyclomatic complexity # (threshold #, line #) — consider extracting",
       "file": "benchmark/oracle.go",
       "rule": "complexity",
@@ -50,6 +62,18 @@
       "count": 1
     },
     {
+      "fingerprint": "cmd/gorefactor-agent/apply_op.go\u0000complexity\u0000applyOp has cyclomatic complexity # (threshold #, line #) — consider extracting",
+      "file": "cmd/gorefactor-agent/apply_op.go",
+      "rule": "complexity",
+      "count": 1
+    },
+    {
+      "fingerprint": "cmd/gorefactor-agent/apply_op.go\u0000long-function\u0000applyOp is # lines (threshold #, line #) — dispatch table: # cases, worst case # lines; per-branch length # is under threshold",
+      "file": "cmd/gorefactor-agent/apply_op.go",
+      "rule": "long-function",
+      "count": 1
+    },
+    {
       "fingerprint": "cmd/gorefactor-agent/dispatch_tool.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): cmd/gorefactor-agent/dispatch_tool.go:#-#, cmd/gorefactor-agent/dispatch_tool.go:#-#",
       "file": "cmd/gorefactor-agent/dispatch_tool.go",
       "rule": "duplicate-block",
@@ -62,26 +86,44 @@
       "count": 1
     },
     {
+      "fingerprint": "cmd/gorefactor-agent/main.go\u0000complexity\u0000main has cyclomatic complexity # (threshold #, line #) — consider extracting",
+      "file": "cmd/gorefactor-agent/main.go",
+      "rule": "complexity",
+      "count": 1
+    },
+    {
       "fingerprint": "cmd/gorefactor-agent/main.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): cmd/gorefactor-agent/main.go:#-#, cmd/gorefactor-agent/main.go:#-#",
       "file": "cmd/gorefactor-agent/main.go",
       "rule": "duplicate-block",
       "count": 1
     },
     {
-      "fingerprint": "cmd/gorefactor-agent/main.go\u0000excessive-returns\u0000Function extractBlockL# has # items (threshold exceeded); Create a result struct to group return values",
+      "fingerprint": "cmd/gorefactor-agent/main.go\u0000long-function\u0000main is # lines (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor-agent/main.go",
-      "rule": "excessive-returns",
+      "rule": "long-function",
       "count": 1
     },
     {
-      "fingerprint": "cmd/gorefactor-agent/provider.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): cmd/gorefactor-agent/provider.go:#-#, cmd/gorefactor-agent/provider_anthropic_anthropic_provider.go:#-#",
+      "fingerprint": "cmd/gorefactor-agent/prompt_plan_json.go\u0000complexity\u0000canonicalizePlanJSON has cyclomatic complexity # (threshold #, line #) — consider extracting",
+      "file": "cmd/gorefactor-agent/prompt_plan_json.go",
+      "rule": "complexity",
+      "count": 1
+    },
+    {
+      "fingerprint": "cmd/gorefactor-agent/provider.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): cmd/gorefactor-agent/provider.go:#-#, cmd/gorefactor-agent/provider_anthropic_methods.go:#-#",
       "file": "cmd/gorefactor-agent/provider.go",
       "rule": "duplicate-block",
       "count": 1
     },
     {
-      "fingerprint": "cmd/gorefactor-agent/provider_anthropic_anthropic_provider.go\u0000long-function\u0000anthropicProvider:ChatTools is # lines (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor-agent/provider_anthropic_anthropic_provider.go",
+      "fingerprint": "cmd/gorefactor-agent/provider_anthropic_methods.go\u0000complexity\u0000ChatTools has cyclomatic complexity # (threshold #, line #) — consider extracting",
+      "file": "cmd/gorefactor-agent/provider_anthropic_methods.go",
+      "rule": "complexity",
+      "count": 1
+    },
+    {
+      "fingerprint": "cmd/gorefactor-agent/provider_anthropic_methods.go\u0000long-function\u0000anthropicProvider:ChatTools is # lines (threshold #, line #) — consider extracting",
+      "file": "cmd/gorefactor-agent/provider_anthropic_methods.go",
       "rule": "long-function",
       "count": 1
     },
@@ -110,8 +152,8 @@
       "count": 1
     },
     {
-      "fingerprint": "cmd/gorefactor/cmd_add_field_add.go\u0000long-function\u0000addFieldCommand is # lines (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor/cmd_add_field_add.go",
+      "fingerprint": "cmd/gorefactor/cmd_add_field_run.go\u0000long-function\u0000addFieldCommand is # lines (threshold #, line #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_add_field_run.go",
       "rule": "long-function",
       "count": 1
     },
@@ -119,6 +161,12 @@
       "fingerprint": "cmd/gorefactor/cmd_add_test_scaffold_build.go\u0000long-function\u0000buildTestScaffold is # lines (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor/cmd_add_test_scaffold_build.go",
       "rule": "long-function",
+      "count": 1
+    },
+    {
+      "fingerprint": "cmd/gorefactor/cmd_add_test_scaffold_test.go:171:1\u0000funcorder-function\u0000exported functions must be declared before unexported functions (excluding constructors and init)",
+      "file": "cmd/gorefactor/cmd_add_test_scaffold_test.go:171:1",
+      "rule": "funcorder-function",
       "count": 1
     },
     {
@@ -188,14 +236,38 @@
       "count": 1
     },
     {
-      "fingerprint": "cmd/gorefactor/cmd_inline_call.go\u0000excessive-params\u0000Function extractBlockL# has # items (threshold exceeded); Create a parameter struct to group related arguments",
+      "fingerprint": "cmd/gorefactor/cmd_inline_call.go\u0000long-function\u0000callSitesInFile is # lines (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor/cmd_inline_call.go",
-      "rule": "excessive-params",
+      "rule": "long-function",
+      "count": 1
+    },
+    {
+      "fingerprint": "cmd/gorefactor/cmd_inline_run.go\u0000complexity\u0000inlineCommand has cyclomatic complexity # (threshold #, line #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_inline_run.go",
+      "rule": "complexity",
+      "count": 1
+    },
+    {
+      "fingerprint": "cmd/gorefactor/cmd_inline_run.go\u0000long-function\u0000inlineCommand is # lines (threshold #, line #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_inline_run.go",
+      "rule": "long-function",
       "count": 1
     },
     {
       "fingerprint": "cmd/gorefactor/cmd_insert_switch_case.go\u0000long-function\u0000insertSwitchCaseCommand is # lines (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor/cmd_insert_switch_case.go",
+      "rule": "long-function",
+      "count": 1
+    },
+    {
+      "fingerprint": "cmd/gorefactor/cmd_inspect.go\u0000complexity\u0000inspectCommand has cyclomatic complexity # (threshold #, line #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_inspect.go",
+      "rule": "complexity",
+      "count": 1
+    },
+    {
+      "fingerprint": "cmd/gorefactor/cmd_inspect.go\u0000long-function\u0000inspectCommand is # lines (threshold #, line #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_inspect.go",
       "rule": "long-function",
       "count": 1
     },
@@ -209,6 +281,18 @@
       "fingerprint": "cmd/gorefactor/cmd_lint_passthrough.go\u0000linear-search-in-loop\u0000linear search inside a loop (line #) — repeated O(n) scans; build a map keyed by the compared value before the outer loop",
       "file": "cmd/gorefactor/cmd_lint_passthrough.go",
       "rule": "linear-search-in-loop",
+      "count": 1
+    },
+    {
+      "fingerprint": "cmd/gorefactor/cmd_orchestrate.go\u0000complexity\u0000orchestrateRefactoring has cyclomatic complexity # (threshold #, line #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_orchestrate.go",
+      "rule": "complexity",
+      "count": 1
+    },
+    {
+      "fingerprint": "cmd/gorefactor/cmd_orchestrate.go\u0000long-function\u0000orchestrateRefactoring is # lines (threshold #, line #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_orchestrate.go",
+      "rule": "long-function",
       "count": 1
     },
     {
@@ -260,8 +344,20 @@
       "count": 1
     },
     {
-      "fingerprint": "cmd/gorefactor/cmd_txn_txn.go\u0000long-function\u0000txnCommand is # lines (threshold #, line #) — consider extracting",
-      "file": "cmd/gorefactor/cmd_txn_txn.go",
+      "fingerprint": "cmd/gorefactor/cmd_test_affected.go\u0000complexity\u0000computeTestAffected has cyclomatic complexity # (threshold #, line #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_test_affected.go",
+      "rule": "complexity",
+      "count": 1
+    },
+    {
+      "fingerprint": "cmd/gorefactor/cmd_txn_run.go\u0000complexity\u0000txnCommand has cyclomatic complexity # (threshold #, line #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_txn_run.go",
+      "rule": "complexity",
+      "count": 1
+    },
+    {
+      "fingerprint": "cmd/gorefactor/cmd_txn_run.go\u0000long-function\u0000txnCommand is # lines (threshold #, line #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_txn_run.go",
       "rule": "long-function",
       "count": 1
     },
@@ -269,12 +365,6 @@
       "fingerprint": "cmd/gorefactor/cmd_wrap_errors_process.go\u0000complexity\u0000recurseIntoStmt has cyclomatic complexity # (threshold #, line #) — dispatch table: # cases, worst case #; per-branch score # is under threshold",
       "file": "cmd/gorefactor/cmd_wrap_errors_process.go",
       "rule": "complexity",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_wrap_errors_process.go\u0000data-clumps\u0000Parameter group [fset *token.FileSet, fn *ast.FuncDecl, stmts []ast.Stmt, file string, result *wrapErrorResult] appears in # functions; consider creating a struct",
-      "file": "cmd/gorefactor/cmd_wrap_errors_process.go",
-      "rule": "data-clumps",
       "count": 1
     },
     {
@@ -344,8 +434,26 @@
       "count": 1
     },
     {
-      "fingerprint": "orchestrator/cross_package_cross_package_operation_handler.go\u0000data-clumps\u0000Parameter group [sourceFile string, destFile string, funcName string] appears in # functions; consider creating a struct",
-      "file": "orchestrator/cross_package_cross_package_operation_handler.go",
+      "fingerprint": "orchestrator/cross_package_handler.go\u0000data-clumps\u0000Parameter group [sourceFile string, destFile string, funcName string] appears in # functions; consider creating a struct",
+      "file": "orchestrator/cross_package_handler.go",
+      "rule": "data-clumps",
+      "count": 1
+    },
+    {
+      "fingerprint": "orchestrator/dry_run_execute.go\u0000complexity\u0000simulateOperationChange has cyclomatic complexity # (threshold #, line #) — consider extracting",
+      "file": "orchestrator/dry_run_execute.go",
+      "rule": "complexity",
+      "count": 1
+    },
+    {
+      "fingerprint": "orchestrator/dry_run_execute.go\u0000long-function\u0000Orchestrator:simulateOperationChange is # lines (threshold #, line #) — consider extracting",
+      "file": "orchestrator/dry_run_execute.go",
+      "rule": "long-function",
+      "count": 1
+    },
+    {
+      "fingerprint": "orchestrator/execute.go\u0000data-clumps\u0000Parameter group [operation *RefactoringOperation, target *TargetLocation, result *OperationResult] appears in # functions; consider creating a struct",
+      "file": "orchestrator/execute.go",
       "rule": "data-clumps",
       "count": 1
     },
@@ -353,12 +461,6 @@
       "fingerprint": "orchestrator/op_helpers.go\u0000excessive-returns\u0000Function findDeclInRange has # items (threshold exceeded); Create a result struct to group return values",
       "file": "orchestrator/op_helpers.go",
       "rule": "excessive-returns",
-      "count": 1
-    },
-    {
-      "fingerprint": "orchestrator/orchestrator_orchestrator.go\u0000data-clumps\u0000Parameter group [operation *RefactoringOperation, target *TargetLocation, result *OperationResult] appears in # functions; consider creating a struct",
-      "file": "orchestrator/orchestrator_orchestrator.go",
-      "rule": "data-clumps",
       "count": 1
     },
     {

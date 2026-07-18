@@ -99,7 +99,7 @@ linters:
         path: cmd/gorefactor/(diff|mutation)\.go$
       # AST walkers and orchestration dispatch — structural complexity.
       - linters: [cyclop, funlen]
-        path: orchestrator/(conditions|cross_package_rewrite_find|cross_package_rewrite_non|dry_run_orchestrator)\.go$
+        path: orchestrator/(conditions|cross_package_rewrite_find|cross_package_rewrite_non|dry_run_execute)\.go$
     paths:
       - ^testfiles/
       - ^examples/

@@ -134,4 +134,3 @@ func suggestPlanCommand(args []string) error {
 
 	return nil
 }
-

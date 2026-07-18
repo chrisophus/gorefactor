@@ -177,7 +177,6 @@ func computeTestAffected(base string) (*testAffectedResult, error) {
 	return res, nil
 }
 
-
 // gitChangedFiles returns files changed vs base (plus untracked files),
 // relative to the current directory.
 func gitChangedFiles(base, prefix string) ([]string, error) {

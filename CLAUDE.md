@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**User-facing overview and install:** [README.md](README.md). **JSON plans:** [ORCHESTRATION_SYSTEM.md](ORCHESTRATION_SYSTEM.md). **Doctor redesign plan:** [docs/doctor-design-plan.md](docs/doctor-design-plan.md).
+**User-facing overview and install:** [README.md](README.md). **JSON plans:** [ORCHESTRATION_SYSTEM.md](ORCHESTRATION_SYSTEM.md). **Doctor redesign plan:** [docs/doctor-design-plan.md](docs/doctor-design-plan.md). **Harness integrity review, learnings & follow-up plan:** [docs/harness-integrity-review-2026-07.md](docs/harness-integrity-review-2026-07.md).
 
 ## Project Overview
 
@@ -81,6 +81,15 @@ gorefactor itself is structured as a harness in the sense of [Fowler's harness-e
 - **Sensors** (feedback): `lint` aggregates 39 structural rules (size, duplication, design smells, error handling, coverage, dead-code, arch) and (where safe) autofixes `file-size` / `dead-code` / `error-not-wrapped` via `--fix`. Run it as a final gate after a refactor batch — anything not under control surfaces here.
 
 When adding new capabilities to gorefactor, add a corresponding lint rule (sensor) so the agent self-detects when the new rule has been violated, and an autofix path (guide → sensor → autofix) when there's a single safe transformation.
+
+**Harness lessons** (from the 2026-07 integrity review — full findings and follow-up plan in [docs/harness-integrity-review-2026-07.md](docs/harness-integrity-review-2026-07.md)):
+- Function-total metrics over-charge dispatch tables; score per independent branch (`analyzer.AnalyzeDispatch`), don't raise thresholds.
+- Any proxy metric can be satisfied by code motion — guides must *refuse* vacuous transforms (nameability + vacuity gates), and the score weights proxies below defects.
+- Execution results outrank static analysis: the autofix outcome journal feeds gate verdicts back into findings; `lint --probe-fixes` buys that signal without mutating the tree.
+- The gate is exactly as strong as the tests beneath it — a mechanical fix once shipped a generator emitting empty test bodies past a green gate. Every code generator gets behavioral tests, not substring checks.
+- Mechanical residue is handled twice: blocked at generation (extractor gates) and detected in-tree (`generated-name`, `byvalue-buffer`).
+- Zero findings ≠ quality: the sensors' blind spots (semantic correctness, API honesty, test depth) are covered only by periodic no-tools review.
+- A trustworthy metric sometimes goes *down*: removing fake compliance resurfaces real findings, baselined visibly with `[baseline-growth]`.
 
 ## Architecture
 

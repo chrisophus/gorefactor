@@ -143,6 +143,7 @@ func extractBlockL59() {
 			"--baseline-file":    true,
 			"--baseline-ratchet": true,
 			"--fix":              false,
+			"--probe-fixes":      false,
 			"--verify":           false,
 			"--fix-level":        true,
 			"--json":             false,

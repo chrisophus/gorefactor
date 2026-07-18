@@ -65,14 +65,18 @@ func (ci *CodeInserter) writeFormattedFile(filePath string, node *ast.File, fset
 	if err := format.Node(&buf, fset, node); err != nil {
 		return fmt.Errorf("failed to format code: %w", err)
 	}
+	// format.Source both formats and re-parses. If the rendered tree is not
+	// valid Go, refuse to write rather than break the file on disk —
+	// "command rejects the change" is the harness contract.
 	normalized, err := format.Source(buf.Bytes())
 	if err != nil {
-		normalized = buf.Bytes()
+		return fmt.Errorf("insertion would produce invalid Go, refusing to write %s: %w", filePath, err)
 	}
 	if err := os.WriteFile(filePath, normalized, 0644); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 	return nil
+
 }
 
 func (ci *CodeInserter) loadOrParseNode(filePath string, location *InsertionLocation, codeSnippet string, fset *token.FileSet) (*ast.File, *InsertionResult, error) {

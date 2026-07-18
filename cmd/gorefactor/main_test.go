@@ -4,7 +4,21 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/chrisophus/gorefactor/analyzer"
 )
+
+// TestMain scrubs git's repository-locating variables before any test runs.
+// Many tests here create throwaway git repositories; when the suite runs as
+// a child of a git hook (pre-commit runs the doctor gate), inherited GIT_DIR
+// and friends would silently point those tests' git commands at the real
+// repository — one such run corrupted the main index.
+func TestMain(m *testing.M) {
+	for _, v := range analyzer.GitRepoEnvVars {
+		os.Unsetenv(v)
+	}
+	os.Exit(m.Run())
+}
 
 func writeTempGo(t *testing.T, dir, name, content string) string {
 	t.Helper()

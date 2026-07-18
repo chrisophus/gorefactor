@@ -381,6 +381,8 @@ func defaultLintRules() []LintRule {
 		couplingRule{},
 		blastRadiusRule{},
 		prematureAbstractionRule{},
+		generatedNameRule{},
+		byValueBufferRule{},
 	}
 	rules = append(rules, logPropagationRules()...)
 	rules = append(rules, funcorderRules()...)

@@ -18,6 +18,8 @@ func TestDefaultLintRules_ExpectedSet(t *testing.T) {
 		"high-coupling",
 		"high-blast-radius",
 		"premature-abstraction",
+		"generated-name",
+		"byvalue-buffer",
 		"if-err-log-return",
 		"wrap-log-return",
 		"wrap-bridge-log-return",

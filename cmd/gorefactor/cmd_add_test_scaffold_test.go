@@ -186,3 +186,25 @@ func addTestWriteModule(t *testing.T, files map[string]string) string {
 	}
 	return dir
 }
+
+func TestScaffoldBodyInvokesFunctionUnderTest(t *testing.T) {
+	addTestWriteModule(t, map[string]string{"greet.go": addTestWithErrorSrc})
+	if err := addTestCommand([]string{"greet.go", "Lookup"}); err != nil {
+		t.Fatalf("add-test: %v", err)
+	}
+	out := readFile(t, "greet_test.go")
+	runIdx := strings.Index(out, "t.Run(")
+	if runIdx < 0 {
+		t.Fatalf("no t.Run in scaffold:\n%s", out)
+	}
+	body := out[runIdx:]
+	if !strings.Contains(body, "Lookup(") {
+		t.Fatalf("t.Run body does not invoke Lookup:\n%s", out)
+	}
+	if !strings.Contains(body, "t.Errorf") {
+		t.Fatalf("t.Run body has no assertion:\n%s", out)
+	}
+	if !strings.Contains(body, "wantErr") || !strings.Contains(body, "err != nil") {
+		t.Fatalf("t.Run body missing error assertion:\n%s", out)
+	}
+}

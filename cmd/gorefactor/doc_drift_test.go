@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -28,6 +30,21 @@ func TestDocDrift_CommandsAreDocumented(t *testing.T) {
 		if !containsCommandWord(doc, name) {
 			t.Errorf("command %q is registered but not documented in CLAUDE.md; "+
 				"add it to the command reference (or to docExemptCommands with a reason)", name)
+		}
+	}
+}
+
+func TestDocDrift_RuleCountMatches(t *testing.T) {
+	doc := readClaudeMD(t)
+	want := len(defaultLintRules())
+	re := regexp.MustCompile(`(\d+) (?:default|structural) rules`)
+	matches := re.FindAllStringSubmatch(doc, -1)
+	if len(matches) == 0 {
+		t.Fatal("CLAUDE.md no longer states a rule count; update this test's pattern")
+	}
+	for _, m := range matches {
+		if m[1] != strconv.Itoa(want) {
+			t.Errorf("CLAUDE.md claims %q but the registry has %d rules; update the doc", m[0], want)
 		}
 	}
 }

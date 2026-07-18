@@ -140,9 +140,3 @@ func parseFile(args []string) error {
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(info)
 }
-
-// Output as JSON
-
-// Create template generator
-
-// Generate all templates

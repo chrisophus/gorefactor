@@ -22,14 +22,9 @@ func processWrapErrorsInFunc(fset *token.FileSet, fn *ast.FuncDecl, file string,
 // awareness so that the statement preceding an if-block can be used to
 // derive wrapping context (e.g. from an assignment RHS).
 func processStmtList(fset *token.FileSet, fn *ast.FuncDecl, stmts []ast.Stmt, file string, result *wrapErrorResult) {
-	extractBlockL25(stmts, fset, fn, file, result)
-}
-
-func extractBlockL25(stmts []ast.Stmt, fset *token.FileSet, fn *ast.FuncDecl, file string, result *wrapErrorResult) {
 	for i, stmt := range stmts {
 		ifStmt, ok := stmt.(*ast.IfStmt)
 		if !ok {
-
 			recurseIntoStmt(fset, fn, stmt, file, result)
 			continue
 		}
@@ -57,7 +52,6 @@ func extractBlockL25(stmts []ast.Stmt, fset *token.FileSet, fn *ast.FuncDecl, fi
 			context = wrapContextFromPrecedingStmt(fset, stmts[i-1])
 		}
 		if context == "" {
-
 			context = camelToContext(fn.Name.Name)
 		}
 

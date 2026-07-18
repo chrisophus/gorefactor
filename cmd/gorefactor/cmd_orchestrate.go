@@ -59,36 +59,7 @@ func orchestrateRefactoring(args []string) error {
 	fmt.Printf("Operations: %d\n", len(plan.Operations))
 
 	if dryRun {
-		fmt.Printf("\n[DRY-RUN MODE] No files will be modified\n")
-		dryRunResult, err := orch.ExecutePlanDryRun(plan.Name)
-		if err != nil {
-			return fmt.Errorf("failed to execute dry-run: %w", err)
-		}
-
-		fmt.Println(dryRunResult.Summary)
-
-		for i, op := range dryRunResult.Operations {
-			fmt.Printf("\nOperation %d: %s\n", i+1, op.Operation.Type)
-			if op.Success {
-				fmt.Printf("  Status: SUCCESS\n")
-				fmt.Printf("  Changes: %d file(s)\n", len(op.Changes))
-				for _, change := range op.Changes {
-					fmt.Printf("    - %s\n", change.File)
-				}
-			} else {
-				fmt.Printf("  Status: FAILED\n")
-				fmt.Printf("  Error: %s\n", op.Error)
-			}
-		}
-
-		if outputFile != "" {
-			if err := orchestrator.SaveDryRunReport(dryRunResult, outputFile); err != nil {
-				return fmt.Errorf("failed to save dry-run report: %w", err)
-			}
-			fmt.Printf("\nDry-run report saved to: %s\n", outputFile)
-		}
-
-		return nil
+		return runPlanDryRun(orch, plan, outputFile)
 	}
 
 	// Capture pre-execution content of every file the plan may touch so the
@@ -140,6 +111,41 @@ func orchestrateRefactoring(args []string) error {
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
 		return encoder.Encode(result)
+	}
+
+	return nil
+}
+
+// runPlanDryRun executes a plan in dry-run mode: nothing is written, the
+// per-operation outcome is printed, and the report is optionally saved.
+func runPlanDryRun(orch *orchestrator.Orchestrator, plan *orchestrator.RefactoringPlan, outputFile string) error {
+	fmt.Printf("\n[DRY-RUN MODE] No files will be modified\n")
+	dryRunResult, err := orch.ExecutePlanDryRun(plan.Name)
+	if err != nil {
+		return fmt.Errorf("failed to execute dry-run: %w", err)
+	}
+
+	fmt.Println(dryRunResult.Summary)
+
+	for i, op := range dryRunResult.Operations {
+		fmt.Printf("\nOperation %d: %s\n", i+1, op.Operation.Type)
+		if op.Success {
+			fmt.Printf("  Status: SUCCESS\n")
+			fmt.Printf("  Changes: %d file(s)\n", len(op.Changes))
+			for _, change := range op.Changes {
+				fmt.Printf("    - %s\n", change.File)
+			}
+		} else {
+			fmt.Printf("  Status: FAILED\n")
+			fmt.Printf("  Error: %s\n", op.Error)
+		}
+	}
+
+	if outputFile != "" {
+		if err := orchestrator.SaveDryRunReport(dryRunResult, outputFile); err != nil {
+			return fmt.Errorf("failed to save dry-run report: %w", err)
+		}
+		fmt.Printf("\nDry-run report saved to: %s\n", outputFile)
 	}
 
 	return nil

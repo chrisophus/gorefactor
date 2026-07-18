@@ -169,7 +169,27 @@ func (m *mutation) run(apply func() (string, error)) error {
 	}
 
 	undoToken := ""
-	undoToken = extractBlockL150(changed, before, m, detail, undoToken)
+	if len(changed) > 0 {
+		beforeChanged := map[string][]byte{}
+		var createdOnly []string
+		for _, f := range changed {
+			if b, ok := before[f]; ok {
+				beforeChanged[f] = b
+			} else {
+				createdOnly = append(createdOnly, f)
+			}
+		}
+		if activeTxn != nil {
+			activeTxn.record(beforeChanged, createdOnly)
+		} else {
+			entry, jerr := orchestrator.RecordOperation(m.op, detail, beforeChanged, createdOnly)
+			if jerr != nil {
+				fmt.Fprintf(os.Stderr, "warning: journal write failed: %v\n", jerr)
+			} else {
+				undoToken = entry.ID
+			}
+		}
+	}
 
 	if m.gate && len(changed) > 0 {
 		if gerr := buildAffectedPackages(changed); gerr != nil {
@@ -195,32 +215,6 @@ func (m *mutation) run(apply func() (string, error)) error {
 		fmt.Println(detail)
 	}
 	return nil
-}
-
-func extractBlockL150(changed []string, before map[string][]byte, m *mutation, detail string, undoToken string) string {
-	if len(changed) > 0 {
-		beforeChanged := map[string][]byte{}
-		var createdOnly []string
-		for _, f := range changed {
-			if b, ok := before[f]; ok {
-				beforeChanged[f] = b
-			} else {
-				createdOnly = append(createdOnly, f)
-			}
-		}
-		if activeTxn != nil {
-
-			activeTxn.record(beforeChanged, createdOnly)
-		} else {
-			entry, jerr := orchestrator.RecordOperation(m.op, detail, beforeChanged, createdOnly)
-			if jerr != nil {
-				fmt.Fprintf(os.Stderr, "warning: journal write failed: %v\n", jerr)
-			} else {
-				undoToken = entry.ID
-			}
-		}
-	}
-	return undoToken
 }
 
 // restore puts files back to their captured pre-mutation state, removing

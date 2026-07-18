@@ -75,8 +75,21 @@ func suggestPlanCommand(args []string) error {
 		return nil
 	}
 
-	if r0, done := extractBlockL78(jsonOutput, suggestions, outputFile); done {
-		return r0
+	if jsonOutput {
+		data, err := json.MarshalIndent(suggestions, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal suggestions: %w", err)
+		}
+
+		if outputFile != "" {
+			if err := os.WriteFile(outputFile, data, 0644); err != nil {
+				return fmt.Errorf("failed to write output file: %w", err)
+			}
+			fmt.Printf("Suggestions written to: %s\n", outputFile)
+		} else {
+			fmt.Println(string(data))
+		}
+		return nil
 	}
 
 	fmt.Printf("=== Refactoring Suggestions for %s ===\n\n", filePath)
@@ -122,23 +135,3 @@ func suggestPlanCommand(args []string) error {
 	return nil
 }
 
-func extractBlockL78(jsonOutput bool, suggestions []analyzer.SuggestedPlan, outputFile string) (r0 error, done bool) {
-	if jsonOutput {
-
-		data, err := json.MarshalIndent(suggestions, "", "  ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal suggestions: %w", err), true
-		}
-
-		if outputFile != "" {
-			if err := os.WriteFile(outputFile, data, 0644); err != nil {
-				return fmt.Errorf("failed to write output file: %w", err), true
-			}
-			fmt.Printf("Suggestions written to: %s\n", outputFile)
-		} else {
-			fmt.Println(string(data))
-		}
-		return nil, true
-	}
-	return
-}

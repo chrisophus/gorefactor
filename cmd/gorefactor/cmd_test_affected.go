@@ -118,7 +118,16 @@ func computeTestAffected(base string) (*testAffectedResult, error) {
 
 	// Directly changed package dirs (graph keys: "" is the module root).
 	direct := map[string]bool{}
-	extractBlockL121(changed, direct)
+	for _, f := range changed {
+		if !strings.HasSuffix(f, ".go") {
+			continue
+		}
+		dir := filepath.ToSlash(filepath.Dir(f))
+		if dir == "." {
+			dir = ""
+		}
+		direct[dir] = true
+	}
 	if len(direct) == 0 {
 		return res, nil
 	}
@@ -168,18 +177,6 @@ func computeTestAffected(base string) (*testAffectedResult, error) {
 	return res, nil
 }
 
-func extractBlockL121(changed []string, direct map[string]bool) {
-	for _, f := range changed {
-		if !strings.HasSuffix(f, ".go") {
-			continue
-		}
-		dir := filepath.ToSlash(filepath.Dir(f))
-		if dir == "." {
-			dir = ""
-		}
-		direct[dir] = true
-	}
-}
 
 // gitChangedFiles returns files changed vs base (plus untracked files),
 // relative to the current directory.

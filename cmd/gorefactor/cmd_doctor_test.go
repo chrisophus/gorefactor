@@ -71,7 +71,7 @@ func TestDoctorAutoFixStageOKDespiteFailedFixes(t *testing.T) {
 	if !stage.ok {
 		t.Fatal("autofix stage should stay ok=true even when some fixes failed to apply")
 	}
-	if !strings.Contains(stage.info, "5 failed to apply") {
+	if !strings.Contains(stage.info, "5 not applied") {
 		t.Fatalf("info should report the failed count; got %q", stage.info)
 	}
 }

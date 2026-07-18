@@ -106,7 +106,7 @@ func lintPrintIssuesAndFix(displayIssues []lintIssue, opts lintOptions, shouldFa
 		if opts.fix {
 			applied, reverted, failed := applyAutoFixes(issues, ctx, rules, opts.verify, false)
 			if opts.verify {
-				fmt.Printf("\nAuto-fixes: %d applied, %d reverted (gate failed), %d failed to apply\n",
+				fmt.Printf("\nAuto-fixes: %d applied, %d reverted (gate failed), %d not applied (no target, or skipped as previously reverted)\n",
 					applied, reverted, failed)
 			} else {
 				fmt.Printf("\nAuto-fixes: %d applied, %d failed\n", applied, failed)
@@ -114,7 +114,7 @@ func lintPrintIssuesAndFix(displayIssues []lintIssue, opts lintOptions, shouldFa
 		}
 		if opts.probeFixes {
 			verified, wouldRevert, failed := applyAutoFixes(issues, ctx, rules, true, true)
-			fmt.Printf("\nProbe: %d verified safe, %d would be reverted by the gate, %d no target — outcomes journaled, tree unchanged\n",
+			fmt.Printf("\nProbe: %d verified safe, %d would be reverted by the gate, %d not attempted (no target, or previously reverted) — outcomes journaled, tree unchanged\n",
 				verified, wouldRevert, failed)
 		}
 	}

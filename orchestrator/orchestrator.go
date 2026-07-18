@@ -14,25 +14,6 @@ func NewOrchestrator() *Orchestrator {
 	}
 }
 
-// executeOperation executes a single refactoring operation
-
-// Check conditions first
-
-// Special handling for insert_code with at_beginning on new files
-
-// Check if file exists
-
-// Skip target finding for new file creation
-
-// Find the target using resilient targeting
-// Note: insert_code operations may not need a target, but we'll still try to find one if specified
-
-// For insert_code and rename_declaration, target is optional
-
-// Try fallback strategy
-
-// For insert_code, we can proceed without a target
-
 // isCrossPackageMove returns true when the destination file is in a different
 // package than the source file. It checks by comparing absolute directory
 // paths; if either file cannot be stat'd or parsed the comparison falls back

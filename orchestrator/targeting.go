@@ -45,8 +45,6 @@ func ReceiverTypeName(fn *ast.FuncDecl) string {
 	return ""
 }
 
-// Fallback to simple string representation
-
 func nodeToString(node ast.Node, fset *token.FileSet) string {
 	var buf bytes.Buffer
 	if err := format.Node(&buf, fset, node); err != nil {

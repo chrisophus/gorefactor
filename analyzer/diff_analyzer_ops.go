@@ -12,8 +12,20 @@ func (da *DiffAnalyzer) analyzeAddedCode(filePath string, hunk *DiffHunk, addedL
 	code := strings.Join(addedLines, "\n")
 
 	// Detect method addition (check this before function addition)
-	if r0, done := extractBlockL15(da, code, filePath, hunk); done {
-		return r0
+	if da.isMethodAddition(code) {
+		return &Change{
+			Type:        "method_addition",
+			File:        filePath,
+			Description: "Added new method",
+			StartLine:   hunk.StartLine,
+			EndLine:     hunk.EndLine,
+			Confidence:  0.9,
+			Details: map[string]interface{}{
+				"methodName":   da.extractMethodName(code),
+				"receiverType": da.extractReceiverType(code),
+				"code":         code,
+			},
+		}
 	}
 
 	// Detect function addition
@@ -76,25 +88,6 @@ func (da *DiffAnalyzer) analyzeAddedCode(filePath string, hunk *DiffHunk, addedL
 			"code": code,
 		},
 	}
-}
-
-func extractBlockL15(da *DiffAnalyzer, code string, filePath string, hunk *DiffHunk) (r0 *Change, done bool) {
-	if da.isMethodAddition(code) {
-		return &Change{
-			Type:        "method_addition",
-			File:        filePath,
-			Description: "Added new method",
-			StartLine:   hunk.StartLine,
-			EndLine:     hunk.EndLine,
-			Confidence:  0.9,
-			Details: map[string]interface{}{
-				"methodName":   da.extractMethodName(code),
-				"receiverType": da.extractReceiverType(code),
-				"code":         code,
-			},
-		}, true
-	}
-	return
 }
 
 // analyzeRemovedCode analyzes removed code to detect patterns

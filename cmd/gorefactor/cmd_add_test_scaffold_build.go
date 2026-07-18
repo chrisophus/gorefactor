@@ -79,7 +79,7 @@ func buildTestScaffold(pkg *packages.Package, fn *ast.FuncDecl, recv, target str
 		callExpr = fmt.Sprintf("(%s{}).%s(%s)", recv, fn.Name.Name, strings.Join(callArgs, ", "))
 	}
 
-	extractBlockL82(results, buf, callExpr)
+	writeScaffoldInvocation(&buf, results, callExpr)
 
 	fmt.Fprintf(&buf, "\t\t})\n")
 	fmt.Fprintf(&buf, "\t}\n")
@@ -88,14 +88,19 @@ func buildTestScaffold(pkg *packages.Package, fn *ast.FuncDecl, recv, target str
 	return buf.String(), testName, nil
 }
 
-func extractBlockL82(results []fieldInfo, buf bytes.Buffer, callExpr string) {
+// writeScaffoldInvocation emits the body of the generated t.Run: the call
+// to the function under test plus the got/want and wantErr assertions. buf
+// must be a pointer — this function once took the buffer by value (a
+// mechanical extraction artifact) and every write here was silently lost,
+// producing scaffolds with empty t.Run bodies.
+func writeScaffoldInvocation(buf *bytes.Buffer, results []fieldInfo, callExpr string) {
 	if len(results) == 0 {
-		fmt.Fprintf(&buf, "\t\t\t%s\n", callExpr)
+		fmt.Fprintf(buf, "\t\t\t%s\n", callExpr)
 	} else if len(results) == 1 && results[0].typStr == "error" {
-		fmt.Fprintf(&buf, "\t\t\terr := %s\n", callExpr)
-		fmt.Fprintf(&buf, "\t\t\tif (err != nil) != tc.wantErr {\n")
-		fmt.Fprintf(&buf, "\t\t\t\tt.Errorf(\"got err %%v, wantErr %%v\", err, tc.wantErr)\n")
-		fmt.Fprintf(&buf, "\t\t\t}\n")
+		fmt.Fprintf(buf, "\t\t\terr := %s\n", callExpr)
+		fmt.Fprintf(buf, "\t\t\tif (err != nil) != tc.wantErr {\n")
+		fmt.Fprintf(buf, "\t\t\t\tt.Errorf(\"got err %%v, wantErr %%v\", err, tc.wantErr)\n")
+		fmt.Fprintf(buf, "\t\t\t}\n")
 	} else {
 
 		retVars := make([]string, len(results))
@@ -109,21 +114,21 @@ func extractBlockL82(results []fieldInfo, buf bytes.Buffer, callExpr string) {
 				}
 			}
 		}
-		fmt.Fprintf(&buf, "\t\t\t%s := %s\n", strings.Join(retVars, ", "), callExpr)
+		fmt.Fprintf(buf, "\t\t\t%s := %s\n", strings.Join(retVars, ", "), callExpr)
 		for i, r := range results {
 			if r.typStr == "error" {
-				fmt.Fprintf(&buf, "\t\t\tif (err != nil) != tc.wantErr {\n")
-				fmt.Fprintf(&buf, "\t\t\t\tt.Errorf(\"got err %%v, wantErr %%v\", err, tc.wantErr)\n")
-				fmt.Fprintf(&buf, "\t\t\t}\n")
+				fmt.Fprintf(buf, "\t\t\tif (err != nil) != tc.wantErr {\n")
+				fmt.Fprintf(buf, "\t\t\t\tt.Errorf(\"got err %%v, wantErr %%v\", err, tc.wantErr)\n")
+				fmt.Fprintf(buf, "\t\t\t}\n")
 			} else {
 				got := retVars[i]
 				want := fmt.Sprintf("want%d", i+1)
 				if i == 0 && len(results) <= 2 {
 					want = "want"
 				}
-				fmt.Fprintf(&buf, "\t\t\tif got, want := %s, tc.%s; got != want {\n", got, want)
-				fmt.Fprintf(&buf, "\t\t\t\tt.Errorf(\"got %%v, want %%v\", got, want)\n")
-				fmt.Fprintf(&buf, "\t\t\t}\n")
+				fmt.Fprintf(buf, "\t\t\tif got, want := %s, tc.%s; got != want {\n", got, want)
+				fmt.Fprintf(buf, "\t\t\t\tt.Errorf(\"got %%v, want %%v\", got, want)\n")
+				fmt.Fprintf(buf, "\t\t\t}\n")
 			}
 		}
 	}

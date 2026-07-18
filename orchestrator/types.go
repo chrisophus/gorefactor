@@ -2,28 +2,26 @@ package orchestrator
 
 import "time"
 
-// RefactoringOperation represents a single refactoring operation
+// RefactoringOperation represents a single refactoring operation.
 type RefactoringOperation struct {
-	Type        string `json:"type"`
-	Description string `json:"description"`
-
-	// TargetSpecification defines how to locate the target for refactoring
-	File   string `json:"file"`
-	Target *
-
-	// Line-based targeting (traditional)
-	TargetSpecification `json:"target"`
-	Parameters map[string]interface{} `json:"parameters,omitempty"`
-	Conditions []*Condition           `json:"conditions,omitempty"`
-
-	// Semantic targeting (resilient to code changes)
-	Fallback *FallbackStrategy `json:"fallback,omitempty"`
+	Type        string                 `json:"type"`
+	Description string                 `json:"description"`
+	File        string                 `json:"file"`
+	Target      *TargetSpecification   `json:"target"`
+	Parameters  map[string]interface{} `json:"parameters,omitempty"`
+	Conditions  []*Condition           `json:"conditions,omitempty"`
+	Fallback    *FallbackStrategy      `json:"fallback,omitempty"`
 }
 
+// TargetSpecification defines how to locate the target for refactoring.
+// Strategies can be combined; the orchestrator scores candidates against
+// every populated field (see targeting.go).
 type TargetSpecification struct {
+	// Line-based targeting (traditional)
 	StartLine *int `json:"startLine,omitempty"`
 	EndLine   *int `json:"endLine,omitempty"`
 
+	// Semantic targeting (resilient to code changes)
 	FunctionName      string   `json:"functionName,omitempty"`
 	MethodName        string   `json:"methodName,omitempty"`
 	ReceiverType      string   `json:"receiverType,omitempty"`
@@ -39,43 +37,27 @@ type TargetSpecification struct {
 	VarName   string `json:"varName,omitempty"`   // For var declarations
 
 	// Context-based targeting
-
-	// Condition represents a condition that must be met for the operation
-
-	// eq, ne, gt, lt, contains, regex
-
-	// FallbackStrategy defines what to do if the primary target cannot be found
-
-	// RefactoringPlan represents a complete refactoring plan
-
-	// ExecutionResult represents the result of executing a refactoring plan
-
-	// OperationResult represents the result of a single operation
-
-	// CodeChange represents a specific change made to the code
-
-	// ExecutionStatistics provides metrics about the execution
-
-	// Orchestrator manages the execution of refactoring plans
-
 	BeforePattern   string            `json:"beforePattern,omitempty"`
 	AfterPattern    string            `json:"afterPattern,omitempty"`
 	SurroundingCode map[string]string `json:"surroundingCode,omitempty"`
 }
 
+// Condition represents a condition that must be met for the operation.
 type Condition struct {
 	Type     string      `json:"type"`
 	Property string      `json:"property"`
 	Value    interface{} `json:"value"`
-	Operator string      `json:"operator,omitempty"`
+	Operator string      `json:"operator,omitempty"` // eq, ne, gt, lt, contains, regex
 }
 
+// FallbackStrategy defines what to do if the primary target cannot be found.
 type FallbackStrategy struct {
 	Type        string                 `json:"type"`
 	Description string                 `json:"description"`
 	Parameters  map[string]interface{} `json:"parameters,omitempty"`
 }
 
+// RefactoringPlan represents a complete refactoring plan.
 type RefactoringPlan struct {
 	Version     string                  `json:"version"`
 	Name        string                  `json:"name"`
@@ -86,6 +68,7 @@ type RefactoringPlan struct {
 	Metadata    map[string]interface{}  `json:"metadata,omitempty"`
 }
 
+// ExecutionResult represents the result of executing a refactoring plan.
 type ExecutionResult struct {
 	PlanName   string               `json:"planName"`
 	Executed   time.Time            `json:"executed"`
@@ -96,6 +79,7 @@ type ExecutionResult struct {
 	Statistics *ExecutionStatistics `json:"statistics,omitempty"`
 }
 
+// OperationResult represents the result of a single operation.
 type OperationResult struct {
 	Operation    *RefactoringOperation `json:"operation"`
 	Success      bool                  `json:"success"`
@@ -106,6 +90,7 @@ type OperationResult struct {
 	Error        string                `json:"error,omitempty"`
 }
 
+// CodeChange represents a specific change made to the code.
 type CodeChange struct {
 	Type        string `json:"type"`
 	File        string `json:"file"`
@@ -116,6 +101,7 @@ type CodeChange struct {
 	NewCode     string `json:"newCode,omitempty"`
 }
 
+// ExecutionStatistics provides metrics about the execution.
 type ExecutionStatistics struct {
 	TotalOperations      int `json:"totalOperations"`
 	SuccessfulOperations int `json:"successfulOperations"`
@@ -125,6 +111,7 @@ type ExecutionStatistics struct {
 	TotalChanges         int `json:"totalChanges"`
 }
 
+// Orchestrator manages the execution of refactoring plans.
 type Orchestrator struct {
 	plans map[string]*RefactoringPlan
 	// SkipSnapshot disables the per-plan snapshot in ExecutePlan. Set by

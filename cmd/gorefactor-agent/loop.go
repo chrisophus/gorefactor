@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chrisophus/gorefactor/analyzer"
 	"github.com/chrisophus/gorefactor/orchestrator"
 )
 
@@ -264,7 +265,8 @@ func runGate(dir string) (bool, string) {
 func runInWithStdin(dir, stdin, name string, args ...string) (string, error) {
 	c := exec.Command(name, args...)
 	c.Dir = dir
-	env := append(os.Environ(), "GOTOOLCHAIN=auto")
+	env := append(analyzer.SanitizedGitEnv(), "GOTOOLCHAIN=auto")
+
 	if v := os.Getenv("GOTMPDIR"); v != "" {
 		env = append(env, "GOTMPDIR="+v)
 	}
@@ -280,7 +282,8 @@ func runInWithStdin(dir, stdin, name string, args ...string) (string, error) {
 func runIn(dir, name string, args ...string) (string, error) {
 	c := exec.Command(name, args...)
 	c.Dir = dir
-	env := append(os.Environ(), "GOTOOLCHAIN=auto")
+	env := append(analyzer.SanitizedGitEnv(), "GOTOOLCHAIN=auto")
+
 	// If /tmp is noexec (common in some container environments), the caller can
 	// set GOTMPDIR to a directory that allows execution. We honour it here so
 	// go test can write and execute test binaries. GOCACHE follows suit.

@@ -75,7 +75,8 @@ func TestPackageFuncNames(t *testing.T) {
 }
 
 func TestIsGeneratedFallbackName(t *testing.T) {
-	fallback := []string{"extractBlockL98", "extractBlockL982", "extractBlockL1"}
+	fallback := []string{"extractBlockL98", "extractBlockL982", "extractBlockL1", "processStmts2", "writeLine3"}
+
 	meaningful := []string{"processStmts", "handleFunctionName", "computeTotal", "extractBlock", "extractBlockLX", "extract"}
 	for _, n := range fallback {
 		if !IsGeneratedFallbackName(n) {

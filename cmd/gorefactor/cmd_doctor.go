@@ -220,6 +220,8 @@ func doctorArchStage(root string) doctorStage {
 func doctorGoStage(root, verb string) doctorStage {
 	cmd := exec.Command("go", verb, "./...")
 	cmd.Dir = root
+	cmd.Env = analyzer.SanitizedGitEnv()
+
 	out, err := cmd.CombinedOutput()
 	return doctorStage{name: verb, ok: err == nil, info: trimOutput(out)}
 }

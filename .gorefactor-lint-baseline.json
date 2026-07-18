@@ -8,6 +8,12 @@
       "count": 1
     },
     {
+      "fingerprint": "analyzer/file_size_analyzer.go\u0000complexity\u0000countComplexity has cyclomatic complexity # (threshold #, line #) — consider extracting",
+      "file": "analyzer/file_size_analyzer.go",
+      "rule": "complexity",
+      "count": 1
+    },
+    {
       "fingerprint": "analyzer/funcorder.go\u0000data-clumps\u0000Parameter group [g *funcorderGroup, fset *token.FileSet, out []FuncorderIssue, filename string] appears in # functions; consider creating a struct",
       "file": "analyzer/funcorder.go",
       "rule": "data-clumps",
@@ -17,6 +23,12 @@
       "fingerprint": "analyzer/log_propagation.go\u0000data-clumps\u0000Parameter group [list []ast.Stmt, fset *token.FileSet, report logReportFn] appears in # functions; consider creating a struct",
       "file": "analyzer/log_propagation.go",
       "rule": "data-clumps",
+      "count": 1
+    },
+    {
+      "fingerprint": "benchmark/oracle.go\u0000complexity\u0000declOf has cyclomatic complexity # (threshold #, line #) — consider extracting",
+      "file": "benchmark/oracle.go",
+      "rule": "complexity",
       "count": 1
     },
     {
@@ -158,6 +170,12 @@
       "count": 1
     },
     {
+      "fingerprint": "cmd/gorefactor/cmd_file_sizes.go\u0000complexity\u0000analyzeFileSizes has cyclomatic complexity # (threshold #, line #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_file_sizes.go",
+      "rule": "complexity",
+      "count": 1
+    },
+    {
       "fingerprint": "cmd/gorefactor/cmd_file_sizes.go\u0000long-function\u0000analyzeFileSizes is # lines (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor/cmd_file_sizes.go",
       "rule": "long-function",
@@ -200,6 +218,12 @@
       "count": 1
     },
     {
+      "fingerprint": "cmd/gorefactor/cmd_recommend.go\u0000complexity\u0000recommendExtractions has cyclomatic complexity # (threshold #, line #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_recommend.go",
+      "rule": "complexity",
+      "count": 1
+    },
+    {
       "fingerprint": "cmd/gorefactor/cmd_recommend.go\u0000long-function\u0000recommendExtractions is # lines (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor/cmd_recommend.go",
       "rule": "long-function",
@@ -230,6 +254,12 @@
       "count": 1
     },
     {
+      "fingerprint": "cmd/gorefactor/cmd_suggest.go\u0000complexity\u0000suggestPlanCommand has cyclomatic complexity # (threshold #, line #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_suggest.go",
+      "rule": "complexity",
+      "count": 1
+    },
+    {
       "fingerprint": "cmd/gorefactor/cmd_suggest.go\u0000long-function\u0000suggestPlanCommand is # lines (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor/cmd_suggest.go",
       "rule": "long-function",
@@ -242,9 +272,21 @@
       "count": 1
     },
     {
+      "fingerprint": "cmd/gorefactor/cmd_wrap_errors_process.go\u0000complexity\u0000recurseIntoStmt has cyclomatic complexity # (threshold #, line #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_wrap_errors_process.go",
+      "rule": "complexity",
+      "count": 1
+    },
+    {
       "fingerprint": "cmd/gorefactor/cmd_wrap_errors_process.go\u0000data-clumps\u0000Parameter group [fset *token.FileSet, fn *ast.FuncDecl, stmts []ast.Stmt, file string, result *wrapErrorResult] appears in # functions; consider creating a struct",
       "file": "cmd/gorefactor/cmd_wrap_errors_process.go",
       "rule": "data-clumps",
+      "count": 1
+    },
+    {
+      "fingerprint": "cmd/gorefactor/mutation.go\u0000complexity\u0000run has cyclomatic complexity # (threshold #, line #) — consider extracting",
+      "file": "cmd/gorefactor/mutation.go",
+      "rule": "complexity",
       "count": 1
     },
     {

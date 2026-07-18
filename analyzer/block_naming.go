@@ -46,27 +46,26 @@ func SuggestBlockName(stmt ast.Stmt, cmap ast.CommentMap, fallbackLine int, used
 	return name
 }
 
-// IsGeneratedFallbackName reports whether name is the positional
-// extractBlockL<line> fallback — i.e. SuggestBlockName found no comment or
-// recognizable structure to name the block. Such blocks (typically guard
-// clauses like `if err != nil { return err }`) make poor auto-extraction
-// targets: lifting them into a many-parameter (results, done bool) helper hurts
-// readability, so the autofix path skips them.
+// IsGeneratedFallbackName reports whether name is fallback-quality: either the positional
+// extractBlockL<line> form (SuggestBlockName found no comment or recognizable structure to name the
+// block) or a collision-suffixed form like processStmts2 (the meaningful name was already taken, so
+// the suffixed one no longer describes the block). Such blocks make poor auto-extraction targets:
+// lifting them into a many-parameter helper under a non-descriptive name hurts readability, so the
+// autofix path skips them and leaves the finding for a human.
 func IsGeneratedFallbackName(name string) bool {
+	if name == "" {
+		return false
+	}
 	const prefix = "extractBlockL"
-	if !strings.HasPrefix(name, prefix) {
-		return false
+	if strings.HasPrefix(name, prefix) && allDigits(strings.TrimPrefix(name, prefix)) {
+		return true
 	}
-	digits := strings.TrimPrefix(name, prefix)
-	if digits == "" {
-		return false
-	}
-	for _, r := range digits {
-		if !unicode.IsDigit(r) {
-			return false
-		}
-	}
-	return true
+	// A trailing digit means ensureUnique had to suffix the name because the
+	// meaningful form was already taken (processStmts -> processStmts2). The
+	// suffixed form no longer describes the block, so it is fallback-quality
+	// for autofix purposes.
+	return allDigits(name[len(name)-1:])
+
 }
 
 // PackageFuncNames returns the set of top-level function/method names declared
@@ -98,6 +97,15 @@ func PackageFuncNames(filePath string) map[string]bool {
 		}
 	}
 	return names
+}
+
+func allDigits(s string) bool {
+	for _, r := range s {
+		if !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return s != ""
 }
 
 // nameFromComment turns a block's leading comment into an identifier.

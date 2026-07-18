@@ -8,7 +8,7 @@ import (
 )
 
 // longFunctionThreshold is the line count above which a function is flagged.
-const longFunctionThreshold = 75
+const longFunctionThreshold = analyzer.DefaultLongFunctionLines
 
 type longFunctionRule struct{}
 

@@ -115,6 +115,20 @@ func (ap *ArchitecturalPattern) Summary() string {
 	return fmt.Sprintf("[%s] %s: %s", strings.ToUpper(ap.Type), ap.Name, ap.Description)
 }
 
+func isCarrierParamType(t string) bool {
+	t = strings.TrimPrefix(t, "[]")
+	t = strings.TrimPrefix(t, "*")
+	if t == "context.Context" {
+		return true
+	}
+	for _, p := range []string{"testing.", "token.", "ast.", "packages.", "parser."} {
+		if strings.HasPrefix(t, p) {
+			return true
+		}
+	}
+	return false
+}
+
 // detectDataClumps finds typed parameter groups (>=3 params) that recur
 // across >=2 functions in the file -- a Fowler "data clump" that likely
 // wants to become its own struct. The signature is keyed on (name,type)
@@ -135,14 +149,21 @@ func (pd *PatternDetector) detectDataClumps() []ArchitecturalPattern {
 			continue
 		}
 		var pairs, names []string
+		realParams := 0 // params that are domain data, not idiomatic carriers
 		for _, field := range fn.Type.Params.List {
 			t := paramTypeString(field.Type)
 			for _, name := range field.Names {
 				pairs = append(pairs, name.Name+" "+t)
 				names = append(names, name.Name)
+				if !isCarrierParamType(t) {
+					realParams++
+				}
 			}
 		}
-		if len(pairs) < 3 {
+		// A clump is bundleable domain data. Require ≥3 real (non-carrier)
+		// params, so a group whose bulk is *token.FileSet / *testing.T /
+		// context.Context plumbing does not masquerade as a data clump.
+		if len(pairs) < 3 || realParams < 3 {
 			continue
 		}
 		key := append([]string(nil), pairs...)

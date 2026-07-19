@@ -16,14 +16,8 @@ func reduceComplexityByExtraction(file, function string, threshold int, allowRet
 	if err != nil {
 		return 0, err
 	}
-	// Only extract blocks we can name meaningfully (see reduceLengthByExtraction).
-	var specs []extractionSpec
-	for _, e := range res.Extractions {
-		if analyzer.IsGeneratedFallbackName(e.Suggestion) {
-			continue
-		}
-		specs = append(specs, extractionSpec{StartLine: e.StartLine, EndLine: e.EndLine, Suggestion: e.Suggestion})
-	}
-	return applyExtractionsBottomUp(file, specs, allowReturns), nil
+	return applyNameableExtractions(file, res.Extractions, allowReturns, func(e analyzer.ComplexityExtraction) extractionSpec {
+		return extractionSpec{StartLine: e.StartLine, EndLine: e.EndLine, Suggestion: e.Suggestion}
+	}), nil
 
 }

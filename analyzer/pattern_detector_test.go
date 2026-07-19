@@ -155,6 +155,52 @@ func B(x string, y string, z string) {}
 `,
 			shouldDetect: false,
 		},
+		{
+			// Idiomatic AST-processing signatures: *token.FileSet threads with
+			// *ast.File / ast.Node by necessity. Once carriers are excluded only
+			// one real param (src) remains, so this is not a bundleable clump.
+			name: "carrier types (fset+ast) are not a data clump",
+			code: `
+package main
+
+import (
+	"go/ast"
+	"go/token"
+)
+
+func A(fset *token.FileSet, node *ast.File, src []byte) {}
+func B(fset *token.FileSet, node *ast.File, src []byte) {}
+`,
+			shouldDetect: false,
+		},
+		{
+			// *testing.T is not domain data; a test helper group carrying it plus
+			// one or two real params must not be flagged (bundling *testing.T
+			// into a struct is anti-idiomatic).
+			name: "testing.T helper group is not a data clump",
+			code: `
+package main
+
+import "testing"
+
+func A(t *testing.T, dir string, mode int) {}
+func B(t *testing.T, dir string, mode int) {}
+`,
+			shouldDetect: false,
+		},
+		{
+			// Carriers plus THREE real domain params is still a genuine clump.
+			name: "three real params beside a carrier still clumps",
+			code: `
+package main
+
+import "go/token"
+
+func A(fset *token.FileSet, host string, port string, scheme string) {}
+func B(fset *token.FileSet, host string, port string, scheme string) {}
+`,
+			shouldDetect: true,
+		},
 	}
 
 	for _, tt := range tests {

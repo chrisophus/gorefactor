@@ -35,7 +35,7 @@ func (f *fakeSubstrate) Probe(string) error { return f.probeErr }
 
 func TestComputeScore(t *testing.T) {
 	clean := &Report{}
-	clean.ComputeScore()
+	clean.ComputeScore(1000)
 	if clean.Score == nil || *clean.Score != 100 {
 		t.Fatalf("clean tree score = %v, want 100", clean.Score)
 	}
@@ -44,7 +44,7 @@ func TestComputeScore(t *testing.T) {
 		{Severity: SeverityWarning},
 		{Severity: SeverityInfo},
 	}}
-	dirty.ComputeScore()
+	dirty.ComputeScore(1000)
 	if dirty.Score == nil || *dirty.Score >= 100 || *dirty.Score <= 0 {
 		t.Fatalf("dirty tree score = %v, want in (0, 100)", dirty.Score)
 	}
@@ -52,7 +52,7 @@ func TestComputeScore(t *testing.T) {
 	for i := range worse.Findings {
 		worse.Findings[i].Severity = SeverityError
 	}
-	worse.ComputeScore()
+	worse.ComputeScore(1000)
 	if *worse.Score >= *dirty.Score {
 		t.Fatalf("score must decrease with findings: %v >= %v", *worse.Score, *dirty.Score)
 	}
@@ -60,7 +60,7 @@ func TestComputeScore(t *testing.T) {
 		{Severity: SeverityInfo, Rule: "high-blast-radius"},
 		{Severity: SeverityInfo, Rule: "low-gorefactor-adherence"},
 	}}
-	ranking.ComputeScore()
+	ranking.ComputeScore(1000)
 	if *ranking.Score != 100 {
 		t.Fatalf("ranking-signal rules must not depress the score: %v", *ranking.Score)
 	}
@@ -91,10 +91,49 @@ func TestScoreWeightTiers(t *testing.T) {
 
 	defect := &Report{Findings: []Finding{{Rule: "duplicate-block", Severity: SeverityWarning}}}
 	proxy := &Report{Findings: []Finding{{Rule: "long-function", Severity: SeverityWarning}}}
-	defect.ComputeScore()
-	proxy.ComputeScore()
+	defect.ComputeScore(1000)
+	proxy.ComputeScore(1000)
 	if !(*proxy.Score > *defect.Score) {
 		t.Fatalf("proxy finding must cost less than defect finding: proxy=%v defect=%v", *proxy.Score, *defect.Score)
+	}
+}
+
+// TestComputeScoreSizeNormalization pins the size-relative proxy scoring: the
+// same proxy finding count costs less on a larger codebase (it is a density,
+// not an absolute count), while a defect costs the same regardless of size, and
+// a codebase at the reference size scores as the pre-normalisation model did.
+func TestComputeScoreSizeNormalization(t *testing.T) {
+	proxies := func() []Finding {
+		fs := make([]Finding, 20)
+		for i := range fs {
+			fs[i] = Finding{Rule: "long-function", Severity: SeverityWarning}
+		}
+		return fs
+	}
+
+	small := &Report{Findings: proxies()}
+	large := &Report{Findings: proxies()}
+	small.ComputeScore(1000)  // reference size: no scaling
+	large.ComputeScore(10000) // 10x functions -> proxy density 1/10
+	if !(*large.Score > *small.Score) {
+		t.Fatalf("proxy findings must cost less on a larger codebase: large=%v small=%v", *large.Score, *small.Score)
+	}
+
+	// Defects are absolute: same finding count, same score regardless of size.
+	dSmall := &Report{Findings: []Finding{{Rule: "duplicate-block", Severity: SeverityWarning}}}
+	dLarge := &Report{Findings: []Finding{{Rule: "duplicate-block", Severity: SeverityWarning}}}
+	dSmall.ComputeScore(1000)
+	dLarge.ComputeScore(50000)
+	if *dSmall.Score != *dLarge.Score {
+		t.Fatalf("defect score must not depend on codebase size: %v vs %v", *dSmall.Score, *dLarge.Score)
+	}
+
+	// Below the reference size, no leniency (floored): a tiny codebase with the
+	// same proxy count scores the same as one at the reference size.
+	tiny := &Report{Findings: proxies()}
+	tiny.ComputeScore(200)
+	if *tiny.Score != *small.Score {
+		t.Fatalf("sub-reference sizes must floor (no density benefit): tiny=%v ref=%v", *tiny.Score, *small.Score)
 	}
 }
 

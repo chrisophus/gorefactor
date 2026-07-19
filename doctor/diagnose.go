@@ -3,9 +3,14 @@ package doctor
 import (
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"sort"
+	"strings"
 
+	"github.com/chrisophus/gorefactor/analyzer"
 	"github.com/chrisophus/gorefactor/config"
 )
 
@@ -75,7 +80,7 @@ func Diagnose(opts Options) (*Report, error) {
 		}
 	}
 	if opts.Score && !opts.Scoped {
-		report.ComputeScore()
+		report.ComputeScore(countScoredFunctions(opts.Root, cfg.WalkOptions()))
 	}
 	if !opts.NoJournal {
 		if jerr := appendJournal(opts.Root, journalEntryFor(report)); jerr != nil {
@@ -83,6 +88,30 @@ func Diagnose(opts Options) (*Report, error) {
 		}
 	}
 	return report, nil
+}
+
+func countScoredFunctions(root string, walk analyzer.WalkOptions) int {
+	files, err := analyzer.WalkGoFiles(root, walk)
+	if err != nil {
+		return 0
+	}
+	fset := token.NewFileSet()
+	n := 0
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		af, perr := parser.ParseFile(fset, f, nil, 0)
+		if perr != nil {
+			continue
+		}
+		for _, d := range af.Decls {
+			if _, ok := d.(*ast.FuncDecl); ok {
+				n++
+			}
+		}
+	}
+	return n
 }
 
 // substrateResult is the output of one substrate execution.

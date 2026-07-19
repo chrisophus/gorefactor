@@ -46,10 +46,12 @@ func (r longFunctionRule) Run(ctx LintContext) []lintIssue {
 			}
 
 			iss := lintIssue{
-				File:     f,
-				Rule:     "long-function",
-				Severity: "warning",
-				Message:  fmt.Sprintf("%s is %d lines (threshold %d, line %d) — consider extracting", m.Key(), m.Lines, threshold, m.Line),
+				File:      f,
+				Rule:      "long-function",
+				Severity:  "warning",
+				Message:   fmt.Sprintf("%s is %d lines (threshold %d, line %d) — consider extracting", m.Key(), m.Lines, threshold, m.Line),
+				Value:     m.Lines,
+				Threshold: threshold,
 			}
 			// Live no-target check: if the reducer has no nameable,
 			// non-vacuous block to offer, say so up front instead of

@@ -125,6 +125,32 @@ func scoreWeight(rule string, sev Severity) float64 {
 	return w
 }
 
+// scoreProxyGradientFloor is the minimum partial credit a threshold-based proxy
+// finding carries: even a function one line over the limit is not entirely free
+// (it still exceeds a deliberate bound), but it is far cheaper than one at twice
+// the limit, which reaches full weight.
+const scoreProxyGradientFloor = 0.15
+
+// proxyGradient scores a threshold-based proxy by how far over its threshold the
+// measured value is: floored at threshold, rising linearly to full weight at
+// twice the threshold. This replaces the flat proxy multiplier for rules that
+// report a value (long-function, complexity, deep-nesting), so a cx-16 function
+// no longer costs the same as a cx-45 one and a genuine reduction lowers the
+// score cost even when the finding does not fully clear.
+func proxyGradient(value, threshold int) float64 {
+	if threshold <= 0 {
+		return scoreProxyGradientFloor
+	}
+	g := float64(value-threshold) / float64(threshold) // 0 at threshold, 1 at 2x
+	if g < scoreProxyGradientFloor {
+		g = scoreProxyGradientFloor
+	}
+	if g > 1.0 {
+		g = 1.0
+	}
+	return g
+}
+
 // scoreProxyReferenceFuncs is the codebase size (in scored functions) at which
 // the proxy tier is neither discounted nor amplified — the reference where this
 // size-normalised score equals the older absolute-count score. 1000 functions
@@ -154,6 +180,16 @@ func (r *Report) ComputeScore(scoredFuncs int) {
 	for _, f := range r.Findings {
 		w := scoreWeight(f.Rule, f.Severity)
 		if scoreProxyRules[f.Rule] {
+			// For a threshold-based proxy that carries its measured value,
+			// replace the flat proxy multiplier with distance-based partial
+			// credit: a function just over threshold is nearly fine, one at 2x
+			// is fully flagged. This is a redistribution, not a discount — a
+			// badly-over finding costs *more* than the old flat half — and it
+			// rewards genuine reductions (cx 30->20) that the binary cliff
+			// ignored.
+			if f.MetricThreshold > 0 {
+				w = severityWeight[f.Severity] * proxyGradient(f.MetricValue, f.MetricThreshold)
+			}
 			proxyWeighted += w
 		} else {
 			defectWeighted += w

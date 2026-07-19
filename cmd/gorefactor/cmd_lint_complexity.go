@@ -44,10 +44,12 @@ func (r complexityRule) Run(ctx LintContext) []lintIssue {
 				sev = "error"
 			}
 			iss := lintIssue{
-				File:     f,
-				Rule:     "complexity",
-				Severity: sev,
-				Message:  fmt.Sprintf("%s has cyclomatic complexity %d (threshold %d, line %d) — consider extracting", c.Name, c.Complexity, threshold, c.Line),
+				File:      f,
+				Rule:      "complexity",
+				Severity:  sev,
+				Message:   fmt.Sprintf("%s has cyclomatic complexity %d (threshold %d, line %d) — consider extracting", c.Name, c.Complexity, threshold, c.Line),
+				Value:     c.Complexity,
+				Threshold: threshold,
 			}
 			// Live no-target check, mirroring long-function's: don't imply
 			// extraction will help when the reducer has nothing to offer.

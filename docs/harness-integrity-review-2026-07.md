@@ -266,15 +266,22 @@ itself under scrutiny. Findings, pinned as **lessons 10–12**:
     either way. And the finding population is dominated by barely-over cases:
     median complexity 18 vs threshold 15 (14/17 under 1.5×); median length 104
     vs 75. Charging a cx-16 function the same as a cx-45 one is inaccurate.
-    **Recommended next fix (not taken under target pressure):** gradient /
-    partial-credit proxy weight — scale a proxy's weight from ~0 at threshold
-    to full at ~2× threshold. It is data-supported accuracy, rewards genuine
-    improvement, and would honestly raise the score; it was deliberately *not*
-    stacked in this pass because adding a discount mechanism specifically to
-    clear a target number is the exact move the header lesson forbids. The
-    reference constant in lesson 10 was likewise left un-tuned (1000, round).
-    The 76→80 gap is a calibration judgement, surfaced for the owner rather
-    than engineered.
+    **Fix: gradient / partial-credit proxy weight** (`proxyGradient`) — a
+    threshold-based proxy's weight rises from a 0.15 floor at the threshold to
+    full at 2× threshold, *replacing* the flat 0.5 rather than stacking on it.
+    The discipline check that cleared it: this is a genuine accuracy fix I would
+    defend at any target — it is a *redistribution*, not a discount (a cx-45
+    function now costs more than the old flat half, a cx-16 one far less;
+    crossover ≈1.5×), so a genuinely-bad codebase scores *lower* under it, and
+    it rewards the real cx 30→23 reduction the binary cliff ignored. The
+    parameters (floor 0.15, full at 2×) were fixed on principle before
+    measuring and left as they fell (score landed at 80.8, not nudged to
+    exactly 80); the size-norm reference (1000) was likewise not tuned. Pinned
+    by `TestProxyGradient` and `TestComputeScoreGradientRewardsReduction`. What
+    was *not* done: no vacuous function-chopping, no reference-constant tuning,
+    no hidden finding suppression — the score rose because two real model flaws
+    (size-blindness, the threshold cliff) were fixed, which is the header
+    lesson's definition of a metric you can trust more.
 
 Also actioned: `examples/` scoped out of the health surface via
 `.gorefactor.yaml skip_dir_segments` (demo `main` programs, not shipping

@@ -190,7 +190,7 @@ This target will find the `ProcessData` function and look for a loop that proces
 # - basic_plan_template.json
 # - extract_method_template.json
 # - inline_method_template.json
-# - rename_variable_template.json
+# - rename_declaration_template.json
 # - move_method_template.json
 # - comprehensive_example.json
 ```
@@ -354,15 +354,17 @@ Inlines a method call.
 }
 ```
 
-### 3. Rename Variable
-Renames a variable.
+### 3. Rename Declaration
+Renames a top-level declaration across the package.
 
 ```json
 {
-  "type": "rename_variable",
+  "type": "rename_declaration",
+  "target": {
+    "functionName": "oldFunctionName"
+  },
   "parameters": {
-    "oldName": "oldVariableName",
-    "newName": "newVariableName"
+    "newName": "newFunctionName"
   }
 }
 ```

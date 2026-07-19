@@ -232,7 +232,7 @@ These operations require minimal LLM context and produce no code output:
 **Structural targeting operations** (no code I/O):
 - ✅ **Move/copy functions** - `move_method`, `move_function`: Target by name, no code reading/writing
 - ✅ **Delete code** - `delete_block`: Just needs location (function name, line range)
-- ✅ **Rename symbols** - `rename_variable`, `rename_function`: Semantic targeting with find-and-replace
+- ✅ **Rename symbols** - `rename_declaration`: Semantic targeting with find-and-replace
 - ✅ **Simple insertions** - `insert_code` at known locations: `before_function`, `after_function`, at package level
 
 **Analysis-driven operations** (LLM reads output, not input):
@@ -495,7 +495,7 @@ All refactoring plans follow this structure:
   "description": "what this does",
   "operations": [
     {
-      "type": "extract_method|inline_method|rename_variable|move_method|insert_code",
+      "type": "extract_method|inline_method|rename_declaration|move_method|insert_code",
       "description": "what this operation does",
       "file": "path/to/file.go",
       "target": { /* targeting strategy */ },

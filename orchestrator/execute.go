@@ -143,6 +143,14 @@ func (o *Orchestrator) dispatchOperation(operation *RefactoringOperation, target
 	case "rename_declaration":
 		return o.executeRenameDeclaration(operation, result)
 	default:
+		if h, ok := externalHandlers[operation.Type]; ok {
+			changes, err := h(operation, target)
+			if err != nil {
+				return err
+			}
+			result.Changes = append(result.Changes, changes...)
+			return nil
+		}
 		return fmt.Errorf("unknown operation type: %s", operation.Type)
 	}
 }

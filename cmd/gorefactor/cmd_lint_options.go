@@ -283,10 +283,7 @@ func applyConfigSeverity(issues []lintIssue, opts lintOptions) []lintIssue {
 
 func lintShouldFail(issues []lintIssue, failOn string) bool {
 	for _, iss := range issues {
-		if failOn == "warning" {
-			return true
-		}
-		if iss.Severity == "error" {
+		if issueFailsAt(iss, failOn) {
 			return true
 		}
 	}

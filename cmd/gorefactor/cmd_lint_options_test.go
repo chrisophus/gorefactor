@@ -57,6 +57,10 @@ func TestLintShouldFail(t *testing.T) {
 	if !lintShouldFail(issues, "error") {
 		t.Fatal("expected fail on error")
 	}
+	// info is advisory: it must never fail a gate, not even a warning gate.
+	if lintShouldFail([]lintIssue{{Severity: "info"}}, "warning") {
+		t.Fatal("info finding must not fail a warning gate")
+	}
 }
 
 func TestFailingIssueCount(t *testing.T) {
@@ -69,8 +73,9 @@ func TestFailingIssueCount(t *testing.T) {
 	if got := failingIssueCount(issues, "error"); got != 2 {
 		t.Fatalf("failingIssueCount(error) = %d, want 2", got)
 	}
-	if got := failingIssueCount(issues, "warning"); got != len(issues) {
-		t.Fatalf("failingIssueCount(warning) = %d, want %d", got, len(issues))
+	// warning gate counts warning+error but not the advisory info finding.
+	if got := failingIssueCount(issues, "warning"); got != 3 {
+		t.Fatalf("failingIssueCount(warning) = %d, want 3 (info excluded)", got)
 	}
 }
 
@@ -84,8 +89,9 @@ func TestFailingIssues(t *testing.T) {
 	if got := failingIssues(issues, "error"); len(got) != 2 {
 		t.Fatalf("len(failingIssues(error)) = %d, want 2", len(got))
 	}
-	if got := failingIssues(issues, "warning"); len(got) != len(issues) {
-		t.Fatalf("len(failingIssues(warning)) = %d, want %d", len(got), len(issues))
+	// warning gate keeps warning+error, drops the advisory info finding.
+	if got := failingIssues(issues, "warning"); len(got) != 3 {
+		t.Fatalf("len(failingIssues(warning)) = %d, want 3 (info excluded)", len(got))
 	}
 }
 

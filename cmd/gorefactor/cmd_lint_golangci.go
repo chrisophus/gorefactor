@@ -22,8 +22,6 @@ type golangciLintRule struct{}
 // checker ran and found something" instead of conflating both into a count.
 const golangciToolFailureRule = "golangci-lint-error"
 
-func (golangciLintRule) Name() string { return "golangci-lint" }
-
 func (r golangciLintRule) Run(ctx LintContext) []lintIssue {
 	if !golangciLintAvailable(ctx.Root) {
 		return nil

@@ -10,8 +10,6 @@ import (
 
 type archLintRule struct{}
 
-func (archLintRule) Name() string { return "arch-violation" }
-
 func (r archLintRule) Run(ctx LintContext) []lintIssue {
 	cfgPath := detectArchConfig(ctx.Root)
 	if cfgPath == "" {

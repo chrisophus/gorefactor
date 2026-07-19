@@ -217,13 +217,8 @@ func (p *anthropicProvider) doWithRetry(ctx context.Context, endpoint string, bu
 	var lastErr error
 	var prevResp *http.Response // headers only after attempts 1..N-1; carries Retry-After
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		if attempt > 0 {
-			delay := retryDelay(attempt, prevResp)
-			provDebugf("anthropic retry %d/%d after %s backoff (last: %v)",
-				attempt+1, maxAttempts, delay, lastErr)
-			if err := retrySleep(ctx, delay); err != nil {
-				return 0, nil, err
-			}
+		if err := retryBackoff(ctx, "anthropic", attempt, maxAttempts, prevResp, lastErr); err != nil {
+			return 0, nil, err
 		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(buf))
 		if err != nil {

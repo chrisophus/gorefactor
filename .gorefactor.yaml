@@ -1,0 +1,9 @@
+# Scope the analysis/health surface. examples/ holds intentional demonstration
+# programs (illustrative "before" code for `gorefactor recommend` etc.), not
+# shipping code, so its deliberately-dead helpers must not count against tree
+# health. testdata/ is the Go-conventional fixtures dir (ignored by the go tool
+# itself) and is excluded on the same principle.
+walk:
+  skip_dir_segments:
+    - examples
+    - testdata

@@ -255,6 +255,55 @@ AGENTS.md, plus machinery for a `.gorefactor.yaml` that doesn't exist.
 
 ---
 
+## Part 2.5 — The dogfooding test: would gorefactor have caught its own defects?
+
+gorefactor exists to keep *other* Go projects clean. The hardest and fairest benchmark it will
+ever face is therefore its own repository — a 68K-line, agent-built-at-speed codebase, i.e. exactly
+the kind of project the tool targets. So score it: **of the defect classes this review found, how
+many would any of the 41 sensors have flagged?**
+
+| Defect found in this repo | Caught by a sensor? | Why not |
+|---|---|---|
+| Committed binaries + tracked `coverage.html` (~16.5MB) | **No** | No repo-hygiene rule; sensors only walk `.go` ASTs |
+| Five phantom targeting fields, advertised in docs and examples | **No** | No "advertised-but-unwired" sensor; `dead-code` doesn't cover struct fields |
+| `rename` is scope-blind find-and-replace | **No** | Semantic correctness — the integrity review already names this blind spot |
+| Diff analyzer emits `rename_variable` ops no executor dispatches | **No** | No producer/consumer registry cross-check (the lint registry *has* one; the op registry doesn't) |
+| Dead `call_hierarchy.go`/`call_chain.go` | **No** | Their own tests reference them, and test references count as "uses" |
+| `cmd/gorefactor-test/` compiled but wired into nothing | **No** | Nothing senses "built but absent from Makefile/CI/release" |
+| 25 lines of stranded narration comments in `orchestrator/operations.go` | **No** — verified | `stranded-comment` matches mis-attached *doc* comments; free-floating comment groups don't fit its pattern |
+| Doctor gate runs 3 rules while docs claim the full lint | **No** | Doc-drift tests pinned constants in CLAUDE.md only; behavioral claims unsensed |
+| README said 28 rules (41), 24 steps (40), 6 commands undocumented | **Partially** | The drift-test *class* exists but watched the wrong file |
+| 128-file `package main`, engines unimportable | **No** | `file-size` is per-file; `god-object`/`large-class` are per-type; nothing is per-package |
+| Two journal/undo systems, duplicated gates | **No** | `duplicate-block` sees textual clones, not conceptual duplication |
+| 84-finding self-baseline incl. an autofixable `funcorder` violation | **Sensor fired** | …and the finding was baselined instead of fixed |
+
+Rounded generously: the sensors caught **one of twelve** defect classes, and the culture suppressed
+that one. Meanwhile the rules that dominate the self-baseline (`long-function`, `complexity`) are
+proxy metrics the doctor score itself half-weights as gameable-by-code-motion — the tool is
+strictest about the things that matter least, and blind to the things that actually degraded it.
+
+Two conclusions follow:
+
+1. **This repo is the product demo, and the demo currently argues against the product.** The first
+   thing a prospective adopter will do is run gorefactor on gorefactor. Today that returns "no
+   issues" over a baseline hiding 84 findings, in a tree containing committed binaries, phantom
+   features, and dead subsystems. The baseline/ratchet was designed for adopting *legacy*
+   codebases; using it to suppress the tool's own findings on a three-day-old repo is a misuse of
+   the mechanism, and "self-clean without a baseline" should be a release gate.
+2. **This review is a free corpus of next-generation sensors.** The defects above are precisely the
+   failure modes of agent-built codebases at speed — speculative subsystems, phantom surface area,
+   doc drift, conceptual duplication — which is the exact market the tool serves, and no current
+   rule targets them. The project's own harness rule ("every new capability gets a sensor") applied
+   to itself says: each row in the table becomes either a new sensor or an explicit out-of-scope
+   note. Concretely promising: `tracked-artifact` (binary/coverage committed to git),
+   `test-only-live` (exported symbol referenced only from `_test.go`), free-floating
+   stranded-comment detection, `advertised-but-unwired` (docs/examples referencing flags, fields,
+   or op types nothing reads — the generalization of `orphaned-config-path`, which is the right
+   instinct scoped too narrowly), a per-package god-package rule, and an op-registry cross-check
+   test mirroring `lint_registry_test.go`.
+
+---
+
 ## Part 3 — Recommendations
 
 Ordered; each is independently shippable. P0 is hygiene, P1 is strategy, P2 is architecture, P3 is
@@ -310,6 +359,11 @@ prove-or-cut experiments.
     "rename."
 
 ### P3 — Prove or cut (ongoing)
+
+13a. **Adopt "self-clean, no baseline" as the release gate**, and turn Part 2.5's table into the
+    sensor backlog: each defect class this review found gets a sensor or a documented
+    out-of-scope decision. The repo is the benchmark; a tool that keeps other projects clean
+    must demonstrably keep itself clean first.
 
 14. **Run the cost-of-pass sweep and publish frontier-vs-junior numbers.** The campaign-mode
     economic thesis is the project's most novel claim and its infrastructure is already built. If

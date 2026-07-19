@@ -21,6 +21,7 @@ func TestDefaultLintRules_ExpectedSet(t *testing.T) {
 		"generated-name",
 		"byvalue-buffer",
 		"stranded-comment",
+		"orphaned-config-path",
 		"if-err-log-return",
 		"wrap-log-return",
 		"wrap-bridge-log-return",

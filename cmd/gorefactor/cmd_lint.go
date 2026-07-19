@@ -384,6 +384,7 @@ func defaultLintRules() []LintRule {
 		generatedNameRule{},
 		byValueBufferRule{},
 		strandedCommentRule{},
+		orphanedConfigPathRule{},
 	}
 	rules = append(rules, logPropagationRules()...)
 	rules = append(rules, funcorderRules()...)

@@ -101,7 +101,5 @@ linters:
       - linters: [cyclop, funlen]
         path: orchestrator/(conditions|cross_package_rewrite_find|cross_package_rewrite_non|dry_run_execute)\.go$
     paths:
-      - ^testfiles/
       - ^examples/
       - ^benchmark/
-      - ^move_by_plan\.go$

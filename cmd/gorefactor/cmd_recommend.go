@@ -10,17 +10,33 @@ import (
 )
 
 // Check for help flag
-func recommendExtractions(
 
-	// Create default config
-	args []string) error {
+// Create default config
 
-	// Parse optional configuration flags
+// Parse optional configuration flags
+
+// Full JSON output
+func parseIntFlag(args []string, i int, flag string) (val, next int, err error) {
+	if i+1 >= len(args) {
+
+		// Improvement plan item 7: complexity-threshold mode. Collect the non-flag
+		// positionals (file + function) and dispatch to the reduce-complexity path.
+		return 0, i, fmt.Errorf("missing value for %s", flag)
+	}
+	val, err = strconv.Atoi(args[i+1])
+	if err != nil {
+		return 0, i, fmt.Errorf("invalid value for %s: %v", flag, err)
+	}
+	return val, i + 1, nil
+}
+
+// recommendExtractions implements `recommend <file> [flags]`: it parses the
+// extraction filter flags and prints candidate blocks as JSON (or, with
+// --short, a top-3 summary). --reduce-complexity/--reduce-length dispatch to
+// their threshold-driven paths.
+func recommendExtractions(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf(
-
-			// Full JSON output
-			"missing file path")
+		return fmt.Errorf("missing file path")
 	}
 
 	if args[0] == "--help" {
@@ -28,8 +44,6 @@ func recommendExtractions(
 		return nil
 	}
 
-	// Improvement plan item 7: complexity-threshold mode. Collect the non-flag
-	// positionals (file + function) and dispatch to the reduce-complexity path.
 	if hasFlag(args, "--reduce-complexity") {
 		return runReduceComplexity(args)
 	}
@@ -46,75 +60,47 @@ func recommendExtractions(
 			printUsage()
 			return nil
 		case "--min-complexity":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --min-complexity")
-			}
-			val, err := strconv.Atoi(args[i+1])
+			val, ni, err := parseIntFlag(args, i, "--min-complexity")
 			if err != nil {
-				return fmt.Errorf("invalid value for --min-complexity: %v", err)
+				return err
 			}
-			config.MinComplexity = val
-			i++
+			config.MinComplexity, i = val, ni
 		case "--max-complexity":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --max-complexity")
-			}
-			val, err := strconv.Atoi(args[i+1])
+			val, ni, err := parseIntFlag(args, i, "--max-complexity")
 			if err != nil {
-				return fmt.Errorf("invalid value for --max-complexity: %v", err)
+				return err
 			}
-			config.MaxComplexity = val
-			i++
+			config.MaxComplexity, i = val, ni
 		case "--max-read-vars":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --max-read-vars")
-			}
-			val, err := strconv.Atoi(args[i+1])
+			val, ni, err := parseIntFlag(args, i, "--max-read-vars")
 			if err != nil {
-				return fmt.Errorf("invalid value for --max-read-vars: %v", err)
+				return err
 			}
-			config.MaxReadVars = val
-			i++
+			config.MaxReadVars, i = val, ni
 		case "--max-write-vars":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --max-write-vars")
-			}
-			val, err := strconv.Atoi(args[i+1])
+			val, ni, err := parseIntFlag(args, i, "--max-write-vars")
 			if err != nil {
-				return fmt.Errorf("invalid value for --max-write-vars: %v", err)
+				return err
 			}
-			config.MaxWriteVars = val
-			i++
+			config.MaxWriteVars, i = val, ni
 		case "--min-statements":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --min-statements")
-			}
-			val, err := strconv.Atoi(args[i+1])
+			val, ni, err := parseIntFlag(args, i, "--min-statements")
 			if err != nil {
-				return fmt.Errorf("invalid value for --min-statements: %v", err)
+				return err
 			}
-			config.MinStatements = val
-			i++
+			config.MinStatements, i = val, ni
 		case "--max-statements":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --max-statements")
-			}
-			val, err := strconv.Atoi(args[i+1])
+			val, ni, err := parseIntFlag(args, i, "--max-statements")
 			if err != nil {
-				return fmt.Errorf("invalid value for --max-statements: %v", err)
+				return err
 			}
-			config.MaxStatements = val
-			i++
+			config.MaxStatements, i = val, ni
 		case "--num-leading-stmts":
-			if i+1 >= len(args) {
-				return fmt.Errorf("missing value for --num-leading-stmts")
-			}
-			val, err := strconv.Atoi(args[i+1])
+			val, ni, err := parseIntFlag(args, i, "--num-leading-stmts")
 			if err != nil {
-				return fmt.Errorf("invalid value for --num-leading-stmts: %v", err)
+				return err
 			}
-			config.NumLeadingStmts = val
-			i++
+			config.NumLeadingStmts, i = val, ni
 		case "--function":
 			if i+1 >= len(args) {
 				return fmt.Errorf("missing value for --function")

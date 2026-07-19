@@ -6,77 +6,96 @@ import (
 	"strings"
 )
 
-// ValidateRename checks if renaming a symbol is safe
-func (v *ExportedRenameValidator) ValidateRename(oldName, newName string) (*RenameValidation, error) {
-	validation := &RenameValidation{
+// AdviseRename analyzes a proposed rename and returns advisory hints.
+// Blocking hints are definite problems (invalid identifier, builtin or
+// package-level collision, symbol not found); advisory hints are
+// name-match-only observations. It never claims a rename is safe.
+func (v *RenameAdvisor) AdviseRename(oldName, newName string) (*RenameHints, error) {
+	hints := &RenameHints{
 		IsExported: isExportedName(oldName),
-		Warnings:   make([]string, 0),
 	}
 
-	// Check if new name is valid Go identifier
+	// Definite problems first: these hold regardless of scope resolution.
 	if !isValidIdentifier(newName) {
-		validation.SafeToRename = false
-		validation.Warnings = append(validation.Warnings, fmt.Sprintf("Invalid identifier: %s", newName))
-		return validation, nil
+		hints.Blocking = append(hints.Blocking, fmt.Sprintf("invalid identifier: %s", newName))
+		return hints, nil
 	}
-
-	// Check if new name conflicts with built-ins
 	if isBuiltinName(newName) {
-		validation.SafeToRename = false
-		validation.Warnings = append(validation.Warnings, fmt.Sprintf("Conflicts with builtin: %s", newName))
-		return validation, nil
+		hints.Blocking = append(hints.Blocking, fmt.Sprintf("conflicts with builtin: %s", newName))
+		return hints, nil
+	}
+	if v.packageLevelNames()[newName] {
+		hints.Blocking = append(hints.Blocking, fmt.Sprintf("%s is already declared at package level in %s", newName, v.packageName))
+		return hints, nil
 	}
 
 	// Find all occurrences of the symbol
-	var targetFile string
-	var targetLine int
 	refs := v.findSymbolReferences(oldName)
-
 	if len(refs) == 0 {
-		validation.SafeToRename = false
-		validation.Warnings = append(validation.Warnings, fmt.Sprintf("Symbol not found: %s", oldName))
-		return validation, nil
+		hints.Blocking = append(hints.Blocking, fmt.Sprintf("symbol not found: %s", oldName))
+		return hints, nil
 	}
 
 	// Categorize references
 	for _, ref := range refs {
 		if ref.Type == "definition" {
-			targetFile = ref.File
-			targetLine = ref.Line
+			hints.TargetFile = ref.File
+			hints.TargetLine = ref.Line
 		}
 		if strings.HasSuffix(ref.File, "_test.go") {
-			validation.TestReferences++
+			hints.TestReferences++
 		} else {
-			validation.InternalReferences++
+			hints.InternalReferences++
 		}
 	}
 
-	validation.TargetFile = targetFile
-	validation.TargetLine = targetLine
-
-	// For exported symbols, warn if there are external references
-	// (This is conservative; actual external package detection requires more context)
-	if validation.IsExported && validation.InternalReferences > 0 {
-		validation.CanRenameInPackage = true
-		validation.Warnings = append(validation.Warnings,
-			"Symbol is exported; external packages may reference it")
+	if hints.IsExported {
+		hints.Advisory = append(hints.Advisory,
+			"symbol is exported; packages outside this directory are invisible to this name-match-only analysis and may reference it")
 	}
+	hints.Advisory = append(hints.Advisory,
+		"reference counts are textual matches, not scope-resolved: shadowed or same-named locals are counted too")
 
-	// Collect referring symbols
-	validation.ReferringSymbols = v.getReferringSymbols(oldName)
+	hints.ReferringSymbols = v.getReferringSymbols(oldName)
 
-	// Safe to rename if:
-	// - Symbol exists
-	// - New name is valid
-	// - No conflicts
-	validation.SafeToRename = len(validation.Warnings) == 0 && len(refs) > 0
-	validation.CanRenameInPackage = true
+	return hints, nil
+}
 
-	return validation, nil
+// packageLevelNames returns every top-level declared name in the package —
+// a rename onto one of them is a definite collision.
+func (v *RenameAdvisor) packageLevelNames() map[string]bool {
+	names := make(map[string]bool)
+	for _, f := range v.files {
+		for _, decl := range f.Decls {
+			switch d := decl.(type) {
+			case *ast.FuncDecl:
+				if d.Recv == nil {
+					names[d.Name.Name] = true
+				}
+			case *ast.GenDecl:
+				addGenDeclNames(d, names)
+			}
+		}
+	}
+	return names
+
+}
+
+func addGenDeclNames(d *ast.GenDecl, names map[string]bool) {
+	for _, spec := range d.Specs {
+		switch s := spec.(type) {
+		case *ast.TypeSpec:
+			names[s.Name.Name] = true
+		case *ast.ValueSpec:
+			for _, n := range s.Names {
+				names[n.Name] = true
+			}
+		}
+	}
 }
 
 // findSymbolReferences finds all references to a symbol
-func (v *ExportedRenameValidator) findSymbolReferences(symbolName string) []*SymbolUse {
+func (v *RenameAdvisor) findSymbolReferences(symbolName string) []*SymbolUse {
 	var uses []*SymbolUse
 
 	for i, f := range v.files {
@@ -119,7 +138,7 @@ func (v *ExportedRenameValidator) findSymbolReferences(symbolName string) []*Sym
 }
 
 // getReferringSymbols returns functions/methods that reference a symbol
-func (v *ExportedRenameValidator) getReferringSymbols(symbolName string) []string {
+func (v *RenameAdvisor) getReferringSymbols(symbolName string) []string {
 	seen := make(map[string]bool)
 	var symbols []string
 
@@ -141,7 +160,7 @@ func (v *ExportedRenameValidator) getReferringSymbols(symbolName string) []strin
 }
 
 // funcReferencesSymbol checks if a function references a symbol
-func (v *ExportedRenameValidator) funcReferencesSymbol(fn *ast.FuncDecl, symbolName string) bool {
+func (v *RenameAdvisor) funcReferencesSymbol(fn *ast.FuncDecl, symbolName string) bool {
 	found := false
 	ast.Inspect(fn, func(node ast.Node) bool {
 		if ident, ok := node.(*ast.Ident); ok {

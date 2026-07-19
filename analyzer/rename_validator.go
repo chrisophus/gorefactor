@@ -11,30 +11,45 @@ import (
 	"unicode"
 )
 
-// ExportedRenameValidator checks if it's safe to rename an exported symbol within a package
-type ExportedRenameValidator struct {
+// RenameAdvisor produces advisory, name-match-only hints about renaming a
+// symbol within a package. It deliberately does not promise safety: matching
+// is textual (no go/types scope resolution), shadowing is not modeled, and
+// packages outside the analyzed directory are invisible. Blocking hints mark
+// conditions under which the rename is certainly wrong (invalid identifier,
+// builtin or package-level collision, symbol not found); everything else is
+// advisory. For a scope-aware exported rename, use gopls.
+//
+// (Harness-integrity plan item 7: this replaced ExportedRenameValidator,
+// whose SafeToRename boolean promised a soundness the name-based analysis
+// cannot deliver.)
+type RenameAdvisor struct {
 	packageName string
 	fset        *token.FileSet
 	files       []*ast.File
 	filePaths   []string
 }
 
-// RenameValidation represents the validation result for a rename operation
-type RenameValidation struct {
+// RenameHints is the advisory result of analyzing a proposed rename.
+// Blocking hints are definite problems; Advisory hints are name-match-only
+// observations the caller must judge. There is deliberately no "safe"
+// boolean — absence of blocking hints means "nothing certainly wrong was
+// found by a name-based scan", not "safe".
+type RenameHints struct {
 	IsExported         bool
-	CanRenameInPackage bool
 	ReferringSymbols   []string // Functions/methods that reference this symbol
-	ExternalReferences int
 	InternalReferences int
 	TestReferences     int
-	SafeToRename       bool
-	Warnings           []string
+	Blocking           []string
+	Advisory           []string
 	TargetFile         string
 	TargetLine         int
 }
 
-// NewExportedRenameValidator creates a new validator for a package directory
-func NewExportedRenameValidator(packageDir string) (*ExportedRenameValidator, error) {
+// HasBlocking reports whether any definite problem was found.
+func (h *RenameHints) HasBlocking() bool { return len(h.Blocking) > 0 }
+
+// NewRenameAdvisor creates a new advisor for a package directory
+func NewRenameAdvisor(packageDir string) (*RenameAdvisor, error) {
 	fset := token.NewFileSet()
 	pkgs, err := parser.ParseDir(fset, packageDir, func(fi os.FileInfo) bool {
 		return !strings.HasSuffix(fi.Name(), "_test.go")
@@ -61,7 +76,7 @@ func NewExportedRenameValidator(packageDir string) (*ExportedRenameValidator, er
 		}
 	}
 
-	return &ExportedRenameValidator{
+	return &RenameAdvisor{
 		packageName: packageName,
 		fset:        fset,
 		files:       files,
@@ -154,27 +169,33 @@ func isDefinition(ident *ast.Ident) bool {
 	return ident.Obj != nil && ident.Obj.Pos() == ident.Pos()
 }
 
-// SafetyReport generates a human-readable safety report
-func (v *RenameValidation) SafetyReport(oldName, newName string) string {
+// Report generates a human-readable report of the hints. It states the
+// analysis's limits explicitly instead of a safe/unsafe verdict.
+func (h *RenameHints) Report(oldName, newName string) string {
 	var report strings.Builder
-	fmt.Fprintf(&report, "Rename validation for: %s -> %s\n", oldName, newName)
-	fmt.Fprintf(&report, "Status: %v\n", v.SafeToRename)
-	fmt.Fprintf(&report, "Exported: %v\n", v.IsExported)
+	fmt.Fprintf(&report, "Rename hints for: %s -> %s (name-match only — this analysis cannot prove a rename safe)\n", oldName, newName)
+	fmt.Fprintf(&report, "Exported: %v\n", h.IsExported)
 
-	if v.TargetFile != "" {
-		fmt.Fprintf(&report, "Location: %s:%d\n", filepath.Base(v.TargetFile), v.TargetLine)
+	if h.TargetFile != "" {
+		fmt.Fprintf(&report, "Location: %s:%d\n", filepath.Base(h.TargetFile), h.TargetLine)
 	}
 
-	fmt.Fprintf(&report, "References: %d internal, %d test\n", v.InternalReferences, v.TestReferences)
+	fmt.Fprintf(&report, "References: %d internal, %d test\n", h.InternalReferences, h.TestReferences)
 
-	if len(v.ReferringSymbols) > 0 {
-		fmt.Fprintf(&report, "Referenced by: %v\n", v.ReferringSymbols)
+	if len(h.ReferringSymbols) > 0 {
+		fmt.Fprintf(&report, "Referenced by: %v\n", h.ReferringSymbols)
 	}
 
-	if len(v.Warnings) > 0 {
-		report.WriteString("Warnings:\n")
-		for _, w := range v.Warnings {
-			fmt.Fprintf(&report, "  - %s\n", w)
+	if len(h.Blocking) > 0 {
+		report.WriteString("Blocking:\n")
+		for _, b := range h.Blocking {
+			fmt.Fprintf(&report, "  - %s\n", b)
+		}
+	}
+	if len(h.Advisory) > 0 {
+		report.WriteString("Advisory:\n")
+		for _, a := range h.Advisory {
+			fmt.Fprintf(&report, "  - %s\n", a)
 		}
 	}
 

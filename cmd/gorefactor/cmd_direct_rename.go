@@ -21,28 +21,25 @@ func renameCommand(args []string) error {
 	m := &mutation{op: "rename", file: file, files: packageGoFiles(file)}
 	m.setCommonFlags(flags)
 
-	// Validate rename if --strict flag is set
+	// With --strict, run the advisory rename analysis first. It blocks only
+	// on definite problems; advisory hints are printed for the user to judge
+	// (the analysis is name-match-only and never claims safety).
 	if strict {
 		pkgDir := filepath.Dir(file)
-		validator, err := analyzer.NewExportedRenameValidator(pkgDir)
+		advisor, err := analyzer.NewRenameAdvisor(pkgDir)
 		if err != nil {
-			return m.fail(fmt.Errorf("failed to initialize validator: %w", err))
+			return m.fail(fmt.Errorf("failed to initialize rename advisor: %w", err))
 		}
 
-		validation, err := validator.ValidateRename(oldName, newName)
+		hints, err := advisor.AdviseRename(oldName, newName)
 		if err != nil {
-			return m.fail(fmt.Errorf("validation failed: %w", err))
+			return m.fail(fmt.Errorf("rename analysis failed: %w", err))
 		}
 
-		// Print validation report
-		fmt.Println(validation.SafetyReport(oldName, newName))
+		fmt.Println(hints.Report(oldName, newName))
 
-		if !validation.SafeToRename {
-			return m.fail(fmt.Errorf("rename is not safe; review warnings above"))
-		}
-
-		if validation.IsExported && len(validation.Warnings) > 0 {
-			fmt.Println("WARNING: Symbol is exported; this rename may break external packages")
+		if hints.HasBlocking() {
+			return m.fail(fmt.Errorf("rename has definite problems; review blocking hints above"))
 		}
 	}
 

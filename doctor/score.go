@@ -125,14 +125,46 @@ func scoreWeight(rule string, sev Severity) float64 {
 	return w
 }
 
+// scoreProxyReferenceFuncs is the codebase size (in scored functions) at which
+// the proxy tier is neither discounted nor amplified — the reference where this
+// size-normalised score equals the older absolute-count score. 1000 functions
+// is a mid-sized module; the proxy density is expressed per this many
+// functions. It is the one calibration constant the normalisation introduces.
+const scoreProxyReferenceFuncs = 1000.0
+
 // ComputeScore sets r.Score from all findings (not just new ones — the score
 // describes the tree, the gate describes the change). Only meaningful on
 // full-tree runs; scoped callers should not request it.
-func (r *Report) ComputeScore() {
-	weighted := 0.0
+//
+// Defect-tier findings (duplication, error handling, dead code, gate integrity,
+// lifecycle, …) are discrete flaws: N duplicate blocks is N flaws whether the
+// repo is 5k or 50k LOC, so they count in absolute terms. Size/shape proxies
+// (long-function, complexity, deep-nesting, data-clumps, …) fire per function
+// above a threshold, so their expected count grows with the number of
+// functions; summing them as an absolute count silently penalises a large
+// codebase at constant quality. The proxy tier is therefore scored as a
+// *density* — weighted proxy findings per scoreProxyReferenceFuncs functions —
+// so the number measures the fraction of the codebase that is oversized, not
+// its raw size. scoredFuncs below the reference is floored so small codebases
+// are not divided into leniency, and a codebase of exactly the reference size
+// scores identically to the pre-normalisation model.
+func (r *Report) ComputeScore(scoredFuncs int) {
+	defectWeighted := 0.0
+	proxyWeighted := 0.0
 	for _, f := range r.Findings {
-		weighted += scoreWeight(f.Rule, f.Severity)
+		w := scoreWeight(f.Rule, f.Severity)
+		if scoreProxyRules[f.Rule] {
+			proxyWeighted += w
+		} else {
+			defectWeighted += w
+		}
 	}
+
+	funcMultiple := float64(scoredFuncs) / scoreProxyReferenceFuncs
+	if funcMultiple < 1.0 {
+		funcMultiple = 1.0
+	}
+	weighted := defectWeighted + proxyWeighted/funcMultiple
 
 	score := 100.0 / (1.0 + weighted/scoreHalfLife)
 	r.Score = &score

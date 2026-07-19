@@ -67,16 +67,8 @@ func reduceLengthByExtraction(file, function string, maxLines int, allowReturns 
 	if err != nil {
 		return 0, err
 	}
-	// Only extract blocks we can name meaningfully. An unnameable block (the
-	// extractBlockL<line> fallback) is typically a guard clause; lifting it into
-	// a many-parameter helper reduces line count but hurts readability.
-	var specs []extractionSpec
-	for _, e := range res.Extractions {
-		if analyzer.IsGeneratedFallbackName(e.Suggestion) {
-			continue
-		}
-		specs = append(specs, extractionSpec{StartLine: e.StartLine, EndLine: e.EndLine, Suggestion: e.Suggestion})
-	}
-	return applyExtractionsBottomUp(file, specs, allowReturns), nil
+	return applyNameableExtractions(file, res.Extractions, allowReturns, func(e analyzer.LengthExtraction) extractionSpec {
+		return extractionSpec{StartLine: e.StartLine, EndLine: e.EndLine, Suggestion: e.Suggestion}
+	}), nil
 
 }

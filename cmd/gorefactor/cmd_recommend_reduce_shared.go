@@ -5,6 +5,8 @@ import (
 	"os"
 	"sort"
 	"strconv"
+
+	"github.com/chrisophus/gorefactor/analyzer"
 )
 
 // extractionSpec captures the fields analyzer.ComplexityExtraction and
@@ -40,6 +42,18 @@ func applyExtractionsBottomUp(file string, extractions []extractionSpec, allowRe
 		applied++
 	}
 	return applied
+}
+
+func applyNameableExtractions[T any](file string, exs []T, allowReturns bool, project func(T) extractionSpec) int {
+	var specs []extractionSpec
+	for _, e := range exs {
+		s := project(e)
+		if analyzer.IsGeneratedFallbackName(s.Suggestion) {
+			continue
+		}
+		specs = append(specs, s)
+	}
+	return applyExtractionsBottomUp(file, specs, allowReturns)
 }
 
 // reduceFlags holds the flags shared between `recommend --reduce-complexity`

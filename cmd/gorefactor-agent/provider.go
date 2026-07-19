@@ -121,6 +121,16 @@ func (p *openAIProvider) ChatTools(ctx context.Context, messages []chatMessage, 
 	return msg, nil
 }
 
+func retryBackoff(ctx context.Context, provider string, attempt, maxAttempts int, prevResp *http.Response, lastErr error) error {
+	if attempt == 0 {
+		return nil
+	}
+	delay := retryDelay(attempt, prevResp)
+	provDebugf("%s retry %d/%d after %s backoff (last: %v)",
+		provider, attempt+1, maxAttempts, delay, lastErr)
+	return retrySleep(ctx, delay)
+}
+
 // doWithRetry posts buf to endpoint with exponential-backoff retry on
 // 429 / 5xx responses — mirrors anthropicProvider.doWithRetry.
 func (p *openAIProvider) doWithRetry(ctx context.Context, endpoint string, buf []byte) (int, []byte, error) {
@@ -128,13 +138,8 @@ func (p *openAIProvider) doWithRetry(ctx context.Context, endpoint string, buf [
 	var lastErr error
 	var prevResp *http.Response
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		if attempt > 0 {
-			delay := retryDelay(attempt, prevResp)
-			provDebugf("openai retry %d/%d after %s backoff (last: %v)",
-				attempt+1, maxAttempts, delay, lastErr)
-			if err := retrySleep(ctx, delay); err != nil {
-				return 0, nil, err
-			}
+		if err := retryBackoff(ctx, "openai", attempt, maxAttempts, prevResp, lastErr); err != nil {
+			return 0, nil, err
 		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(buf))
 		if err != nil {

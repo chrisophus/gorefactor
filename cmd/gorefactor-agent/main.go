@@ -102,13 +102,7 @@ func main() {
 	// sees a complete record. On no match, fall through to the agent.
 	if matched, err := triage(cfg); matched {
 		if err != nil {
-			var pe *puntError
-			if errors.As(err, &pe) {
-				fmt.Fprintln(os.Stderr, "punted:", pe.Error())
-				os.Exit(3)
-			}
-			fmt.Fprintln(os.Stderr, "\nError:", err)
-			os.Exit(1)
+			exitPuntAware(err)
 		}
 		return
 	}
@@ -151,14 +145,18 @@ func main() {
 		// A punt is not a crash: the junior cleanly handed work back.
 		// The structured report is already on stdout; exit 3 so a
 		// delegating (senior) agent can branch on "punted" vs "failed".
-		var pe *puntError
-		if errors.As(runErr, &pe) {
-			fmt.Fprintln(os.Stderr, "punted:", pe.Error())
-			os.Exit(3)
-		}
-		fmt.Fprintln(os.Stderr, "\nError:", runErr)
-		os.Exit(1)
+		exitPuntAware(runErr)
 	}
+}
+
+func exitPuntAware(err error) {
+	var pe *puntError
+	if errors.As(err, &pe) {
+		fmt.Fprintln(os.Stderr, "punted:", pe.Error())
+		os.Exit(3)
+	}
+	fmt.Fprintln(os.Stderr, "\nError:", err)
+	os.Exit(1)
 }
 
 // resolveSpec accepts inline text or @path.

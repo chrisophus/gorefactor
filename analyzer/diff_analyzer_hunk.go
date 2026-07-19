@@ -44,94 +44,110 @@ func (da *DiffAnalyzer) parseHunkHeader(line string) *DiffHunk {
 		return &DiffHunk{}
 	}
 
-	_, _ = strconv.Atoi(matches[1]) // oldStart - not used
-	_, _ = strconv.Atoi(matches[2]) // oldCount - not used
+	oldStart, _ := strconv.Atoi(matches[1])
+	oldCount, _ := strconv.Atoi(matches[2])
+	if matches[2] == "" {
+		oldCount = 1
+	}
 	newStart, _ := strconv.Atoi(matches[3])
 	newCount, _ := strconv.Atoi(matches[4])
+	if matches[4] == "" {
+		newCount = 1
+	}
 
 	return &DiffHunk{
-		StartLine: newStart,
-		EndLine:   newStart + newCount - 1,
-		Lines:     []string{},
+		StartLine:    newStart,
+		EndLine:      newStart + newCount - 1,
+		OldStartLine: oldStart,
+		OldEndLine:   oldStart + oldCount - 1,
+		Lines:        []string{},
 	}
+
 }
 
 // analyzeHunk analyzes a single hunk for changes
 func (da *DiffAnalyzer) analyzeHunk(filePath string, hunk *DiffHunk) []*Change {
 	var changes []*Change
-
-	// Check for modifications first (take priority over add/remove)
-	modifiedLines := da.getModifiedLines(hunk)
-	if len(modifiedLines) > 0 {
-		change := da.analyzeModifiedCode(filePath, hunk, modifiedLines)
-		if change != nil {
-			changes = append(changes, change)
-			// If we found a modification, don't analyze as separate add/remove
-			return changes
+	for _, run := range splitHunkRuns(hunk) {
+		runHunk := run.asHunk()
+		var change *Change
+		switch {
+		case len(run.oldLines) > 0 && len(run.newLines) > 0:
+			change = da.analyzeModifiedCode(filePath, runHunk, run.oldLines, run.newLines)
+		case len(run.newLines) > 0:
+			change = da.analyzeAddedCode(filePath, runHunk, run.newLines)
+		case len(run.oldLines) > 0:
+			change = da.analyzeRemovedCode(filePath, runHunk, run.oldLines)
 		}
-	}
-
-	// Analyze added lines
-	addedLines := da.getAddedLines(hunk)
-	if len(addedLines) > 0 {
-		change := da.analyzeAddedCode(filePath, hunk, addedLines)
 		if change != nil {
 			changes = append(changes, change)
 		}
 	}
-
-	// Analyze removed lines
-	removedLines := da.getRemovedLines(hunk)
-	if len(removedLines) > 0 {
-		change := da.analyzeRemovedCode(filePath, hunk, removedLines)
-		if change != nil {
-			changes = append(changes, change)
-		}
-	}
-
 	return changes
+
 }
 
-// getAddedLines extracts added lines from a hunk
-func (da *DiffAnalyzer) getAddedLines(hunk *DiffHunk) []string {
-	var added []string
-	for _, line := range hunk.Lines {
-		if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
-			added = append(added, strings.TrimPrefix(line, "+"))
-		}
-	}
-	return added
+type hunkRun struct {
+	oldLines []string
+	newLines []string
+	oldStart int
+	newStart int
 }
 
-// getRemovedLines extracts removed lines from a hunk
-func (da *DiffAnalyzer) getRemovedLines(hunk *DiffHunk) []string {
-	var removed []string
-	for _, line := range hunk.Lines {
-		if strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---") {
-			removed = append(removed, strings.TrimPrefix(line, "-"))
-		}
+func (r hunkRun) asHunk() *DiffHunk {
+	newEnd := r.newStart
+	if n := len(r.newLines); n > 0 {
+		newEnd = r.newStart + n - 1
 	}
-	return removed
+	oldEnd := r.oldStart
+	if n := len(r.oldLines); n > 0 {
+		oldEnd = r.oldStart + n - 1
+	}
+	return &DiffHunk{
+		StartLine:    r.newStart,
+		EndLine:      newEnd,
+		OldStartLine: r.oldStart,
+		OldEndLine:   oldEnd,
+	}
 }
 
-// getModifiedLines extracts modified lines from a hunk
-func (da *DiffAnalyzer) getModifiedLines(hunk *DiffHunk) [][]string {
-	var modified [][]string
-	var currentPair []string
-
-	for _, line := range hunk.Lines {
-		if strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---") {
-			if len(currentPair) == 0 {
-				currentPair = append(currentPair, strings.TrimPrefix(line, "-"))
-			}
-		} else if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
-			if len(currentPair) == 1 {
-				currentPair = append(currentPair, strings.TrimPrefix(line, "+"))
-				modified = append(modified, currentPair)
-				currentPair = []string{}
-			}
+func splitHunkRuns(hunk *DiffHunk) []hunkRun {
+	newLine := hunk.StartLine
+	oldLine := hunk.OldStartLine
+	if oldLine == 0 {
+		oldLine = hunk.StartLine
+	}
+	var runs []hunkRun
+	var cur *hunkRun
+	flush := func() {
+		if cur != nil {
+			runs = append(runs, *cur)
+			cur = nil
 		}
 	}
+	start := func() {
+		if cur == nil {
+			cur = &hunkRun{oldStart: oldLine, newStart: newLine}
+		}
+	}
+	for _, line := range hunk.Lines {
+		switch {
+		case strings.HasPrefix(line, "\\"):
 
-	return modified
+		case strings.HasPrefix(line, "-"):
+			start()
+			cur.oldLines = append(cur.oldLines, strings.TrimPrefix(line, "-"))
+			oldLine++
+		case strings.HasPrefix(line, "+"):
+			start()
+			cur.newLines = append(cur.newLines, strings.TrimPrefix(line, "+"))
+			newLine++
+		default:
+			flush()
+			oldLine++
+			newLine++
+		}
+	}
+	flush()
+	return runs
 }

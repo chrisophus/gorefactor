@@ -93,10 +93,12 @@ func (da *DiffAnalyzer) analyzeChanges(files []*DiffFile) []*Change {
 
 // DiffHunk represents a single hunk in a diff
 type DiffHunk struct {
-	StartLine int      `json:"startLine"`
-	EndLine   int      `json:"endLine"`
-	Lines     []string `json:"lines"`
-	Type      string   `json:"type"` // "added", "removed", "context"
+	StartLine    int      `json:"startLine"`
+	EndLine      int      `json:"endLine"`
+	OldStartLine int      `json:"oldStartLine"`
+	OldEndLine   int      `json:"oldEndLine"`
+	Lines        []string `json:"lines"`
+	Type         string   `json:"type"` // "added", "removed", "context"
 }
 
 // DiffFile represents a file in a diff

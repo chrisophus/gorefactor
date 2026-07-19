@@ -106,6 +106,8 @@ func (da *DiffAnalyzer) analyzeRemovedCode(filePath string, hunk *DiffHunk, remo
 			Details: map[string]interface{}{
 				"functionName": da.extractFunctionName(code),
 				"code":         code,
+				"oldStartLine": hunk.OldStartLine,
+				"oldEndLine":   hunk.OldEndLine,
 			},
 		}
 	}
@@ -119,28 +121,22 @@ func (da *DiffAnalyzer) analyzeRemovedCode(filePath string, hunk *DiffHunk, remo
 		EndLine:     hunk.EndLine,
 		Confidence:  0.7,
 		Details: map[string]interface{}{
-			"code": code,
+			"code":         code,
+			"oldStartLine": hunk.OldStartLine,
+			"oldEndLine":   hunk.OldEndLine,
 		},
 	}
 }
 
-// analyzeModifiedCode analyzes modified code to detect patterns
-func (da *DiffAnalyzer) analyzeModifiedCode(filePath string, hunk *DiffHunk, modifiedLines [][]string) *Change {
-	if len(modifiedLines) == 0 {
+func (da *DiffAnalyzer) analyzeModifiedCode(filePath string, hunk *DiffHunk, oldLines, newLines []string) *Change {
+	if len(oldLines) == 0 || len(newLines) == 0 {
 		return nil
 	}
 
-	// Each element in modifiedLines is a [old, new] pair
-	pair := modifiedLines[0]
-	if len(pair) < 2 {
-		return nil
-	}
+	oldCode := strings.Join(oldLines, "\n")
+	newCode := strings.Join(newLines, "\n")
 
-	oldCode := pair[0]
-	newCode := pair[1]
-
-	// Detect variable renaming
-	if da.isVariableRename(oldCode, newCode) {
+	if len(oldLines) == 1 && len(newLines) == 1 && da.isVariableRename(oldCode, newCode) {
 		return &Change{
 			Type:        "variable_rename",
 			File:        filePath,
@@ -157,7 +153,6 @@ func (da *DiffAnalyzer) analyzeModifiedCode(filePath string, hunk *DiffHunk, mod
 		}
 	}
 
-	// Detect function modification
 	if da.isFunctionModification(oldCode, newCode) {
 		return &Change{
 			Type:        "function_modification",
@@ -170,11 +165,12 @@ func (da *DiffAnalyzer) analyzeModifiedCode(filePath string, hunk *DiffHunk, mod
 				"functionName": da.extractFunctionName(oldCode),
 				"oldCode":      oldCode,
 				"newCode":      newCode,
+				"oldStartLine": hunk.OldStartLine,
+				"oldEndLine":   hunk.OldEndLine,
 			},
 		}
 	}
 
-	// Generic code modification
 	return &Change{
 		Type:        "code_modification",
 		File:        filePath,
@@ -183,11 +179,21 @@ func (da *DiffAnalyzer) analyzeModifiedCode(filePath string, hunk *DiffHunk, mod
 		EndLine:     hunk.EndLine,
 		Confidence:  0.6,
 		Details: map[string]interface{}{
-			"oldCode": oldCode,
-			"newCode": newCode,
+			"oldCode":      oldCode,
+			"newCode":      newCode,
+			"oldStartLine": hunk.OldStartLine,
+			"oldEndLine":   hunk.OldEndLine,
 		},
 	}
 }
+
+// Each element in modifiedLines is a [old, new] pair
+
+// Detect variable renaming
+
+// Detect function modification
+
+// Generic code modification
 
 // createInsertCodeOperation creates an insert_code operation
 func (da *DiffAnalyzer) createInsertCodeOperation(change *Change) *orchestrator.RefactoringOperation {

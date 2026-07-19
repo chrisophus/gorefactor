@@ -78,21 +78,23 @@ func (tg *TemplateGenerator) GenerateInlineTemplate() *RefactoringOperation {
 	}
 }
 
-// GenerateRenameTemplate creates a template for variable renaming
+// GenerateRenameTemplate creates a template for declaration renaming. It emits rename_declaration
+// — the executable rename op — rather than the historical rename_variable, which no executor
+// ever dispatched (a harness-integrity review finding: templates advertised ops that failed with
+// "unknown operation type").
 func (tg *TemplateGenerator) GenerateRenameTemplate() *RefactoringOperation {
 	return &RefactoringOperation{
-		Type:        "rename_variable",
-		Description: "Rename a variable",
+		Type:        "rename_declaration",
+		Description: "Rename a top-level declaration across the package",
 		File:        "path/to/your/file.go",
 		Target: &TargetSpecification{
-			FunctionName:  "YourFunctionName",
-			VariableNames: []string{"oldVariableName"},
+			FunctionName: "oldFunctionName",
 		},
 		Parameters: map[string]interface{}{
-			"oldName": "oldVariableName",
-			"newName": "newVariableName",
+			"newName": "newFunctionName",
 		},
 	}
+
 }
 
 // GenerateMoveTemplate creates a template for method moving
@@ -177,11 +179,11 @@ func (tg *TemplateGenerator) GenerateAllTemplates(outputDir string) error {
 	}
 
 	operations := map[string]*RefactoringOperation{
-		"extract_method":  tg.GenerateExtractionTemplate(),
-		"inline_method":   tg.GenerateInlineTemplate(),
-		"rename_variable": tg.GenerateRenameTemplate(),
-		"move_method":     tg.GenerateMoveTemplate(),
-		"insert_code":     tg.GenerateInsertCodeTemplate(),
+		"extract_method":     tg.GenerateExtractionTemplate(),
+		"inline_method":      tg.GenerateInlineTemplate(),
+		"rename_declaration": tg.GenerateRenameTemplate(),
+		"move_method":        tg.GenerateMoveTemplate(),
+		"insert_code":        tg.GenerateInsertCodeTemplate(),
 	}
 
 	for opType, operation := range operations {
@@ -225,7 +227,7 @@ func (tg *TemplateGenerator) PrintTemplateHelp() {
 	fmt.Println("  1. basic_plan_template.json - Basic refactoring plan structure")
 	fmt.Println("  2. extract_method_template.json - Method extraction operation")
 	fmt.Println("  3. inline_method_template.json - Method inlining operation")
-	fmt.Println("  4. rename_variable_template.json - Variable renaming operation")
+	fmt.Println("  4. rename_declaration_template.json - Declaration renaming operation")
 	fmt.Println("  5. move_method_template.json - Method moving operation")
 	fmt.Println("  6. insert_code_template.json - Code insertion operation")
 	fmt.Println("  7. comprehensive_example.json - Complete example with multiple operations")

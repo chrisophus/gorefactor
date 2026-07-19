@@ -2,6 +2,7 @@ package doctor
 
 import (
 	"bytes"
+	"fmt"
 	"os/exec"
 	"strings"
 )
@@ -35,13 +36,15 @@ func Preflight(root string, subs []Substrate) map[string]error {
 // config (`golangci-lint config path`), which is what catches a
 // version-skewed binary that only fails at run time.
 func (Golangci) Probe(root string) error {
-	if _, err := exec.LookPath("golangci-lint"); err != nil {
-		return unavailablef("golangci-lint not on PATH")
+	bin, err := EnsureGolangciLint(root)
+	if err != nil {
+		return fmt.Errorf("ensure golangci-lint: %w", err)
+
 	}
 	if !hasGolangciConfig(root) {
 		return unavailablef("no .golangci config in %s", root)
 	}
-	cmd := exec.Command("golangci-lint", "config", "path")
+	cmd := exec.Command(bin, "config", "path")
 	cmd.Dir = root
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -53,6 +56,7 @@ func (Golangci) Probe(root string) error {
 		return unavailablef("golangci-lint cannot load config: %s", msg)
 	}
 	return nil
+
 }
 
 // Probe implements prober: apidiff needs a resolvable git HEAD.

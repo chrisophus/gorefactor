@@ -1,11 +1,8 @@
 package doctor
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"os/exec"
-	"strings"
 )
 
 // Deadcode is the whole-program unused-code substrate (design plan step 4).
@@ -23,10 +20,8 @@ func (Deadcode) Info() SubstrateInfo {
 
 // Probe implements prober.
 func (Deadcode) Probe(root string) error {
-	if _, err := exec.LookPath("deadcode"); err != nil {
-		return unavailablef("deadcode not on PATH (go install golang.org/x/tools/cmd/deadcode@latest)")
-	}
-	return nil
+	return probeModuleOrPathTool(root, "deadcode", "deadcode")
+
 }
 
 // Run implements Substrate. -test keeps test-reachable code live, the
@@ -36,28 +31,12 @@ func (d Deadcode) Run(ctx RunContext) ([]Finding, error) {
 	if err := d.Probe(ctx.Root); err != nil {
 		return nil, fmt.Errorf("probe: %w", err)
 	}
-	out, err := runSubstrateBinary(ctx.Root, "deadcode", "-json", "-test", "./...")
+	out, err := runModuleOrPathTool(ctx.Root, "deadcode", "deadcode", "-json", "-test", "./...")
 	if err != nil {
-		return nil, fmt.Errorf("run substrate binary: %w", err)
+		return nil, fmt.Errorf("run deadcode: %w", err)
 	}
 	return parseDeadcodeJSON(out)
 
-}
-
-func runSubstrateBinary(root, name string, args ...string) ([]byte, error) {
-	cmd := exec.Command(name, args...)
-	cmd.Dir = root
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	out, runErr := cmd.Output()
-	if runErr != nil && len(bytes.TrimSpace(out)) == 0 {
-		msg := strings.TrimSpace(stderr.String())
-		if msg == "" {
-			msg = runErr.Error()
-		}
-		return nil, unavailablef("%s failed to run: %s", name, msg)
-	}
-	return out, nil
 }
 
 // parseDeadcodeJSON maps deadcode's -json output ([]package with dead funcs)

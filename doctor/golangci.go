@@ -23,8 +23,10 @@ func (Golangci) Info() SubstrateInfo {
 
 // Run implements Substrate.
 func (Golangci) Run(ctx RunContext) ([]Finding, error) {
-	if _, err := exec.LookPath("golangci-lint"); err != nil {
-		return nil, unavailablef("golangci-lint not on PATH")
+	bin, err := EnsureGolangciLint(ctx.Root)
+	if err != nil {
+		return nil, fmt.Errorf("ensure golangci-lint: %w", err)
+
 	}
 	if !hasGolangciConfig(ctx.Root) {
 		return nil, unavailablef("no .golangci config in %s", ctx.Root)
@@ -37,7 +39,7 @@ func (Golangci) Run(ctx RunContext) ([]Finding, error) {
 			args = append(args, "./"+filepath.ToSlash(d))
 		}
 	}
-	cmd := exec.Command("golangci-lint", args...)
+	cmd := exec.Command(bin, args...)
 	cmd.Dir = ctx.Root
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -53,6 +55,7 @@ func (Golangci) Run(ctx RunContext) ([]Finding, error) {
 		return nil, nil
 	}
 	return parseGolangciJSON(out)
+
 }
 
 func hasGolangciConfig(root string) bool {

@@ -144,21 +144,6 @@ func (ia *InterfaceAnalyzer) VerifyInterfaceImpl(typeName, interfaceName string)
 	return implements, impl.MissingMethods, nil
 }
 
-// FindInterfaceUsers finds all places where an interface is used
-func (ia *InterfaceAnalyzer) FindInterfaceUsers(interfaceName string) ([]SymbolUse, error) {
-	if err := ia.symbolAnalyzer.Parse(); err != nil {
-		return nil, fmt.Errorf("parse: %w", err)
-	}
-
-	query := SymbolQuery{Name: interfaceName, Type: TypeInterface}
-	uses, err := ia.symbolAnalyzer.FindAllUses(query)
-	if err != nil {
-		return nil, fmt.Errorf("find all uses: %w", err)
-	}
-
-	return uses, nil
-}
-
 // typeInfo represents a struct type definition
 type typeInfo struct {
 	Name    string

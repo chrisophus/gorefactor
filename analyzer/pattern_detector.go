@@ -110,20 +110,6 @@ func countSwitchInStmt(stmt ast.Stmt) int {
 	return count
 }
 
-// priorityFromSeverity converts severity to priority score
-func priorityFromSeverity(severity string) int {
-	switch severity {
-	case "high":
-		return 9
-	case "medium":
-		return 6
-	case "low":
-		return 3
-	default:
-		return 5
-	}
-}
-
 // Summary returns a string summary of detected patterns
 func (ap *ArchitecturalPattern) Summary() string {
 	return fmt.Sprintf("[%s] %s: %s", strings.ToUpper(ap.Type), ap.Name, ap.Description)

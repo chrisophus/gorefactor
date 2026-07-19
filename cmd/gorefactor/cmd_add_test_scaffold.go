@@ -6,11 +6,9 @@ import (
 	"go/ast"
 	goparser "go/parser"
 	"go/token"
-	"go/types"
 	"os"
 	"path/filepath"
 	"strings"
-	"unicode"
 
 	"github.com/chrisophus/gorefactor/orchestrator"
 	"golang.org/x/tools/go/packages"
@@ -220,38 +218,4 @@ func addTestReceiverTypeName(expr ast.Expr) string {
 		return addTestReceiverTypeName(e.X)
 	}
 	return ""
-}
-
-var _ = camelToLower // used in template generation
-var _ = zeroValueFor
-
-func camelToLower(s string) string {
-	var out []rune
-	for i, r := range s {
-		if i == 0 {
-			out = append(out, unicode.ToLower(r))
-		} else {
-			out = append(out, r)
-		}
-	}
-	return string(out)
-}
-
-func zeroValueFor(typ types.Type) string {
-	switch t := typ.Underlying().(type) {
-	case *types.Basic:
-		switch t.Kind() {
-		case types.Bool:
-			return "false"
-		case types.String:
-			return `""`
-		default:
-			if t.Info()&types.IsNumeric != 0 {
-				return "0"
-			}
-		}
-	case *types.Pointer, *types.Slice, *types.Map, *types.Chan, *types.Interface, *types.Signature:
-		return "nil"
-	}
-	return fmt.Sprintf("%s{}", typ)
 }

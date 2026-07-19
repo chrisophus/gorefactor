@@ -160,7 +160,35 @@ a single safe transform exists) autofix.
     here. The sensors' blind spots (lesson 8) make this the only detection
     path for a whole class of defect.
 
+## Addendum — 2026-07-18 dogfood loop
+
+A `/goal` dogfood pass surfaced a lesson worth pinning as **lesson 9**:
+
+9. **A *scored* substrate that silently skips makes the score lie.** The
+   `deadcode` binary was not on PATH, so `doctor --report --score` reported
+   64.7 while omitting 24 real dead-code findings — the number read healthier
+   than the tree was, with the skip visible only in a `[deadcode] skipped`
+   line most readers scan past. Fix is two-sided, mirroring the golangci
+   precedent: **prevention** — `.claude/hooks/session-start.sh` best-effort
+   `go install`s `deadcode` so the local score is complete; **honesty** —
+   `printDoctorReport` now appends "N scored substrate(s) skipped (…) — score
+   is optimistic" whenever any non-`baseline` substrate did not run
+   (`scoredSubstratesSkipped`, pinned by test), so even a network-blocked
+   checkout cannot present a partial score as a whole one. Same shape as
+   lesson 3 (dark gating substrate) but for the *presentation* score rather
+   than the gate.
+
+Also actioned in the same pass: 17 genuinely-dead symbols removed (honest
+score 49.4 → 59.3, again *below* the inflated 64.7 — cleanup lowering a
+now-trustworthy number, lesson from the header). The removal exposed a
+compiler-and-linter-defeating scar worth noting: a package-level
+`var _ = deadFunc` blank-identifier reference keeps an otherwise-dead helper
+"used" for `go build` *and* hides it from gorefactor's own `dead-code` rule;
+only the whole-program `deadcode` substrate saw through it. Candidate future
+sensor if the pattern recurs (it was a one-off here).
+
 ## Status
 
 Items 1–10: not started (this document is their tracking issue). Everything
 in "What changed because of it" is merged into the PR #52 branch line.
+The 2026-07-18 addendum items (score-skip honesty + prevention) are done.

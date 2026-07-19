@@ -243,34 +243,4 @@ func (pd *PatternDetector) detectSwitchStatements() []ArchitecturalPattern {
 	return patterns
 }
 
-// DetectCircularDependencies checks for potential circular imports within package
-func (pd *PatternDetector) DetectCircularDependencies() []ArchitecturalPattern {
-	// This would need cross-file analysis, placeholder for now
-	return []ArchitecturalPattern{}
-}
-
-// SuggestRefactorings converts detected patterns to refactoring suggestions
-func (pd *PatternDetector) SuggestRefactorings() []SuggestedPlan {
-	patterns := pd.DetectPatterns()
-	var suggestions []SuggestedPlan
-
-	for _, pattern := range patterns {
-		suggestion := SuggestedPlan{
-			Name:        fmt.Sprintf("Fix: %s", pattern.Name),
-			Description: pattern.Description,
-			Rationale:   pattern.Suggestion,
-			Complexity:  "medium",
-			SafetyRisk:  "medium",
-			Operations: []SuggestedOp{
-				{
-					Type:        "refactor_architecture",
-					Description: pattern.Suggestion,
-					Priority:    priorityFromSeverity(pattern.Severity),
-				},
-			},
-		}
-		suggestions = append(suggestions, suggestion)
-	}
-
-	return suggestions
-}
+// This would need cross-file analysis, placeholder for now

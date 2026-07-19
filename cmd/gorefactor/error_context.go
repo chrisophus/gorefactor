@@ -271,26 +271,6 @@ func ExampleTargetNotFoundError(file, targetName string) *DetailedError {
 	return err
 }
 
-// ExampleInvalidSnippetError creates a detailed error for malformed code snippets
-func ExampleInvalidSnippetError(content, errorMsg string) *DetailedError {
-	err := NewDetailedError(ErrInvalidSnippet,
-		fmt.Sprintf("Cannot insert: code snippet is malformed: %s", errorMsg))
-
-	_ = err.WithContext("snippet", 0, 0,
-		"Code snippet failed to parse").
-		WithRootCause(errorMsg).
-		WithSuggestion("check_syntax",
-			"Verify the snippet has correct Go syntax",
-			0.95).
-		WithSuggestion("check_packages",
-			"Ensure snippet doesn't duplicate package declaration",
-			0.80).
-		WithRelatedCode("snippet", content).
-		WithDetail("parseError", errorMsg)
-
-	return err
-}
-
 // ExampleImportCycleError creates a detailed error for circular imports
 func ExampleImportCycleError(sourceFile, destFile, targetName string, cycle []string) *DetailedError {
 	err := NewDetailedError(ErrImportCycle,
@@ -314,82 +294,6 @@ func ExampleImportCycleError(sourceFile, destFile, targetName string, cycle []st
 		WithDetail("sourceFile", sourceFile).
 		WithDetail("destFile", destFile).
 		WithDetail("importCycle", cycle)
-
-	return err
-}
-
-// ExampleHasCallersError creates a detailed error for functions with callers
-func ExampleHasCallersError(targetName string, callers []string, fileLines map[string]int) *DetailedError {
-	callerCount := len(callers)
-	err := NewDetailedError(ErrHasCallers,
-		fmt.Sprintf("Cannot delete %s: has %d caller(s)", targetName, callerCount))
-
-	_ = err.WithContext("", 0, 0,
-		fmt.Sprintf("%s is called from %d location(s)", targetName, callerCount)).
-		WithRootCause(
-			fmt.Sprintf("Deleting %s would break the build", targetName))
-
-	for _, caller := range callers {
-		if line, ok := fileLines[caller]; ok {
-			_ = err.WithRootCause(fmt.Sprintf("%s:%d", caller, line))
-		} else {
-			_ = err.WithRootCause(caller)
-		}
-	}
-
-	_ = err.WithSuggestion("find_callers",
-		fmt.Sprintf("Use 'gorefactor find-callers %s' to see all call sites", targetName),
-		0.95).
-		WithSuggestion("update_callers",
-			"Update all callers to use an alternative function",
-			0.85).
-		WithSuggestion("consolidate",
-			"Consolidate callers and the function into a single refactored version",
-			0.70).
-		WithSuggestion("use_safe_flag",
-			fmt.Sprintf("Use 'gorefactor delete %s --safe' to prevent accidental deletions", targetName),
-			0.90).
-		WithDetail("targetName", targetName).
-		WithDetail("callerCount", callerCount).
-		WithDetail("callers", callers)
-
-	return err
-}
-
-// ExamplePatternNotFoundError creates a detailed error for missing replace patterns
-func ExamplePatternNotFoundError(targetName, pattern string, count int) *DetailedError {
-	msg := fmt.Sprintf("Cannot replace: pattern not found inside %s", targetName)
-	if count > 0 {
-		msg = fmt.Sprintf("Cannot replace: pattern occurs %d time(s), but requested occurrence not found", count)
-	}
-
-	err := NewDetailedError(ErrPatternNotFound, msg)
-
-	_ = err.WithContext("", 0, 0,
-		fmt.Sprintf("Pattern %q not found in %s", pattern, targetName)).
-		WithRootCause(
-			"The text to replace does not exist in the function body")
-
-	if count > 0 {
-		_ = err.WithRootCause(
-			fmt.Sprintf("Pattern exists %d time(s), but requested occurrence not in range", count))
-	}
-
-	_ = err.WithSuggestion("relax_pattern",
-		"Try a shorter substring that's more likely to exist",
-		0.85).
-		WithSuggestion("check_whitespace",
-			"Check that whitespace (spaces/tabs) matches exactly",
-			0.90).
-		WithSuggestion("use_simple_replace",
-			"Use 'gorefactor find <func> <pattern>' to preview matches first",
-			0.80).
-		WithSuggestion("check_occurrence",
-			"Verify the --occurrence N value is not out of range",
-			0.75).
-		WithDetail("targetName", targetName).
-		WithDetail("pattern", pattern).
-		WithDetail("occurrenceCount", count)
 
 	return err
 }

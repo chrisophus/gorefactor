@@ -129,15 +129,23 @@ func destFileFor(dir, stem string, g splitGroup, used map[string]bool) string {
 	case strings.HasPrefix(g.key, "single:"):
 		suffix = camelToSnake(strings.TrimPrefix(g.key, "single:"))
 	}
-	if suffix == "" {
+	isTest := strings.HasSuffix(stem, "_test")
+	coreStem := strings.TrimSuffix(stem, "_test")
+	if deduped := dropStemTokens(coreStem, suffix); deduped != "" {
+		suffix = deduped
+	} else if strings.HasPrefix(g.key, "recv:") {
+		// The group's receiver is the file's own identity (splitting
+		// provider_anthropic.go by receiver AnthropicProvider): every token is
+		// already in the stem, so name the overflow file for what it holds.
+		suffix = "methods"
+	} else {
 		suffix = "part"
 	}
-	base := stem + "_" + suffix
-	candidate := base + ".go"
-	if strings.HasSuffix(stem, "_test") {
-		base = strings.TrimSuffix(stem, "_test") + "_" + suffix + "_test"
-		candidate = base + ".go"
+	base := coreStem + "_" + suffix
+	if isTest {
+		base += "_test"
 	}
+	candidate := base + ".go"
 	i := 2
 	for used[candidate] {
 		candidate = fmt.Sprintf("%s%d.go", base, i)
@@ -145,6 +153,24 @@ func destFileFor(dir, stem string, g splitGroup, used map[string]bool) string {
 	}
 	used[candidate] = true
 	return filepath.Join(dir, candidate)
+
+}
+
+func dropStemTokens(stem, suffix string) string {
+	if suffix == "" {
+		return ""
+	}
+	have := make(map[string]bool)
+	for _, t := range strings.Split(stem, "_") {
+		have[t] = true
+	}
+	var keep []string
+	for _, t := range strings.Split(suffix, "_") {
+		if !have[t] {
+			keep = append(keep, t)
+		}
+	}
+	return strings.Join(keep, "_")
 }
 
 func camelToSnake(s string) string {

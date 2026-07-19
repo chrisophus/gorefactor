@@ -121,32 +121,7 @@ func (m *mutation) run(apply func() (string, error)) error {
 	linesChanged := 0
 	var diffBuf strings.Builder
 	needDiff := m.dryRun || m.jsonOut
-	for _, f := range files {
-		after, rerr := os.ReadFile(f)
-		b, existed := before[f]
-		switch {
-		case rerr != nil && !existed:
-			continue // never existed, still doesn't
-		case rerr != nil && existed:
-			changed = append(changed, f)
-			if needDiff {
-				linesChanged += diffLineCount(string(b), "")
-				diffBuf.WriteString(unifiedDiff(f, string(b), ""))
-			}
-		case !existed:
-			changed = append(changed, f)
-			if needDiff {
-				linesChanged += diffLineCount("", string(after))
-				diffBuf.WriteString(unifiedDiff(f, "", string(after)))
-			}
-		case !bytes.Equal(b, after):
-			changed = append(changed, f)
-			if needDiff {
-				linesChanged += diffLineCount(string(b), string(after))
-				diffBuf.WriteString(unifiedDiff(f, string(b), string(after)))
-			}
-		}
-	}
+	changed, linesChanged = processFiles(files, before, changed, needDiff, linesChanged, &diffBuf)
 
 	if m.dryRun {
 		m.restore(before, files)
@@ -169,27 +144,7 @@ func (m *mutation) run(apply func() (string, error)) error {
 	}
 
 	undoToken := ""
-	if len(changed) > 0 {
-		beforeChanged := map[string][]byte{}
-		var createdOnly []string
-		for _, f := range changed {
-			if b, ok := before[f]; ok {
-				beforeChanged[f] = b
-			} else {
-				createdOnly = append(createdOnly, f)
-			}
-		}
-		if activeTxn != nil {
-			activeTxn.record(beforeChanged, createdOnly)
-		} else {
-			entry, jerr := orchestrator.RecordOperation(m.op, detail, beforeChanged, createdOnly)
-			if jerr != nil {
-				fmt.Fprintf(os.Stderr, "warning: journal write failed: %v\n", jerr)
-			} else {
-				undoToken = entry.ID
-			}
-		}
-	}
+	undoToken = recordUndoToken(changed, before, m, detail, undoToken)
 
 	if m.gate && len(changed) > 0 {
 		if gerr := buildAffectedPackages(changed); gerr != nil {
@@ -215,6 +170,61 @@ func (m *mutation) run(apply func() (string, error)) error {
 		fmt.Println(detail)
 	}
 	return nil
+}
+
+func recordUndoToken(changed []string, before map[string][]byte, m *mutation, detail string, undoToken string) string {
+	if len(changed) > 0 {
+		beforeChanged := map[string][]byte{}
+		var createdOnly []string
+		for _, f := range changed {
+			if b, ok := before[f]; ok {
+				beforeChanged[f] = b
+			} else {
+				createdOnly = append(createdOnly, f)
+			}
+		}
+		if activeTxn != nil {
+			activeTxn.record(beforeChanged, createdOnly)
+		} else {
+			entry, jerr := orchestrator.RecordOperation(m.op, detail, beforeChanged, createdOnly)
+			if jerr != nil {
+				fmt.Fprintf(os.Stderr, "warning: journal write failed: %v\n", jerr)
+			} else {
+				undoToken = entry.ID
+			}
+		}
+	}
+	return undoToken
+}
+
+func processFiles(files []string, before map[string][]byte, changed []string, needDiff bool, linesChanged int, diffBuf *strings.Builder) ([]string, int) {
+	for _, f := range files {
+		after, rerr := os.ReadFile(f)
+		b, existed := before[f]
+		switch {
+		case rerr != nil && !existed:
+			continue
+		case rerr != nil && existed:
+			changed = append(changed, f)
+			if needDiff {
+				linesChanged += diffLineCount(string(b), "")
+				diffBuf.WriteString(unifiedDiff(f, string(b), ""))
+			}
+		case !existed:
+			changed = append(changed, f)
+			if needDiff {
+				linesChanged += diffLineCount("", string(after))
+				diffBuf.WriteString(unifiedDiff(f, "", string(after)))
+			}
+		case !bytes.Equal(b, after):
+			changed = append(changed, f)
+			if needDiff {
+				linesChanged += diffLineCount(string(b), string(after))
+				diffBuf.WriteString(unifiedDiff(f, string(b), string(after)))
+			}
+		}
+	}
+	return changed, linesChanged
 }
 
 // restore puts files back to their captured pre-mutation state, removing

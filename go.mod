@@ -2,7 +2,7 @@ module github.com/chrisophus/gorefactor
 
 go 1.26.0
 
-toolchain go1.26.3
+toolchain go1.26.5
 
 require (
 	github.com/modelcontextprotocol/go-sdk v1.6.1

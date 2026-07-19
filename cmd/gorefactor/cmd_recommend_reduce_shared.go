@@ -56,6 +56,13 @@ func applyNameableExtractions[T any](file string, exs []T, allowReturns bool, pr
 	return applyExtractionsBottomUp(file, specs, allowReturns)
 }
 
+func applyRecommendedExtractions[T any](file string, extractions []T, err error, allowReturns bool, project func(T) extractionSpec) (int, error) {
+	if err != nil {
+		return 0, err
+	}
+	return applyNameableExtractions(file, extractions, allowReturns, project), nil
+}
+
 // reduceFlags holds the flags shared between `recommend --reduce-complexity`
 // and `recommend --reduce-length`, which differ only in the name of the mode
 // flag and the name/meaning of the numeric threshold flag.

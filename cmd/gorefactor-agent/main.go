@@ -48,22 +48,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(2)
 	}
-	if spec == "" && !*campaign {
-		if *interactive {
-			fmt.Print("What would you like to do? > ")
-			reader := bufio.NewReader(os.Stdin)
-			line, _ := reader.ReadString('\n')
-			spec = strings.TrimSpace(line)
-			if spec == "" {
-				fmt.Fprintln(os.Stderr, "Error: no spec provided")
-				os.Exit(2)
-			}
-		} else {
-			fmt.Fprintln(os.Stderr, "Error: -spec is required (text or @file), or use -campaign")
-			flag.Usage()
-			os.Exit(2)
-		}
-	}
+	spec = resolveEmptySpec(spec, campaign, interactive)
 
 	cfg := Config{
 		Spec:       spec,
@@ -77,22 +62,7 @@ func main() {
 		Out:        os.Stdout,
 	}
 
-	if *printPrompt {
-		if *singleShot {
-			fmt.Println("===== SYSTEM (single-shot) =====")
-			fmt.Println(systemPrompt())
-			fmt.Println("\n===== USER =====")
-			fmt.Println(buildUserPrompt(spec, *dir, ""))
-		} else {
-			fmt.Println("===== SYSTEM (agentic, default) =====")
-			fmt.Println(agenticSystemPrompt(*dir))
-			fmt.Println("\n===== TOOLS =====")
-			for _, td := range toolCatalog() {
-				fmt.Printf("- %s: %s\n", td.Function.Name, td.Function.Description)
-			}
-			fmt.Println("\n===== TASK =====")
-			fmt.Println(strings.TrimSpace(spec))
-		}
+	if printAssembledPrompt(printPrompt, singleShot, spec, dir) {
 		return
 	}
 
@@ -117,7 +87,37 @@ func main() {
 		os.Exit(2)
 	}
 
-	var runErr error
+	if runErr := runSelectedMode(campaign, provider, cfg, singleShot, interactive); runErr != nil {
+		// A punt is not a crash: the junior cleanly handed work back.
+		// The structured report is already on stdout; exit 3 so a
+		// delegating (senior) agent can branch on "punted" vs "failed".
+		exitPuntAware(runErr)
+	}
+}
+
+func printAssembledPrompt(printPrompt *bool, singleShot *bool, spec string, dir *string) (done bool) {
+	if *printPrompt {
+		if *singleShot {
+			fmt.Println("===== SYSTEM (single-shot) =====")
+			fmt.Println(systemPrompt())
+			fmt.Println("\n===== USER =====")
+			fmt.Println(buildUserPrompt(spec, *dir, ""))
+		} else {
+			fmt.Println("===== SYSTEM (agentic, default) =====")
+			fmt.Println(agenticSystemPrompt(*dir))
+			fmt.Println("\n===== TOOLS =====")
+			for _, td := range toolCatalog() {
+				fmt.Printf("- %s: %s\n", td.Function.Name, td.Function.Description)
+			}
+			fmt.Println("\n===== TASK =====")
+			fmt.Println(strings.TrimSpace(spec))
+		}
+		return true
+	}
+	return
+}
+
+func runSelectedMode(campaign *bool, provider Provider, cfg Config, singleShot *bool, interactive *bool) error {
 	switch {
 	case *campaign:
 		tc, ok := provider.(toolChatter)
@@ -125,9 +125,9 @@ func main() {
 			fmt.Fprintln(os.Stderr, "Error: -campaign needs a tool-calling provider (use -provider openai)")
 			os.Exit(2)
 		}
-		runErr = RunCampaign(context.Background(), tc, cfg)
+		return RunCampaign(context.Background(), tc, cfg)
 	case *singleShot:
-		runErr = RunDriver(context.Background(), provider, cfg)
+		return RunDriver(context.Background(), provider, cfg)
 	default:
 		tc, ok := provider.(toolChatter)
 		if !ok {
@@ -136,17 +136,31 @@ func main() {
 			os.Exit(2)
 		}
 		if *interactive {
-			runErr = RunInteractiveAgenticDriver(context.Background(), tc, cfg)
+			return RunInteractiveAgenticDriver(context.Background(), tc, cfg)
+		}
+		return RunAgenticDriver(context.Background(), tc, cfg)
+	}
+
+}
+
+func resolveEmptySpec(spec string, campaign *bool, interactive *bool) string {
+	if spec == "" && !*campaign {
+		if *interactive {
+			fmt.Print("What would you like to do? > ")
+			reader := bufio.NewReader(os.Stdin)
+			line, _ := reader.ReadString('\n')
+			spec = strings.TrimSpace(line)
+			if spec == "" {
+				fmt.Fprintln(os.Stderr, "Error: no spec provided")
+				os.Exit(2)
+			}
 		} else {
-			runErr = RunAgenticDriver(context.Background(), tc, cfg)
+			fmt.Fprintln(os.Stderr, "Error: -spec is required (text or @file), or use -campaign")
+			flag.Usage()
+			os.Exit(2)
 		}
 	}
-	if runErr != nil {
-		// A punt is not a crash: the junior cleanly handed work back.
-		// The structured report is already on stdout; exit 3 so a
-		// delegating (senior) agent can branch on "punted" vs "failed".
-		exitPuntAware(runErr)
-	}
+	return spec
 }
 
 func exitPuntAware(err error) {

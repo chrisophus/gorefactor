@@ -64,11 +64,8 @@ func runReduceLength(args []string) error {
 // extract-candidate autofixes and `recommend --reduce-length --apply`.
 func reduceLengthByExtraction(file, function string, maxLines int, allowReturns bool) (int, error) {
 	res, err := analyzer.RecommendLengthReduction(file, function, maxLines)
-	if err != nil {
-		return 0, err
-	}
-	return applyNameableExtractions(file, res.Extractions, allowReturns, func(e analyzer.LengthExtraction) extractionSpec {
+	return applyRecommendedExtractions(file, res.Extractions, err, allowReturns, func(e analyzer.LengthExtraction) extractionSpec {
 		return extractionSpec{StartLine: e.StartLine, EndLine: e.EndLine, Suggestion: e.Suggestion}
-	}), nil
+	})
 
 }

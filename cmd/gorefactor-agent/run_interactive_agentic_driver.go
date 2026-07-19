@@ -102,12 +102,12 @@ func interactivePause(ctx context.Context, tc toolChatter, cfg Config, tools []t
 	return stopped
 }
 
-// chatPause opens a conversational pause after a tool step. The user can type
-// freely: any text goes to the model as a chat message and the agent responds.
-// Recognized commands: enter/c = continue, r = diff, s = stop, a = auto.
-// Returns (stopped, goAuto, updated messages).
+// pausePrompt is the menu line chatPause prints before reading input.
 const pausePrompt = "\n  ↩ continue · (a)uto · (r)eview diff · (s)top · or chat > "
 
+// chatPause opens a conversational pause after a tool step. The user can type freely: any text goes
+// to the model as a chat message and the agent responds. Recognized commands: enter/c = continue, r
+// = diff, s = stop, a = auto. Returns (stopped, goAuto, updated messages).
 func chatPause(ctx context.Context, tc toolChatter, cfg Config, messages []chatMessage, tools []toolDef, reader *bufio.Reader) (stopped, goAuto bool, newMsgs []chatMessage) {
 	fmt.Fprint(cfg.Out, pausePrompt)
 	for {

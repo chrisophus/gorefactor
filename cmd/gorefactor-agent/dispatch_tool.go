@@ -7,9 +7,8 @@ import (
 	"strings"
 )
 
-// dispatchTool routes one tool call. Sense tools are read-only; mutate
-// tools are single deterministic orchestrator ops; finish runs the
-// authoritative gate; punt is terminal.
+// runGateWithAdvisory runs the authoritative gate and, when green, appends the advisory lint
+// summary to the success message.
 func runGateWithAdvisory(dir string) (msg, out string, ok bool) {
 	ok, out = runGate(dir)
 	if !ok {
@@ -25,6 +24,8 @@ func runGateWithAdvisory(dir string) (msg, out string, ok bool) {
 	return msg, out, true
 }
 
+// dispatchTool routes one tool call. Sense tools are read-only; mutate tools are single
+// deterministic orchestrator ops; finish runs the authoritative gate; punt is terminal.
 func dispatchTool(call toolCall, cfg Config, gateFails *int) (string, toolStatus) {
 	var a map[string]any
 	if call.Function.Arguments != "" {

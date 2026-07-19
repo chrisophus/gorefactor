@@ -236,8 +236,9 @@ the plan text, in the spirit of honest accounting:
 ## Status
 
 Items 1–8: **done** (2026-07-19 addendum above; one commit per item).
-Item 9 (fate of `sweagent/` and `.pi/`) and item 10 (schedule the no-tools
-review) remain open — both are owner's calls, not code. Item 11 (new,
-above) is not started. Everything in "What changed because of it" is merged
+Item 9: **done** — owner chose deletion; `sweagent/`, `.pi/`, and the
+`.pi`-describing `PI_INTEGRATION.md` are removed (zero Go references, so
+no code impact). Item 10 (schedule the no-tools review) remains open — an
+owner process commitment, not code. Item 11 (new, above) is not started. Everything in "What changed because of it" is merged
 into the PR #52 branch line. The 2026-07-18 addendum items (score-skip
 honesty + prevention) are done.

@@ -188,7 +188,7 @@ func commitFinding(f finding) error {
 	if o, err := runIn(".", "git", "add", "-A"); err != nil {
 		return fmt.Errorf("git add: %s", o)
 	}
-	msg := fmt.Sprintf("gorefactor-agent campaign: %s %s\n\n%s\n\nDelegated to the cheap second-tier agent (zero frontier tokens), gate-verified.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
+	msg := fmt.Sprintf("gorefactor-agent campaign: %s %s\n\n%s\n\nDelegated to the second-tier agent, gate-verified.",
 		f.kind, f.path, f.detail)
 	if o, err := runIn(".", "git", "commit", "-q", "-m", msg); err != nil {
 		return fmt.Errorf("git commit: %s", o)

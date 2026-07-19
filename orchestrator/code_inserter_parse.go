@@ -143,8 +143,6 @@ func stripWhitespace(s string) string {
 	return s
 }
 
-// findFunction finds a function by name and optional receiver type
-
 func matchesReceiverType(funcDecl *ast.FuncDecl, receiverType string) bool {
 	if funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 {
 		return false

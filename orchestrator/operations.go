@@ -25,53 +25,6 @@ func commentBelongsToDecl(fileSet *token.FileSet, declStart, declEnd token.Pos, 
 	return false
 }
 
-// executeMoveMethod executes a method moving operation
-
-// Parse source file
-
-// Re-find the target using the same FileSet for accurate positions
-// This ensures line numbers match between finding and moving
-
-// Find the declaration to move using line numbers from the same FileSet
-
-// Check if this declaration matches the target
-// Declaration should start at or before target start and end at or after target end
-
-// Determine declaration type for better error messages and logging
-
-// Provide helpful error message with available declarations
-
-// Extract the code snippet for the declaration
-
-// Collect comments associated with this declaration
-
-// Remove declaration from source file
-
-// Update source file comments
-
-// Write modified source file
-
-// Run goimports on source file to fix imports
-
-// Parse or create destination file
-
-// Create new file with package declaration
-// Try to extract package name from source file
-
-// Add declaration to destination file (at the end)
-
-// Add comments to destination file
-
-// Write destination file
-
-// Run goimports on destination file to fix imports
-
-// Re-read the file after goimports may have modified it
-
-// Fallback to original content
-
-// Parse the written file to get accurate line numbers for the added declaration
-
 func (o *Orchestrator) executeMoveMethod(operation *RefactoringOperation, target *TargetLocation, result *OperationResult) error {
 	newFile, ok := operation.Parameters["newFile"].(string)
 	if !ok {

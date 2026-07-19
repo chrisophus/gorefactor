@@ -137,9 +137,9 @@ class to punt while `report`-based `analysis` stayed green — the
 diagnostic signature for "broken gate, not broken agent". Fixed by
 anchoring the pattern to `/gorefactor`.
 
-**Wall-clock added:** `RELIABILITY.md` now reports `mean secs` (the real
+**Wall-clock added:** the battery report (generated locally by `scripts/reliability.sh`, not committed) now reports `mean secs` (the real
 adoption gate — the junior is free in frontier tokens, not in time).
 At ~7s/run on this hardware, time is not a constraint at this scale.
 
-See `../RELIABILITY.md` for the live table; regenerate with
+Regenerate the live table locally with
 `scripts/reliability.sh [iters]`.

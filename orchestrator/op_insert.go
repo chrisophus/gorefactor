@@ -6,8 +6,6 @@ import (
 	"strings"
 )
 
-// Write the file
-
 func (o *Orchestrator) executeInsertCode(operation *RefactoringOperation, result *OperationResult) error {
 
 	codeSnippet, ok := operation.Parameters["codeSnippet"].(string)
@@ -57,8 +55,6 @@ func (o *Orchestrator) executeInsertCode(operation *RefactoringOperation, result
 	return nil
 }
 
-// No changes applied
-
 func (o *Orchestrator) executeCreateFile(operation *RefactoringOperation, result *OperationResult) error {
 	codeSnippet, ok := operation.Parameters["codeSnippet"].(string)
 	if !ok {
@@ -92,8 +88,6 @@ func (o *Orchestrator) executeCreateFile(operation *RefactoringOperation, result
 
 	return nil
 }
-
-// File exists - check if we should skip or overwrite
 
 func (o *Orchestrator) executeReplaceCode(operation *RefactoringOperation, result *OperationResult) error {
 	codePattern, _ := operation.Parameters["codePattern"].(string)

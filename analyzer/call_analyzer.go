@@ -33,22 +33,12 @@ type CallerAnalysis struct {
 	Confidence      float64    `json:"confidence"` // 0-1, confidence in analysis
 }
 
-// CallChain represents a chain of function calls (A calls B calls C)
-type CallChain struct {
-	Start      string       `json:"start"`
-	Chains     [][]CallSite `json:"chains"`
-	MaxDepth   int          `json:"maxDepth"`
-	IsCircular bool         `json:"isCircular"`
-	Confidence float64      `json:"confidence"`
-}
-
 // CallAnalyzer analyzes function calls
 type CallAnalyzer struct {
 	symbolAnalyzer *UseAnalyzer
 	files          []string
 	callGraph      map[string][]CallSite // Maps function name to all callers
 	definitions    map[string]*SymbolDefinition
-	visitedChains  map[string]bool     // For cycle detection
 	snippetLines   map[string][]string // Cache of file -> lines for snippet extraction
 }
 
@@ -59,7 +49,6 @@ func NewCallAnalyzer(files []string) *CallAnalyzer {
 		files:          files,
 		callGraph:      make(map[string][]CallSite),
 		definitions:    make(map[string]*SymbolDefinition),
-		visitedChains:  make(map[string]bool),
 		snippetLines:   make(map[string][]string),
 	}
 }
@@ -119,37 +108,4 @@ func (ca *CallAnalyzer) FindCallers(targetName, targetReceiver string) (*CallerA
 	analysis.TotalCallCount = len(allCallers)
 
 	return analysis, nil
-}
-
-// IsCallableFrom checks if one function can call another
-func (ca *CallAnalyzer) IsCallableFrom(callerName, callerReceiver, targetName, targetReceiver string) (bool, error) {
-	if err := ca.symbolAnalyzer.Parse(); err != nil {
-		return false, fmt.Errorf("parse: %w", err)
-	}
-	ca.symbolAnalyzer.collectDefinitions()
-	ca.buildCallGraph(targetName, targetReceiver)
-
-	key := ca.buildCallKey(targetName, targetReceiver)
-	callers := ca.callGraph[key]
-
-	for _, caller := range callers {
-		if caller.CallerName == callerName {
-			if callerReceiver == "" || caller.CallerReceiver == callerReceiver ||
-				caller.CallerReceiver == "*"+callerReceiver ||
-				"*"+caller.CallerReceiver == callerReceiver {
-				return true, nil
-			}
-		}
-	}
-
-	return false, nil
-}
-
-// GetCallerHierarchy returns a hierarchical view of callers
-type CallerHierarchy struct {
-	FunctionName string
-	Receiver     string
-	File         string
-	Callers      []CallerHierarchy
-	CallCount    int
 }

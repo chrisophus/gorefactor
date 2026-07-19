@@ -60,3 +60,9 @@ go.work
 
 # Claude Code agent worktrees (ephemeral)
 .claude/worktrees/
+
+# Agent binary and stale phase artifacts (root binaries are anchored above)
+/gorefactor-agent
+/gorefactor-phase2
+/phase4-test
+orchestrator/gorefactor

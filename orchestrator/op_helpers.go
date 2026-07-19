@@ -11,8 +11,6 @@ import (
 	"strings"
 )
 
-// executeCreateFile creates a new file with the specified content
-
 func declLabel(decl ast.Decl, fset *token.FileSet) string {
 	switch d := decl.(type) {
 	case *ast.FuncDecl:
@@ -22,8 +20,6 @@ func declLabel(decl ast.Decl, fset *token.FileSet) string {
 	}
 	return "declaration"
 }
-
-// Create code inserter and insert code
 
 func genDeclLabel(d *ast.GenDecl) string {
 	switch d.Tok {
@@ -47,8 +43,6 @@ func genDeclLabel(d *ast.GenDecl) string {
 	return "generic declaration"
 }
 
-// Convert location data to InsertionLocation
-
 func findDeclInRange(decls []ast.Decl, fset *token.FileSet, startLine, endLine int) (ast.Decl, int, string, error) {
 	for i, decl := range decls {
 		s := fset.Position(decl.Pos()).Line
@@ -70,8 +64,6 @@ func findDeclInRange(decls []ast.Decl, fset *token.FileSet, startLine, endLine i
 	return nil, -1, "", fmt.Errorf("available declarations:\n%s", list)
 }
 
-// Get parameters
-
 func writeFileAndImport(path string, node *ast.File, fset *token.FileSet) error {
 	var buf bytes.Buffer
 	if err := format.Node(&buf, fset, node); err != nil {
@@ -85,8 +77,6 @@ func writeFileAndImport(path string, node *ast.File, fset *token.FileSet) error 
 	}
 	return nil
 }
-
-// executeInsertCode executes a code insertion operation
 
 func recordMoveResults(result *OperationResult, sourceFile, destFile string, sourceStart, sourceEnd int, declCode, declType string) {
 	destStartLine, destEndLine := 1, 1
@@ -116,8 +106,6 @@ func recordMoveResults(result *OperationResult, sourceFile, destFile string, sou
 	})
 }
 
-// Fallback if parsing fails - still record the change
-
 func extractOldName(target *TargetSpecification) string {
 	if target == nil {
 		return ""
@@ -127,8 +115,6 @@ func extractOldName(target *TargetSpecification) string {
 	}
 	return target.MethodName
 }
-
-// Record changes with detailed information
 
 func renameInFile(filename string, fileNode *ast.File, fset *token.FileSet, oldName, newName string, result *OperationResult) error {
 	changed := false
@@ -160,8 +146,6 @@ func renameInFile(filename string, fileNode *ast.File, fset *token.FileSet, oldN
 	})
 	return nil
 }
-
-// Find the last declaration (the one we just added)
 
 func appendDeclToFile(filePath, declCode, packageName string) error {
 	var content []byte

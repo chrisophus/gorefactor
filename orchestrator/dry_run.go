@@ -13,21 +13,6 @@ type DryRunResult struct {
 	Summary    string
 }
 
-// DiffPaths returns affected file paths from a dry-run result
-func (d *DryRunResult) DiffPaths() []string {
-	seen := make(map[string]bool)
-	var paths []string
-	for _, op := range d.Operations {
-		for _, diff := range op.Changes {
-			if !seen[diff.File] {
-				seen[diff.File] = true
-				paths = append(paths, diff.File)
-			}
-		}
-	}
-	return paths
-}
-
 // DryRunOperationResult shows what would change for a single operation
 type DryRunOperationResult struct {
 	Operation *RefactoringOperation

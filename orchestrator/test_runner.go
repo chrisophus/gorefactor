@@ -1,8 +1,6 @@
 package orchestrator
 
 import (
-	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 )
@@ -51,62 +49,9 @@ func (tr *TestRunner) RunTests() *TestResult {
 	return result
 }
 
-// RunTestsForPackage runs tests for a specific package
-func (tr *TestRunner) RunTestsForPackage(pkgPath string) *TestResult {
-	result := &TestResult{
-		PackageTests: make(map[string]PackageTestResult),
-	}
+// Check if working directory has any Go test files
 
-	cmd := exec.Command("go", "test", "./"+pkgPath, "-v")
-	cmd.Dir = tr.workDir
-
-	output, err := cmd.CombinedOutput()
-	result.Output = string(output)
-
-	if err != nil {
-		result.Success = false
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			result.ExitCode = exitErr.ExitCode()
-		} else {
-			result.ExitCode = 1
-		}
-	} else {
-		result.Success = true
-		result.ExitCode = 0
-	}
-
-	tr.parseTestOutput(result)
-
-	return result
-}
-
-// CanTestAll checks if tests can be run for the working directory
-func (tr *TestRunner) CanTestAll() bool {
-	// Check if working directory has any Go test files
-	entries, err := os.ReadDir(tr.workDir)
-	if err != nil {
-		return false
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") && entry.Name() != "vendor" {
-			// Check for test files in subdirectory
-			subDir := tr.workDir + "/" + entry.Name()
-			subEntries, err := os.ReadDir(subDir)
-			if err == nil {
-				for _, subEntry := range subEntries {
-					if strings.HasSuffix(subEntry.Name(), "_test.go") {
-						return true
-					}
-				}
-			}
-		} else if strings.HasSuffix(entry.Name(), "_test.go") {
-			return true
-		}
-	}
-
-	return false
-}
+// Check for test files in subdirectory
 
 // parseTestOutput extracts test metrics from test output
 func (tr *TestRunner) parseTestOutput(result *TestResult) {
@@ -145,34 +90,6 @@ type TestResult struct {
 	TestsFailed  int
 	Duration     string
 	PackageTests map[string]PackageTestResult
-}
-
-// Summary returns a string summary of test results
-func (r *TestResult) Summary() string {
-	var sb strings.Builder
-	sb.WriteString("=== Test Results ===\n")
-	fmt.Fprintf(&sb, "Status: %v\n", map[bool]string{true: "PASSED", false: "FAILED"}[r.Success])
-	fmt.Fprintf(&sb, "Exit Code: %d\n", r.ExitCode)
-	fmt.Fprintf(&sb, "Tests Passed: %d\n", r.TestsPassed)
-	fmt.Fprintf(&sb, "Tests Failed: %d\n", r.TestsFailed)
-
-	if len(r.PackageTests) > 0 {
-		sb.WriteString("\nPackage Results:\n")
-		for pkg, result := range r.PackageTests {
-			status := "✓"
-			if !result.Passed {
-				status = "✗"
-			}
-			fmt.Fprintf(&sb, "  %s %s\n", status, pkg)
-		}
-	}
-
-	return sb.String()
-}
-
-// OutputLines returns test output as individual lines
-func (r *TestResult) OutputLines() []string {
-	return strings.Split(r.Output, "\n")
 }
 
 // PackageTestResult represents test results for a package

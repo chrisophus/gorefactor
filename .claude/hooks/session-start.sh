@@ -86,4 +86,18 @@ else
 	fi
 fi
 
+# --- 3. Best-effort: install x/tools deadcode so the doctor `deadcode` substrate
+# runs locally. Unlike golangci-lint this is a plain `go install` (no pinned
+# release), and it is a *scored* substrate: when it is absent, `doctor --report
+# --score` omits every dead-code finding and the number reads healthier than the
+# tree is (the score line now says "N scored substrate(s) skipped", but only if
+# you look). Installing it keeps the local score honest.
+if command -v deadcode >/dev/null 2>&1; then
+	echo "session-start: deadcode already installed"
+elif go install golang.org/x/tools/cmd/deadcode@latest >/tmp/deadcode-install.log 2>&1; then
+	echo "session-start: deadcode installed to $GOPATH_BIN"
+else
+	echo "session-start: WARNING - could not install deadcode (network/egress policy likely blocked it; see /tmp/deadcode-install.log). 'doctor --report --score' will flag it as a skipped scored substrate."
+fi
+
 exit 0

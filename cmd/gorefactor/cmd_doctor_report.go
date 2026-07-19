@@ -152,10 +152,29 @@ func doctorReportCommand(opts doctorOpts) error {
 	return nil
 }
 
+func scoredSubstratesSkipped(subs []doctor.SubstrateStatus) []string {
+	var out []string
+	for _, s := range subs {
+		if s.State != doctor.SubstrateRan && s.Name != "baseline" {
+			out = append(out, s.Name)
+		}
+	}
+	return out
+}
+
 func printDoctorReport(rep *doctor.Report) {
 	fmt.Printf("doctor report (base %s)\n", rep.BaseRef)
+	// A skipped substrate emits no findings, so the score silently omits its
+	// rules — a "score: 65" computed without deadcode/govulncheck reads far
+	// healthier than the tree is. Name the gap on the score line itself.
+	skippedSubstrates := scoredSubstratesSkipped(rep.Substrates)
 	if rep.Score != nil {
-		fmt.Printf("  score: %.1f/100 (presentation-only; nothing gates on it)\n", *rep.Score)
+		caveat := "; nothing gates on it"
+		if len(skippedSubstrates) > 0 {
+			caveat = fmt.Sprintf("; %d scored substrate(s) skipped (%s) — score is optimistic",
+				len(skippedSubstrates), strings.Join(skippedSubstrates, ", "))
+		}
+		fmt.Printf("  score: %.1f/100 (presentation-only%s)\n", *rep.Score, caveat)
 	}
 
 	if len(rep.Scope) > 0 {
@@ -197,4 +216,5 @@ func printDoctorReport(rep *doctor.Report) {
 	if len(rep.NewErrors()) > 0 {
 		fmt.Println("  advisory: new error-severity findings above would fail the gate once it goes hard")
 	}
+
 }

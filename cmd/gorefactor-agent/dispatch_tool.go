@@ -10,6 +10,21 @@ import (
 // dispatchTool routes one tool call. Sense tools are read-only; mutate
 // tools are single deterministic orchestrator ops; finish runs the
 // authoritative gate; punt is terminal.
+func runGateWithAdvisory(dir string) (msg, out string, ok bool) {
+	ok, out = runGate(dir)
+	if !ok {
+		return "", out, false
+	}
+	msg = "gate green"
+	if out != "" {
+		msg += "\n" + out
+	}
+	if advisory := runLintAdvisory(dir); advisory != "" {
+		msg += "\n" + advisory
+	}
+	return msg, out, true
+}
+
 func dispatchTool(call toolCall, cfg Config, gateFails *int) (string, toolStatus) {
 	var a map[string]any
 	if call.Function.Arguments != "" {
@@ -37,30 +52,16 @@ func dispatchTool(call toolCall, cfg Config, gateFails *int) (string, toolStatus
 		return answer, stSuccess
 
 	case "finish":
-		ok, out := runGate(".")
+		msg, out, ok := runGateWithAdvisory(".")
 		if ok {
-			msg := "gate green"
-			if out != "" {
-				msg += "\n" + out
-			}
-			if advisory := runLintAdvisory("."); advisory != "" {
-				msg += "\n" + advisory
-			}
 			return msg, stSuccess
 		}
 		*gateFails++
 		return "gate FAILED (not done). Fix and call finish again:\n" + trim(out, 1200), stContinue
 
 	case "run_gate":
-		ok, out := runGate(".")
+		msg, out, ok := runGateWithAdvisory(".")
 		if ok {
-			msg := "gate green"
-			if out != "" {
-				msg += "\n" + out
-			}
-			if advisory := runLintAdvisory("."); advisory != "" {
-				msg += "\n" + advisory
-			}
 			return msg, stContinue
 		}
 		return "gate red:\n" + trim(out, 1000), stContinue

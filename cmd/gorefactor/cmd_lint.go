@@ -28,15 +28,31 @@ type lintIssue struct {
 	// excluded from issueFingerprint so baseline entries and the autofix
 	// outcome journal stay keyed on the underlying finding.
 	Note string `json:"note,omitempty"`
+	// Value/Threshold record the measured metric and its limit for
+	// threshold-based proxy rules (long-function, complexity, deep-nesting), so
+	// the doctor score can weight the finding by how far over threshold it is.
+	// Zero for non-graded rules.
+	Value     int `json:"value,omitempty"`
+	Threshold int `json:"threshold,omitempty"`
+}
+
+// issueFailsAt reports whether iss should fail a gate configured to fail on
+// failOn severity. An "error" gate fails only on errors; a "warning" gate fails
+// on warning and error but never on info — info is advisory by contract (see the
+// Makefile gate: "info stays advisory"), so an info finding must not block a
+// gate. This is the single severity predicate the fail/count/filter helpers
+// share.
+func issueFailsAt(iss lintIssue, failOn string) bool {
+	if iss.Severity == "error" {
+		return true
+	}
+	return failOn == "warning" && iss.Severity == "warning"
 }
 
 func failingIssueCount(issues []lintIssue, failOn string) int {
-	if failOn == "warning" {
-		return len(issues)
-	}
 	count := 0
 	for _, iss := range issues {
-		if iss.Severity == "error" {
+		if issueFailsAt(iss, failOn) {
 			count++
 		}
 	}
@@ -46,7 +62,7 @@ func failingIssueCount(issues []lintIssue, failOn string) int {
 func failingIssues(issues []lintIssue, failOn string) []lintIssue {
 	filtered := make([]lintIssue, 0, len(issues))
 	for _, iss := range issues {
-		if failOn == "warning" || iss.Severity == "error" {
+		if issueFailsAt(iss, failOn) {
 			filtered = append(filtered, iss)
 		}
 	}

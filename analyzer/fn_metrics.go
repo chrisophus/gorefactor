@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"strings"
 )
 
@@ -115,14 +116,7 @@ func receiverTypeName(fn *ast.FuncDecl) string {
 	if id, ok := t.(*ast.Ident); ok {
 		return id.Name
 	}
-	return strings.TrimPrefix(exprString(t), "*")
-}
-
-func exprString(e ast.Expr) string {
-	if id, ok := e.(*ast.Ident); ok {
-		return id.Name
-	}
-	return ""
+	return strings.TrimPrefix(types.ExprString(t), "*")
 }
 
 // functionMaxNesting computes the deepest nesting of control structures

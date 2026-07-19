@@ -233,6 +233,59 @@ the plan text, in the spirit of honest accounting:
     that op with a clear error rather than silently — acceptable, but
     dishonest to leave advertised.
 
+## Addendum — 2026-07-19 "score to 80" dogfood loop
+
+A `/goal` pass targeting `doctor --report --score ≥ 80` forced the score model
+itself under scrutiny. Findings, pinned as **lessons 10–12**:
+
+10. **The health score was size-blind — an absolute weighted-finding count.**
+    A 45k-LOC, near-zero-defect, well-tested codebase scored 67 because size/
+    shape proxies (long-function, complexity, deep-nesting, data-clumps) fire
+    per function above a threshold, so their count scales with codebase size.
+    Summed absolutely, a large codebase is penalised for its size, not its
+    quality (the score's own comment already admitted cross-repo comparison
+    was meaningless). Fix: the proxy tier is now scored as a *density* — proxy
+    weight ÷ codebase size in units of `scoreProxyReferenceFuncs` (1000 scored
+    functions), floored at the reference; defects stay absolute; a
+    reference-sized codebase scores as before (`doctor.ComputeScore`,
+    `countScoredFunctions`, `TestComputeScoreSizeNormalization`). This is the
+    change that makes the score portable across projects. Took the honest
+    score 67.6 → ~76 with no code churn.
+
+11. **`data-clumps` false-positives on idiomatic carrier groups.** A parameter
+    group dominated by `*token.FileSet` / `*ast.*` / `*testing.T` /
+    `context.Context` / go-packages plumbing is not a bundleable struct — those
+    types thread through signatures by necessity. Excluding carriers and
+    requiring ≥3 *real* domain params killed the rule's biggest FP class on
+    AST/test code (`isCarrierParamType`, pinned).
+
+12. **Binary-threshold proxies don't reward partial improvement, and mostly
+    fire barely-over-threshold.** Reducing `recommendExtractions` from
+    cyclomatic 30 → 23 (removing seven duplicated flag-parse blocks — a real
+    gain) moved the score by *zero*, because the finding is over-threshold
+    either way. And the finding population is dominated by barely-over cases:
+    median complexity 18 vs threshold 15 (14/17 under 1.5×); median length 104
+    vs 75. Charging a cx-16 function the same as a cx-45 one is inaccurate.
+    **Recommended next fix (not taken under target pressure):** gradient /
+    partial-credit proxy weight — scale a proxy's weight from ~0 at threshold
+    to full at ~2× threshold. It is data-supported accuracy, rewards genuine
+    improvement, and would honestly raise the score; it was deliberately *not*
+    stacked in this pass because adding a discount mechanism specifically to
+    clear a target number is the exact move the header lesson forbids. The
+    reference constant in lesson 10 was likewise left un-tuned (1000, round).
+    The 76→80 gap is a calibration judgement, surfaced for the owner rather
+    than engineered.
+
+Also actioned: `examples/` scoped out of the health surface via
+`.gorefactor.yaml skip_dir_segments` (demo `main` programs, not shipping
+code — visible declaration, not a hidden detector special-case); 19
+genuinely-dead symbols/methods removed; three real duplicate-blocks
+consolidated (`exitPuntAware`, `retryBackoff`, generic `applyNameableExtractions`);
+`recommendExtractions` extraction residue (scrambled doc/signature) repaired.
+The aggressive autofix experiment reconfirmed lesson 5: it still mints
+formulaic `process<Collection>` names and `(r0, done bool)` sentinels that the
+nameability gate lets through — a candidate gate tightening.
+
 ## Status
 
 Items 1–8: **done** (2026-07-19 addendum above; one commit per item).

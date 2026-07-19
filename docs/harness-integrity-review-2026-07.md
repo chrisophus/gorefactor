@@ -187,8 +187,57 @@ compiler-and-linter-defeating scar worth noting: a package-level
 only the whole-program `deadcode` substrate saw through it. Candidate future
 sensor if the pattern recurs (it was a one-off here).
 
+## Addendum — 2026-07-19 plan execution
+
+Items 1–8 implemented in one pass (one commit per item on the
+`claude/harness-integrity-review-2026-07-qx51nl` branch line). Notes beyond
+the plan text, in the spirit of honest accounting:
+
+- **The new sensors found real defects on their first run.**
+  `stranded-comment` (item 1) surfaced two genuinely stranded doc comments
+  (`dispatchTool`'s doc sitting on `runGateWithAdvisory`; `chatPause`'s doc
+  sitting on `const pausePrompt`) — both re-homed in the same commit.
+  `orphaned-config-path` (item 3) surfaced two dead golangci exemptions
+  (`^testfiles/`, `^move_by_plan\.go$` — neither path exists) — removed,
+  golangci confirmed clean without them.
+- **Item 4's behavioral tests exposed a shipping capability lie**: the
+  template generator (and CLAUDE.md, and `analyze-diff` plans) advertised
+  `extract_method` / `inline_method` / `rename_variable` plan operations
+  that the orchestrator rejected as `unknown operation type` — the tool's
+  own `generate-templates` output failed its own `orchestrate`. Same class
+  as lesson 8: zero findings, worst behavior. Fixed by an
+  external-handler registry (`orchestrator.RegisterExternalHandler` /
+  `KnownOperationTypes`, dispatch-probe-pinned) with `cmd/gorefactor`
+  bridging `extract_method` and `inline_method` to its existing engines —
+  both now execute end-to-end from a JSON plan under compile-verified
+  tests. `rename_variable` had no engine anywhere and is gone from
+  templates and docs (replaced by the executable `rename_declaration`).
+- **Item 7** took the honesty option: `RenameAdvisor`/`RenameHints` with
+  `Blocking`/`Advisory` hint lists (plus a new package-level-collision
+  check) replaced the `SafeToRename` boolean; the report renders no
+  verdict and states the name-match-only limit.
+- **Item 6** evaluation result: `orchestrator.nodeToString` and
+  `api_diff`'s `render` stay — both are lossless `format.Node`-based
+  renderers of whole nodes, which `types.ExprString` cannot replace. The
+  lossy `analyzer.exprString` is deleted; `types.ExprString` is the single
+  blessed type-expression stringifier.
+
+**New item from this pass:**
+
+11. **`analyze-diff` still emits `rename_variable` operations**
+    (`createRenameVariableOperation` in `analyzer/diff_analyzer_ops.go`),
+    which no executor dispatches. Either implement a function-scoped
+    variable-rename executor (conservative: ident match within the resolved
+    function body) or emit an advisory change without an operation. Until
+    then, plans generated from diffs containing variable renames fail at
+    that op with a clear error rather than silently — acceptable, but
+    dishonest to leave advertised.
+
 ## Status
 
-Items 1–10: not started (this document is their tracking issue). Everything
-in "What changed because of it" is merged into the PR #52 branch line.
-The 2026-07-18 addendum items (score-skip honesty + prevention) are done.
+Items 1–8: **done** (2026-07-19 addendum above; one commit per item).
+Item 9 (fate of `sweagent/` and `.pi/`) and item 10 (schedule the no-tools
+review) remain open — both are owner's calls, not code. Item 11 (new,
+above) is not started. Everything in "What changed because of it" is merged
+into the PR #52 branch line. The 2026-07-18 addendum items (score-skip
+honesty + prevention) are done.

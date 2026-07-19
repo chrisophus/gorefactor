@@ -27,6 +27,8 @@ type Config struct {
 	Out        io.Writer // progress sink
 }
 
+const singleShotMaxIter = 3
+
 // RunDriver is the whole harness loop: a cheap model proposes a
 // constrained plan, gorefactor applies it deterministically, the Go
 // toolchain is the gate, and git is the rollback. The model never
@@ -44,7 +46,8 @@ func RunDriver(ctx context.Context, p Provider, cfg Config) (err error) {
 		cfg.Out = os.Stdout
 	}
 	if cfg.MaxIter <= 0 {
-		cfg.MaxIter = 3
+		cfg.MaxIter = singleShotMaxIter
+
 	}
 
 	if !cfg.AllowDirty {

@@ -50,13 +50,15 @@ func (s structuralSubstrate) Run(ctx doctor.RunContext) ([]doctor.Finding, error
 		}
 		file, line := splitLintFilePos(iss.File)
 		findings = append(findings, doctor.Finding{
-			File:     file,
-			Line:     line,
-			Rule:     iss.Rule,
-			Category: doctor.CategoryStruct,
-			Severity: sev,
-			Message:  iss.Message,
-			FixCmd:   runnableFixCmd(iss.AutoFixCmd),
+			File:            file,
+			Line:            line,
+			Rule:            iss.Rule,
+			Category:        doctor.CategoryStruct,
+			Severity:        sev,
+			Message:         iss.Message,
+			FixCmd:          runnableFixCmd(iss.AutoFixCmd),
+			MetricValue:     iss.Value,
+			MetricThreshold: iss.Threshold,
 		})
 	}
 	return findings, nil

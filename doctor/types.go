@@ -54,6 +54,13 @@ type Finding struct {
 	Fingerprint string   `json:"fingerprint"`
 	FixCmd      string   `json:"fixCmd,omitempty"`
 	Context     string   `json:"context,omitempty"`
+	// MetricValue/MetricThreshold carry the measured value and its threshold for
+	// threshold-based proxy findings (long-function lines, complexity, nesting
+	// depth). They let the score give partial credit by how far over threshold a
+	// finding is — a function just over is nearly fine, one at 2x is fully
+	// flagged. Zero when not a graded proxy.
+	MetricValue     int `json:"metricValue,omitempty"`
+	MetricThreshold int `json:"metricThreshold,omitempty"`
 }
 
 // SubstrateState records whether a substrate produced findings this run.

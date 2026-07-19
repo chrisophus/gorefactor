@@ -98,6 +98,43 @@ func TestScoreWeightTiers(t *testing.T) {
 	}
 }
 
+// TestProxyGradient pins the distance-based partial credit: a barely-over
+// finding is cheap, one at 2x threshold is full weight, and the relationship is
+// monotonic — so it redistributes (egregious costs more than the old flat 0.5),
+// it is not a blanket discount.
+func TestProxyGradient(t *testing.T) {
+	if g := proxyGradient(16, 15); g > 0.2 {
+		t.Errorf("barely-over should be cheap, got %v", g)
+	}
+	if g := proxyGradient(30, 15); g != 1.0 {
+		t.Errorf("2x threshold should be full weight, got %v", g)
+	}
+	if g := proxyGradient(45, 15); g != 1.0 {
+		t.Errorf("well over 2x should cap at full weight, got %v", g)
+	}
+	// Monotonic and redistributive: a badly-over finding costs more than the old
+	// flat 0.5 proxy multiplier, a mildly-over one costs less.
+	if !(proxyGradient(30, 15) > 0.5 && proxyGradient(16, 15) < 0.5) {
+		t.Errorf("gradient must redistribute around the old flat 0.5")
+	}
+	if !(proxyGradient(20, 15) < proxyGradient(25, 15)) {
+		t.Errorf("gradient must be monotonic in the value")
+	}
+}
+
+// TestComputeScoreGradientRewardsReduction pins that lowering a proxy metric
+// toward its threshold lowers its score cost, even without clearing it — the
+// property the binary threshold lacked.
+func TestComputeScoreGradientRewardsReduction(t *testing.T) {
+	before := &Report{Findings: []Finding{{Rule: "complexity", Severity: SeverityWarning, MetricValue: 30, MetricThreshold: 15}}}
+	after := &Report{Findings: []Finding{{Rule: "complexity", Severity: SeverityWarning, MetricValue: 20, MetricThreshold: 15}}}
+	before.ComputeScore(1000)
+	after.ComputeScore(1000)
+	if !(*after.Score > *before.Score) {
+		t.Fatalf("reducing complexity 30->20 (still over threshold) must improve the score: before=%v after=%v", *before.Score, *after.Score)
+	}
+}
+
 // TestComputeScoreSizeNormalization pins the size-relative proxy scoring: the
 // same proxy finding count costs less on a larger codebase (it is a density,
 // not an absolute count), while a defect costs the same regardless of size, and

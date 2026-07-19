@@ -383,6 +383,7 @@ func defaultLintRules() []LintRule {
 		prematureAbstractionRule{},
 		generatedNameRule{},
 		byValueBufferRule{},
+		strandedCommentRule{},
 	}
 	rules = append(rules, logPropagationRules()...)
 	rules = append(rules, funcorderRules()...)

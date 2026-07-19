@@ -20,6 +20,7 @@ func TestDefaultLintRules_ExpectedSet(t *testing.T) {
 		"premature-abstraction",
 		"generated-name",
 		"byvalue-buffer",
+		"stranded-comment",
 		"if-err-log-return",
 		"wrap-log-return",
 		"wrap-bridge-log-return",

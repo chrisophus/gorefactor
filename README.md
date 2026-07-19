@@ -77,7 +77,7 @@ gorefactor lint . --fail-only      # Show only blocking (error-severity) issues
 gorefactor doctor                  # Lint + golangci-lint + build + test (final gate)
 ```
 
-The default rule set has 28 rules, grouped by concern:
+The default rule set has 41 rules, grouped by concern (canonical list in `cmd/gorefactor/lint_registry_test.go`):
 
 - **Size & structure**: `file-size` (>500 lines, split hints by receiver/prefix), `long-function`, `deep-nesting`, `complexity` (cyclomatic), `extract-candidate`
 - **Duplication**: `duplicate-block` (>100-line clones with consolidation hints), `duplicate-bare-sentinel`
@@ -85,10 +85,15 @@ The default rule set has 28 rules, grouped by concern:
 - **Error handling**: `error-not-wrapped` (bare `return err`), `if-err-log-return`, `wrap-log-return`, `wrap-bridge-log-return`
 - **Ordering**: `funcorder-constructor` (constructor must follow the struct, before its methods), `funcorder-struct-method` (exported methods before unexported), `funcorder-function` (exported top-level functions before unexported ones, excluding constructors and `init()`) — ports golangci-lint's `funcorder` default checks plus its opt-in `function` check
 - **Coverage**: `untested-function`, `untested-package`
+- **Test hygiene**: `vacuous-test`, `sleep-in-test`
+- **Libraries / lifecycle / concurrency**: `fatal-in-library`, `unstopped-ticker`, `naked-goroutine`, `pass-through-param`
+- **Performance**: `regexp-compile-in-func`, `string-concat-in-loop`, `linear-search-in-loop`
 - **Dead code**: `dead-code` (unused funcs/types across the module)
+- **Impact / self-audit**: `high-blast-radius`, `low-gorefactor-adherence`
+- **Harness residue**: `generated-name`, `byvalue-buffer`, `stranded-comment`, `orphaned-config-path`
 Both `go-arch-lint` and `golangci-lint` are deliberately kept out of the `lint` rule set — `doctor` runs each as its own stage (both self-skip when the binary or config is absent), keeping `lint` fast and fully in-process. Run them independently with `go-arch-lint check` / `golangci-lint run`, or together via `gorefactor doctor`.
 
-`--fix` autofixes the rules with a single safe transformation: `file-size` (via `split`), `dead-code` (delete unreferenced decls), `error-not-wrapped` (wrap with `fmt.Errorf(... %w)`), the log-propagation rules (via `remove-log-return` — delete the redundant log next to a propagating return, wrap a bare `return err`), `duplicate-bare-sentinel` (via `wrap-sentinels`), and `funcorder-constructor`/`funcorder-struct-method`/`funcorder-function` (via `reorder-funcorder`). Add `--verify` to make each fix self-checking: it runs `go build ./...` + `go test ./...` after applying and reverts any fix that fails the gate, keeping the rest — so bulk `--fix` is safe to run unsupervised even where a sensor over-approximates.
+`--fix` autofixes the rules with a single safe transformation: `file-size` (via `split`), `dead-code` (delete unreferenced decls), `error-not-wrapped` (wrap with `fmt.Errorf(... %w)`), the log-propagation rules (via `remove-log-return` — delete the redundant log next to a propagating return, wrap a bare `return err`), `duplicate-bare-sentinel` (via `wrap-sentinels`), and `funcorder-constructor`/`funcorder-struct-method`/`funcorder-function` (via `reorder-funcorder`). Add `--verify` to make each fix self-checking: fixes are applied in batches of up to 8 (`defaultAutoFixBatchSize`), each batch is gated by `go build ./...` + `go test ./...`, and a failing batch is bisected so only the offending fix is reverted while the rest are kept — so bulk `--fix` is safe to run unsupervised even where a sensor over-approximates.
 
 **vs. alternatives:**
 - **gopls**: Great for interactive refactoring in an IDE, slow for CLI (60× slower cold-start)
@@ -192,6 +197,8 @@ Methods use `Receiver:Method` (no `*` on the receiver). Many commands accept `-`
 | `rename` | Unexported symbol, package-wide |
 | `move` | Move declaration to another file |
 | `extract` | Extract line range to new function |
+| `extract-var` | Bind an expression to a new local variable and rewrite occurrence(s) |
+| `extract-const` | Like `extract-var` but emits a local `const` |
 | `inline` | Inline a simple function into call sites and delete it |
 | `add-field` | Add a struct field; optionally rewrite positional literals to keyed |
 | `change-signature` | Add/remove/rename a parameter and update all call sites |
@@ -203,6 +210,8 @@ Methods use `Receiver:Method` (no `*` on the receiver). Many commands accept `-`
 | `add-test` | Generate a table-driven test scaffold for a function/method |
 | `extract-interface` | Generate an interface from a type's exported method set |
 | `implement-interface` | Generate compiling method stubs for unimplemented interface methods |
+| `wrap-errors` | Rewrite bare `return err` in `if err != nil` blocks to `fmt.Errorf` wrapping |
+| `hoist-regexp` | Hoist function-local constant `regexp.MustCompile` calls to package level |
 | `split` | Auto-split an oversized file |
 | `format` | gofmt + goimports in place |
 
@@ -210,8 +219,10 @@ Methods use `Receiver:Method` (no `*` on the receiver). Many commands accept `-`
 
 | Command | Purpose |
 |---------|---------|
-| `lint` | 28 structural rules (size, duplication, smells, error handling, ordering, coverage, dead-code, arch); skips `vendor`/`.git`/`node_modules` and `*.gen.go`/`_gen.go`. `--fix` autofixes `file-size`, `dead-code`, `error-not-wrapped`, `complexity`, the log-propagation family, `funcorder-constructor`/`funcorder-struct-method`/`funcorder-function` (via `reorder-funcorder`) (add `--verify` to revert any fix that breaks build/test). `--fix-level aggressive` (requires `--fix --verify`) additionally autofixes `long-function`/`extract-candidate` by extraction, lifts return-bearing blocks, fixes non-adjacent log/return pairs, and deletes module-wide unreferenced exported functions. `--fail-only` shows blocking issues only |
-| `doctor` | Lint + `go build` + `go test`; non-zero on failure |
+| `lint` | 41 structural rules (size, duplication, smells, error handling, ordering, coverage, dead-code, arch); skips `vendor`/`.git`/`node_modules` and `*.gen.go`/`_gen.go`. `--fix` autofixes `file-size`, `dead-code`, `error-not-wrapped`, `complexity`, the log-propagation family, `funcorder-constructor`/`funcorder-struct-method`/`funcorder-function` (via `reorder-funcorder`) (add `--verify` to revert any fix that breaks build/test). `--fix-level aggressive` (requires `--fix --verify`) additionally autofixes `long-function`/`extract-candidate` by extraction, lifts return-bearing blocks, fixes non-adjacent log/return pairs, and deletes module-wide unreferenced exported functions. `--fail-only` shows blocking issues only |
+| `doctor` | Lint + `go build` + `go test`; non-zero on failure. `--report` merges all substrates into one advisory report |
+| `adherence` | Harness self-audit: fraction of changed `.go` files edited via gorefactor vs raw Write/Edit |
+| `intent` | Declare a deliberate exported-API change so the apidiff gate passes it |
 | `txn` | Apply a batch of mutation commands transactionally (all-or-nothing, single undo unit) |
 | `undo` | Undo the most recent journaled mutation (or restore a named plan snapshot) |
 | `init-agent-rules` | Write the agent-rules snippet into `CLAUDE.md` / `.cursorrules` / `AGENTS.md`; `--mcp` also emits a `.mcp.json` pointing a client at `gorefactor mcp` |
@@ -472,14 +483,14 @@ Requires `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` (or a local OpenAI-compatible e
 
 | Mode | Flag | Use when |
 |------|------|----------|
-| Agentic (default) | `-spec "..."` | Open-ended refactors; tool loop up to 24 steps |
+| Agentic (default) | `-spec "..."` | Open-ended refactors; tool loop, up to 40 iterations by default |
 | Interactive | `-spec "..." -interactive` | Pause after each tool for review/feedback |
 | Single-shot | `-single-shot` | One constrained JSON plan (optional `-dry-run`) |
 | Campaign | `-campaign` | Fix `gorefactor lint` findings autonomously |
 
-The agent’s `finish` gate runs **`go build` + `go test`** only. For lint + build + test, run **`gorefactor doctor`** yourself or in CI.
+`-max-iter` overrides the mode default (40 for agentic, 3 for single-shot). The agent’s `finish` gate runs **`go build` + `go test`** only. For lint + build + test, run **`gorefactor doctor`** yourself or in CI.
 
-Full options and workflows: [CLAUDE.md — Interactive Refactoring with gorefactor-agent](CLAUDE.md#interactive-refactoring-with-gorefactor-agent).
+Before reaching for the agent, read [benchmark/FINDINGS.md](benchmark/FINDINGS.md) — for well-scoped structural tasks the direct CLI is strictly cheaper (~0 tokens vs 20–75K per task).
 
 ## Architecture & design
 
@@ -493,7 +504,7 @@ GoRefactor follows the **harness pattern** (Fowler): guides (feedforward—refus
 | **analyzer/** | Complexity scoring, extraction recommendations, dead code, duplicates, diff analysis, call graphs. Powers `recommend`, `inspect`, `lint` heuristics. |
 | **orchestrator/** | JSON plan execution, semantic targeting (function names + code patterns + variable usage), undo snapshots under `.gorefactor/`. Enables resilient batch refactoring. |
 | **cmd/gorefactor/** | CLI commands. 25+ `cmd_*.go` files (one per command). Extraction logic in `cmd_extract.go` (type-aware via `go/packages`). Direct-mutation commands here (create, insert, replace, delete, move, rename, extract, split, format). |
-| **cmd/gorefactor-agent/** | LLM harness. Proposes operations (never edits `.go` directly). Supports OpenAI-compatible and Anthropic providers. Modes: agentic (24-step loop), single-shot, campaign (autonomous), interactive. Completion gate: `go build` + `go test` (not lint). |
+| **cmd/gorefactor-agent/** | LLM harness. Proposes operations (never edits `.go` directly). Supports OpenAI-compatible and Anthropic providers. Modes: agentic (40-step loop), single-shot, campaign (autonomous), interactive. Completion gate: `go build` + `go test` (not lint). |
 
 **Design principle**: Use GoRefactor when the tool determines *where* and *how*; use Claude/LLM when it determines *what* to change. This minimizes token cost and keeps safety high (deterministic execution, not code generation).
 

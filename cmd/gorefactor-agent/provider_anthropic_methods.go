@@ -63,13 +63,14 @@ func (p *anthropicProvider) Complete(ctx context.Context, system, user string) (
 	return sb.String(), nil
 }
 
+type anthMsg struct {
+	role   string
+	blocks []map[string]any
+}
+
 func (p *anthropicProvider) ChatTools(ctx context.Context, messages []chatMessage, tools []toolDef) (chatMessage, error) {
 
 	var systemParts []string
-	type anthMsg struct {
-		role   string
-		blocks []map[string]any
-	}
 	var conv []anthMsg
 
 	appendBlock := func(role string, block map[string]any) {
@@ -80,70 +81,9 @@ func (p *anthropicProvider) ChatTools(ctx context.Context, messages []chatMessag
 		conv = append(conv, anthMsg{role: role, blocks: []map[string]any{block}})
 	}
 
-	for _, m := range messages {
-		switch m.Role {
-		case "system":
-			if strings.TrimSpace(m.Content) != "" {
-				systemParts = append(systemParts, m.Content)
-			}
-		case "tool":
-			appendBlock("user", map[string]any{
-				"type":        "tool_result",
-				"tool_use_id": m.ToolCallID,
-				"content":     m.Content,
-			})
-		case "assistant":
-			if strings.TrimSpace(m.Content) != "" {
-				appendBlock("assistant", map[string]any{"type": "text", "text": m.Content})
-			}
-			for _, tc := range m.ToolCalls {
-				var input any = map[string]any{}
-				if strings.TrimSpace(tc.Function.Arguments) != "" {
-					_ = json.Unmarshal([]byte(tc.Function.Arguments), &input)
-				}
-				appendBlock("assistant", map[string]any{
-					"type":  "tool_use",
-					"id":    tc.ID,
-					"name":  tc.Function.Name,
-					"input": input,
-				})
-			}
-		default:
-			if strings.TrimSpace(m.Content) != "" {
-				appendBlock("user", map[string]any{"type": "text", "text": m.Content})
-			}
-		}
-	}
+	systemParts = processMessages(messages, systemParts, appendBlock)
 
-	apiMsgs := make([]map[string]any, 0, len(conv))
-	for _, c := range conv {
-		apiMsgs = append(apiMsgs, map[string]any{"role": c.role, "content": c.blocks})
-	}
-
-	reqBody := map[string]any{
-		"model":       p.model,
-		"max_tokens":  p.maxTokens,
-		"messages":    apiMsgs,
-		"temperature": 0,
-	}
-	if s := strings.TrimSpace(strings.Join(systemParts, "\n\n")); s != "" {
-		reqBody["system"] = s
-	}
-	if len(tools) > 0 {
-		at := make([]map[string]any, 0, len(tools))
-		for _, t := range tools {
-			schema := t.Function.Parameters
-			if schema == nil {
-				schema = map[string]any{"type": "object", "properties": map[string]any{}}
-			}
-			at = append(at, map[string]any{
-				"name":         t.Function.Name,
-				"description":  t.Function.Description,
-				"input_schema": schema,
-			})
-		}
-		reqBody["tools"] = at
-	}
+	apiMsgs, reqBody := buildRequestBody(conv, p, systemParts, tools)
 
 	buf, err := json.Marshal(reqBody)
 	if err != nil {
@@ -188,10 +128,69 @@ func (p *anthropicProvider) ChatTools(ctx context.Context, messages []chatMessag
 
 	out := chatMessage{Role: "assistant"}
 	var text strings.Builder
+	out = processContent(parsed, &text, out)
+	out.Content = text.String()
+	provDebugf("anthropic ChatTools <- HTTP 200 in %s (%d bytes) stop=%s in_tok=%d out_tok=%d toolcalls=%d textlen=%d",
+		elapsed, len(body), parsed.StopReason, parsed.Usage.InputTokens, parsed.Usage.OutputTokens,
+		len(out.ToolCalls), len(out.Content))
+	return out, nil
+}
+
+func buildRequestBody(conv []anthMsg, p *anthropicProvider, systemParts []string, tools []toolDef) ([]map[string]any, map[string]any) {
+	apiMsgs := make([]map[string]any, 0, len(conv))
+	for _, c := range conv {
+		apiMsgs = append(apiMsgs, map[string]any{"role": c.role, "content": c.blocks})
+	}
+	reqBody := map[string]any{
+		"model":       p.model,
+		"max_tokens":  p.maxTokens,
+		"messages":    apiMsgs,
+		"temperature": 0,
+	}
+	if s := strings.TrimSpace(strings.Join(systemParts, "\n\n")); s != "" {
+		reqBody["system"] = s
+	}
+	attachTools(tools, reqBody)
+	return apiMsgs, reqBody
+}
+
+func attachTools(tools []toolDef, reqBody map[string]any) {
+	if len(tools) > 0 {
+		at := make([]map[string]any, 0, len(tools))
+		for _, t := range tools {
+			schema := t.Function.Parameters
+			if schema == nil {
+				schema = map[string]any{"type": "object", "properties": map[string]any{}}
+			}
+			at = append(at, map[string]any{
+				"name":         t.Function.Name,
+				"description":  t.Function.Description,
+				"input_schema": schema,
+			})
+		}
+		reqBody["tools"] = at
+	}
+}
+
+func processContent(parsed struct {
+	Content []struct {
+		Type  string          "json:\"type\""
+		Text  string          "json:\"text\""
+		ID    string          "json:\"id\""
+		Name  string          "json:\"name\""
+		Input json.RawMessage "json:\"input\""
+	} "json:\"content\""
+	StopReason string "json:\"stop_reason\""
+	Usage      struct {
+		InputTokens  int "json:\"input_tokens\""
+		OutputTokens int "json:\"output_tokens\""
+	} "json:\"usage\""
+}, text *strings.Builder, out chatMessage) chatMessage {
 	for _, c := range parsed.Content {
 		switch c.Type {
 		case "text":
 			text.WriteString(c.Text)
+
 		case "tool_use":
 			args := string(c.Input)
 			if strings.TrimSpace(args) == "" {
@@ -205,11 +204,45 @@ func (p *anthropicProvider) ChatTools(ctx context.Context, messages []chatMessag
 			out.ToolCalls = append(out.ToolCalls, call)
 		}
 	}
-	out.Content = text.String()
-	provDebugf("anthropic ChatTools <- HTTP 200 in %s (%d bytes) stop=%s in_tok=%d out_tok=%d toolcalls=%d textlen=%d",
-		elapsed, len(body), parsed.StopReason, parsed.Usage.InputTokens, parsed.Usage.OutputTokens,
-		len(out.ToolCalls), len(out.Content))
-	return out, nil
+	return out
+}
+
+func processMessages(messages []chatMessage, systemParts []string, appendBlock func(role string, block map[string]any)) []string {
+	for _, m := range messages {
+		switch m.Role {
+		case "system":
+			if strings.TrimSpace(m.Content) != "" {
+				systemParts = append(systemParts, m.Content)
+			}
+		case "tool":
+			appendBlock("user", map[string]any{
+				"type":        "tool_result",
+				"tool_use_id": m.ToolCallID,
+				"content":     m.Content,
+			})
+		case "assistant":
+			if strings.TrimSpace(m.Content) != "" {
+				appendBlock("assistant", map[string]any{"type": "text", "text": m.Content})
+			}
+			for _, tc := range m.ToolCalls {
+				var input any = map[string]any{}
+				if strings.TrimSpace(tc.Function.Arguments) != "" {
+					_ = json.Unmarshal([]byte(tc.Function.Arguments), &input)
+				}
+				appendBlock("assistant", map[string]any{
+					"type":  "tool_use",
+					"id":    tc.ID,
+					"name":  tc.Function.Name,
+					"input": input,
+				})
+			}
+		default:
+			if strings.TrimSpace(m.Content) != "" {
+				appendBlock("user", map[string]any{"type": "text", "text": m.Content})
+			}
+		}
+	}
+	return systemParts
 }
 
 func (p *anthropicProvider) doWithRetry(ctx context.Context, endpoint string, buf []byte) (int, []byte, error) {

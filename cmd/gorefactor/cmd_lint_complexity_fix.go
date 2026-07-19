@@ -13,11 +13,8 @@ import (
 // prevents mid-edit.)
 func reduceComplexityByExtraction(file, function string, threshold int, allowReturns bool) (int, error) {
 	res, err := analyzer.RecommendComplexityReduction(file, function, threshold)
-	if err != nil {
-		return 0, err
-	}
-	return applyNameableExtractions(file, res.Extractions, allowReturns, func(e analyzer.ComplexityExtraction) extractionSpec {
+	return applyRecommendedExtractions(file, res.Extractions, err, allowReturns, func(e analyzer.ComplexityExtraction) extractionSpec {
 		return extractionSpec{StartLine: e.StartLine, EndLine: e.EndLine, Suggestion: e.Suggestion}
-	}), nil
+	})
 
 }

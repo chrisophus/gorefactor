@@ -49,6 +49,20 @@ func TestDocDrift_RuleCountMatches(t *testing.T) {
 	}
 }
 
+func TestDocDrift_AutoFixBatchSizeMatches(t *testing.T) {
+	doc := readClaudeMD(t)
+	re := regexp.MustCompile("batches of up to (\\d+) \\(`defaultAutoFixBatchSize`\\)")
+	matches := re.FindAllStringSubmatch(doc, -1)
+	if len(matches) == 0 {
+		t.Fatal("CLAUDE.md no longer states the autofix batch size; update this test's pattern")
+	}
+	for _, m := range matches {
+		if m[1] != strconv.Itoa(defaultAutoFixBatchSize) {
+			t.Errorf("CLAUDE.md claims %q but defaultAutoFixBatchSize is %d; update the doc", m[0], defaultAutoFixBatchSize)
+		}
+	}
+}
+
 // readClaudeMD loads the repo-root CLAUDE.md relative to this test's package
 // directory (cmd/gorefactor -> ../../CLAUDE.md).
 func readClaudeMD(t *testing.T) string {

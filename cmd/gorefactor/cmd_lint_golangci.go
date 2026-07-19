@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/chrisophus/gorefactor/doctor"
 )
 
 // golangciLintRule wraps `golangci-lint run` output as lint issues. It is deliberately NOT part of
@@ -26,7 +28,15 @@ func (r golangciLintRule) Run(ctx LintContext) []lintIssue {
 	if !golangciLintAvailable(ctx.Root) {
 		return nil
 	}
-	cmd := exec.Command("golangci-lint", "run",
+	bin, err := doctor.EnsureGolangciLint(ctx.Root)
+	if err != nil {
+		return []lintIssue{{
+			Rule:     golangciToolFailureRule,
+			Severity: "error",
+			Message:  fmt.Sprintf("golangci-lint unavailable: %s", err),
+		}}
+	}
+	cmd := exec.Command(bin, "run",
 		"--output.json.path", "stdout",
 		"--output.text.path", "/dev/null",
 		"./...",
@@ -85,13 +95,14 @@ func (r golangciLintRule) Run(ctx LintContext) []lintIssue {
 }
 
 func golangciLintAvailable(root string) bool {
-	if _, err := exec.LookPath("golangci-lint"); err != nil {
-		return false
-	}
 	for _, name := range []string{".golangci.yml", ".golangci.yaml", ".golangci.toml", ".golangci.json"} {
 		if _, err := os.Stat(filepath.Join(root, name)); err == nil {
-			return true
+			if doctor.FindGolangciLint(root) != "" {
+				return true
+			}
+			return !doctor.ToolBootstrapDisabled()
 		}
 	}
 	return false
+
 }

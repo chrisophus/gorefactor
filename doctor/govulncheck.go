@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 )
 
 // Govulncheck is the call-graph-aware vulnerability substrate (design plan
@@ -24,10 +23,8 @@ func (Govulncheck) Info() SubstrateInfo {
 // Probe implements prober. Binary presence only — DB reachability can't be
 // checked cheaply and surfaces as ErrUnavailable at run time.
 func (Govulncheck) Probe(root string) error {
-	if _, err := exec.LookPath("govulncheck"); err != nil {
-		return unavailablef("govulncheck not on PATH (go install golang.org/x/vuln/cmd/govulncheck@latest)")
-	}
-	return nil
+	return probeModuleOrPathTool(root, "govulncheck", "govulncheck")
+
 }
 
 // Run implements Substrate.
@@ -37,9 +34,9 @@ func (g Govulncheck) Run(ctx RunContext) ([]Finding, error) {
 	}
 	// No JSON stream at all means the tool could not run (offline vuln DB,
 	// broken toolchain); runSubstrateBinary reports that as unavailable.
-	out, err := runSubstrateBinary(ctx.Root, "govulncheck", "-json", "./...")
+	out, err := runModuleOrPathTool(ctx.Root, "govulncheck", "govulncheck", "-json", "./...")
 	if err != nil {
-		return nil, fmt.Errorf("run substrate binary: %w", err)
+		return nil, fmt.Errorf("run govulncheck: %w", err)
 	}
 	return parseGovulncheckJSON(out)
 

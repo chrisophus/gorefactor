@@ -77,7 +77,7 @@ gorefactor lint . --fail-only      # Show only blocking (error-severity) issues
 gorefactor doctor                  # Lint + golangci-lint + build + test (final gate)
 ```
 
-The default rule set has 41 rules, grouped by concern (canonical list in `cmd/gorefactor/lint_registry_test.go`):
+The default rule set has 42 rules, grouped by concern (canonical list in `cmd/gorefactor/lint_registry_test.go`):
 
 - **Size & structure**: `file-size` (>500 lines, split hints by receiver/prefix), `long-function`, `deep-nesting`, `complexity` (cyclomatic), `extract-candidate`
 - **Duplication**: `duplicate-block` (>100-line clones with consolidation hints), `duplicate-bare-sentinel`
@@ -90,7 +90,7 @@ The default rule set has 41 rules, grouped by concern (canonical list in `cmd/go
 - **Performance**: `regexp-compile-in-func`, `string-concat-in-loop`, `linear-search-in-loop`
 - **Dead code**: `dead-code` (unused funcs/types across the module)
 - **Impact / self-audit**: `high-blast-radius`, `low-gorefactor-adherence`
-- **Harness residue**: `generated-name`, `byvalue-buffer`, `stranded-comment`, `orphaned-config-path`
+- **Harness residue**: `generated-name`, `byvalue-buffer`, `stranded-comment` (covers both mis-attached doc comments and free-floating narration), `orphaned-config-path`, `tracked-artifact` (git-tracked binaries/coverage reports)
 Both `go-arch-lint` and `golangci-lint` are deliberately kept out of the `lint` rule set — `doctor` runs each as its own stage (both self-skip when the binary or config is absent), keeping `lint` fast and fully in-process. Run them independently with `go-arch-lint check` / `golangci-lint run`, or together via `gorefactor doctor`.
 
 `--fix` autofixes the rules with a single safe transformation: `file-size` (via `split`), `dead-code` (delete unreferenced decls), `error-not-wrapped` (wrap with `fmt.Errorf(... %w)`), the log-propagation rules (via `remove-log-return` — delete the redundant log next to a propagating return, wrap a bare `return err`), `duplicate-bare-sentinel` (via `wrap-sentinels`), and `funcorder-constructor`/`funcorder-struct-method`/`funcorder-function` (via `reorder-funcorder`). Add `--verify` to make each fix self-checking: fixes are applied in batches of up to 8 (`defaultAutoFixBatchSize`), each batch is gated by `go build ./...` + `go test ./...`, and a failing batch is bisected so only the offending fix is reverted while the rest are kept — so bulk `--fix` is safe to run unsupervised even where a sensor over-approximates.
@@ -219,7 +219,7 @@ Methods use `Receiver:Method` (no `*` on the receiver). Many commands accept `-`
 
 | Command | Purpose |
 |---------|---------|
-| `lint` | 41 structural rules (size, duplication, smells, error handling, ordering, coverage, dead-code, arch); skips `vendor`/`.git`/`node_modules` and `*.gen.go`/`_gen.go`. `--fix` autofixes `file-size`, `dead-code`, `error-not-wrapped`, `complexity`, the log-propagation family, `funcorder-constructor`/`funcorder-struct-method`/`funcorder-function` (via `reorder-funcorder`) (add `--verify` to revert any fix that breaks build/test). `--fix-level aggressive` (requires `--fix --verify`) additionally autofixes `long-function`/`extract-candidate` by extraction, lifts return-bearing blocks, fixes non-adjacent log/return pairs, and deletes module-wide unreferenced exported functions. `--fail-only` shows blocking issues only |
+| `lint` | 42 structural rules (size, duplication, smells, error handling, ordering, coverage, dead-code, arch); skips `vendor`/`.git`/`node_modules` and `*.gen.go`/`_gen.go`. `--fix` autofixes `file-size`, `dead-code`, `error-not-wrapped`, `complexity`, the log-propagation family, `funcorder-constructor`/`funcorder-struct-method`/`funcorder-function` (via `reorder-funcorder`) (add `--verify` to revert any fix that breaks build/test). `--fix-level aggressive` (requires `--fix --verify`) additionally autofixes `long-function`/`extract-candidate` by extraction, lifts return-bearing blocks, fixes non-adjacent log/return pairs, and deletes module-wide unreferenced exported functions. `--fail-only` shows blocking issues only |
 | `doctor` | Lint + `go build` + `go test`; non-zero on failure. `--report` merges all substrates into one advisory report |
 | `adherence` | Harness self-audit: fraction of changed `.go` files edited via gorefactor vs raw Write/Edit |
 | `intent` | Declare a deliberate exported-API change so the apidiff gate passes it |

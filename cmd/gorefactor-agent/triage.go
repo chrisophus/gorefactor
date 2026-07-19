@@ -18,7 +18,7 @@ import (
 // way an agent error would.
 //
 // This is a "guide" in the harness sense (Fowler's harness-engineering).
-// The A/B in RELIABILITY-COMPARISON.md showed the battery's rename and
+// A reliability-battery A/B (scripts/reliability.sh) showed the rename and
 // analysis classes are 100% solved by one CLI command, so sending them
 // through any LLM agent costs 10–100K tokens for what the CLI does for
 // zero. The triage closes that misroute.
@@ -36,7 +36,7 @@ func triage(cfg Config) (matched bool, runErr error) {
 	// Safety guard: a spec carrying an explicit negative constraint ("rename X
 	// to Y but not on receiver Z", "do not change W") cannot be safely handled
 	// by regex-driven positive triage — the build+test gate validates syntax,
-	// not the constraint. Discovered via RELIABILITY-HARD.md disambig: "Rename
+	// not the constraint. Discovered via the hard battery (scripts/reliability-hard.sh): "Rename
 	// Tokens to TokenUsage. Do NOT rename ..." matched reRename and the gate
 	// stayed green even when both Tokens methods were renamed in lock-step.
 	// Fall through to the agent so the model honors the constraint.
@@ -184,7 +184,7 @@ func runAutoPunt(cfg Config, args map[string]any) (bool, error) {
 		"[triage] infeasible -> autopunt:judgement (no LLM call)")
 	reason := "spec explicitly requires semantic judgement " +
 		"(algorithm rewrite / race fix / performance redesign); " +
-		"senior should pick this up. See RELIABILITY-COMPARISON.md."
+		"senior should pick this up."
 	err := doPunt(cfg, "autopunt:judgement", reason, nil, 1)
 	emitRunMetrics(cfg.Out, nil, err, 1, -1)
 	return true, err

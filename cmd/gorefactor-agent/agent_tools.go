@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -255,7 +256,10 @@ func runLintAdvisory(dir string) string {
 }
 
 // gorefactorBin returns the path to the gorefactor binary, found as a sibling
-// of the running agent binary so it works regardless of PATH.
+// of the running agent binary so it works regardless of PATH. The PATH
+// fallback resolves to an absolute path up front: the agent runs
+// autonomously, and execing whatever a mutable PATH happens to name on each
+// call would let a poisoned PATH swap the binary mid-run.
 func gorefactorBin() string {
 	exe, err := os.Executable()
 	if err == nil {
@@ -264,7 +268,12 @@ func gorefactorBin() string {
 			return sib
 		}
 	}
-	return "gorefactor" // fall back to PATH
+	if abs, err := exec.LookPath("gorefactor"); err == nil {
+		if abs, err := filepath.Abs(abs); err == nil {
+			return abs
+		}
+	}
+	return "gorefactor" // last resort; exec will fail loudly if absent
 }
 
 func logToolCall(out io.Writer, verbose bool, name, args, result string) {

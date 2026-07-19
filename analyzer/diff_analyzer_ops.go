@@ -219,26 +219,6 @@ func (da *DiffAnalyzer) createInsertCodeOperation(change *Change) *orchestrator.
 	}
 }
 
-// createRenameVariableOperation creates a rename_variable operation
-func (da *DiffAnalyzer) createRenameVariableOperation(change *Change) *orchestrator.RefactoringOperation {
-	oldName, _ := change.Details["oldName"].(string)
-	newName, _ := change.Details["newName"].(string)
-
-	return &orchestrator.RefactoringOperation{
-		Type:        "rename_variable",
-		Description: change.Description,
-		File:        change.File,
-		Target: &orchestrator.TargetSpecification{
-			StartLine: &change.StartLine,
-			EndLine:   &change.EndLine,
-		},
-		Parameters: map[string]interface{}{
-			"oldName": oldName,
-			"newName": newName,
-		},
-	}
-}
-
 // createExtractMethodOperation creates an extract_method operation
 func (da *DiffAnalyzer) createExtractMethodOperation(change *Change) *orchestrator.RefactoringOperation {
 	functionName, _ := change.Details["functionName"].(string)

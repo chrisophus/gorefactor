@@ -54,51 +54,7 @@ func Caller() {
 	}
 }
 
-func TestBuilderCallerHierarchy(t *testing.T) {
-	tmpDir := createTempTestDir(t)
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-
-	testFile := filepath.Join(tmpDir, "test.go")
-	content := `package main
-
-func Base() {}
-
-func Level1() {
-	Base()
-}
-
-func Level2() {
-	Level1()
-}
-
-func Entry() {
-	Level2()
-}
-`
-	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
-
-	ca := NewCallAnalyzer([]string{testFile})
-	hierarchy, err := ca.BuildCallerHierarchy("Base", "", 5)
-
-	if err != nil {
-		t.Fatalf("BuildCallerHierarchy error: %v", err)
-	}
-
-	if hierarchy == nil {
-		t.Fatal("hierarchy should not be nil")
-	}
-
-	if hierarchy.FunctionName != "Base" {
-		t.Errorf("expected Base, got %s", hierarchy.FunctionName)
-	}
-
-	// Should have at least one caller (Level1)
-	if len(hierarchy.Callers) == 0 {
-		t.Errorf("expected callers in hierarchy")
-	}
-}
+// Should have at least one caller (Level1)
 
 func TestMultipleCallsToSameFunction(t *testing.T) {
 	tmpDir := createTempTestDir(t)

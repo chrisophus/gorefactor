@@ -87,8 +87,96 @@ func strandedCommentsInPackage(files []string) []lintIssue {
 				})
 			}
 		}
+		out = append(out, freeFloatingStranded(pf.path, pf.fset, pf.ast, pkgNames)...)
 	}
 	return out
+}
+
+// freeFloatingStranded flags comment groups attached to nothing — not a doc
+// comment, not inside any declaration — whose leading identifier names a
+// top-level declaration in the package. That is the residue a mechanical
+// body-extraction leaves behind: "// executeMoveMethod executes ..." floating
+// between functions while executeMoveMethod lives in another file. (This
+// repo's orchestrator/ carried 25 lines of exactly that shape while the
+// doc-comment-only version of this rule stayed silent.) Narration comments
+// inside function bodies are never visited: any group positioned within a
+// declaration's span is skipped.
+func freeFloatingStranded(path string, fset *token.FileSet, file *ast.File, pkgNames map[string]bool) []lintIssue {
+	attached := make(map[*ast.CommentGroup]bool)
+	if file.Doc != nil {
+		attached[file.Doc] = true
+	}
+	ast.Inspect(file, func(n ast.Node) bool {
+		switch d := n.(type) {
+		case *ast.FuncDecl:
+			if d.Doc != nil {
+				attached[d.Doc] = true
+			}
+		case *ast.GenDecl:
+			if d.Doc != nil {
+				attached[d.Doc] = true
+			}
+		case *ast.TypeSpec:
+			if d.Doc != nil {
+				attached[d.Doc] = true
+			}
+			if d.Comment != nil {
+				attached[d.Comment] = true
+			}
+		case *ast.ValueSpec:
+			if d.Doc != nil {
+				attached[d.Doc] = true
+			}
+			if d.Comment != nil {
+				attached[d.Comment] = true
+			}
+		case *ast.Field:
+			if d.Doc != nil {
+				attached[d.Doc] = true
+			}
+			if d.Comment != nil {
+				attached[d.Comment] = true
+			}
+		case *ast.ImportSpec:
+			if d.Doc != nil {
+				attached[d.Doc] = true
+			}
+			if d.Comment != nil {
+				attached[d.Comment] = true
+			}
+		}
+		return true
+	})
+	var out []lintIssue
+	for _, cg := range file.Comments {
+		if attached[cg] || insideAnyDecl(cg, file.Decls) {
+			continue
+		}
+		first := leadingIdent(cg.Text())
+		if first == "" || !pkgNames[first] {
+			continue
+		}
+		out = append(out, lintIssue{
+			File:     path,
+			Rule:     "stranded-comment",
+			Severity: "warning",
+			Message: fmt.Sprintf("free-floating comment at line %d opens with %q, which names a declaration elsewhere in the package — likely narration stranded by a mechanical edit; delete it or reattach it",
+				fset.Position(cg.Pos()).Line, first),
+		})
+	}
+	return out
+}
+
+// insideAnyDecl reports whether a comment group lies within the source span
+// of any top-level declaration (i.e. it is body/inline narration, which this
+// rule deliberately leaves alone).
+func insideAnyDecl(cg *ast.CommentGroup, decls []ast.Decl) bool {
+	for _, d := range decls {
+		if cg.Pos() >= d.Pos() && cg.End() <= d.End() {
+			return true
+		}
+	}
+	return false
 }
 
 // docComment pairs a doc comment group with the names its immediate subject

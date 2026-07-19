@@ -82,7 +82,7 @@ func renderDoctorRules() string {
 	var b strings.Builder
 	b.WriteString(doctorRulesSentinel + "\n")
 	b.WriteString("## gorefactor doctor: code health expectations\n\n")
-	b.WriteString("This repo is checked by `gorefactor doctor --report` (structural lint + golangci-lint + apidiff + temporal + modtidy, plus deadcode and govulncheck on full runs). ")
+	b.WriteString("This repo is checked by `gorefactor doctor --report` (structural lint + golangci-lint + temporal + modtidy, plus deadcode and govulncheck on full runs; the agent's doctor gate additionally runs apidiff). ")
 	b.WriteString("Only **new** findings vs the base ref matter; error-severity categories (conc, sec, api, tmprl) gate, the rest report. Write code so findings never appear:\n\n")
 	b.WriteString("- **Errors**: wrap with `fmt.Errorf(\"context: %w\", err)`; never log-and-return the same error; don't return bare shared sentinels.\n")
 	b.WriteString("- **Tests**: every test must be able to fail (assert or pass `*testing.T` to a helper); never synchronize with `time.Sleep`.\n")

@@ -45,11 +45,6 @@ linters:
     rules:
       - linters: [funlen, dupl, cyclop, errcheck, gosec]
         path: _test\.go
-      # gorefactor-test is an integration test harness binary; scenario
-      # fixtures are intentionally repetitive by design and main() is a
-      # dispatch loop — exempt from length and duplication checks.
-      - linters: [funlen, dupl]
-        path: cmd/gorefactor-test/.*\.go$
       # CLI command files have inherent branching for flag parsing /
       # subcommand dispatch and aren't core logic; exempt them from
       # complexity, length, and unchecked-error noise.

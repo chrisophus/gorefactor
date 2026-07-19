@@ -52,17 +52,8 @@ func (da *DiffAnalyzer) consolidateChanges(changes []*Change) []*Change {
 	return changes
 }
 
-// allVariableRenames checks if all changes are variable_rename type
-func allVariableRenames(changes []*Change) bool {
-	if len(changes) == 0 {
-		return false
-	}
-	for _, change := range changes {
-		if change.Type != "variable_rename" {
-			return false
-		}
-	}
-	return true
+func EmittableOperationTypes() []string {
+	return []string{"insert_code", "extract_method"}
 }
 
 // generateSummary generates a summary of the changes
@@ -132,10 +123,29 @@ func (da *DiffAnalyzer) changeToOperation(change *Change) *orchestrator.Refactor
 	case "code_insertion":
 		return da.createInsertCodeOperation(change)
 	case "variable_rename":
-		return da.createRenameVariableOperation(change)
+		// Advisory only: no executor implements a function-scoped variable
+		// rename (rename_declaration is package-level and AST-wide, the wrong
+		// tool for a local). Emitting an undispatchable rename_variable op
+		// made every generated plan containing one fail at execution — the
+		// 2026-07 review called this a phantom feature. Skip it; the change
+		// stays visible in the diff analysis itself.
+		return nil
 	case "function_modification":
 		return da.createExtractMethodOperation(change)
 	default:
 		return nil
 	}
+}
+
+// allVariableRenames checks if all changes are variable_rename type
+func allVariableRenames(changes []*Change) bool {
+	if len(changes) == 0 {
+		return false
+	}
+	for _, change := range changes {
+		if change.Type != "variable_rename" {
+			return false
+		}
+	}
+	return true
 }

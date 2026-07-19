@@ -114,3 +114,51 @@ func TestStrandedComment_ZeroFindingsOnTree(t *testing.T) {
 		t.Errorf("stranded comment in tree: %s: %s", iss.File, iss.Message)
 	}
 }
+
+const freeFloatingFixtureSrc = `package fixture
+
+// executeMove executes a move operation
+
+// Parse source file
+
+// --- helpers ---
+
+func executeMove() {}
+
+func other() {
+	// executeMove is called above; body narration is never visited.
+}
+`
+
+func TestStrandedComment_FiresOnFreeFloatingResidue(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ops.go")
+	if err := os.WriteFile(path, []byte(freeFloatingFixtureSrc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	issues := strandedCommentRule{}.Run(LintContext{Root: dir, Files: []string{path}})
+	if len(issues) != 1 {
+		t.Fatalf("got %d issues, want exactly 1 (the free-floating executeMove comment): %+v", len(issues), issues)
+	}
+	iss := issues[0]
+	if !strings.Contains(iss.Message, `opens with "executeMove"`) || !strings.Contains(iss.Message, "free-floating") {
+		t.Errorf("unexpected message: %s", iss.Message)
+	}
+	if iss.Severity != "warning" {
+		t.Errorf("severity = %q, want warning", iss.Severity)
+	}
+}
+
+func TestStrandedComment_DocCommentNotDoubleReported(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "types.go")
+	if err := os.WriteFile(path, []byte(strandedFixtureSrc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	issues := strandedCommentRule{}.Run(LintContext{Root: dir, Files: []string{path}})
+	for _, iss := range issues {
+		if strings.Contains(iss.Message, "free-floating") {
+			t.Errorf("attached doc comment reported by the free-floating path: %s", iss.Message)
+		}
+	}
+}

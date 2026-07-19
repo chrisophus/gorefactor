@@ -142,7 +142,10 @@ func TestChangeToOperation_ValidOperationTypes(t *testing.T) {
 		{"interface_addition", true},
 		{"struct_addition", true},
 		{"code_insertion", true},
-		{"variable_rename", true},
+		// variable_rename deliberately maps to nil: no executor implements a
+		// function-scoped rename, so the generator skips it (see
+		// changeToOperation) instead of emitting an undispatchable op.
+		{"variable_rename", false},
 		{"function_modification", true},
 		{"unknown_type", false},
 	}

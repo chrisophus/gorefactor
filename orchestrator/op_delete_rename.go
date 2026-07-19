@@ -11,8 +11,6 @@ import (
 	"path/filepath"
 )
 
-// Check if file already exists
-
 func (o *Orchestrator) executeDeleteDeclaration(operation *RefactoringOperation, target *TargetLocation, result *OperationResult) error {
 	src, err := os.ReadFile(operation.File)
 	if err != nil {

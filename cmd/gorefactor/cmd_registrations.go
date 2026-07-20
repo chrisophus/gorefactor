@@ -8,6 +8,8 @@ package main
 func init() {
 	registerCommand(Command{
 		Name:        "recommend",
+		ReadOnly:    true,
+		MCPTool:     true,
 		Description: "Recommend code blocks for method extraction",
 		Usage:       "recommend <file.go> [<Func>] [--short] [--reduce-complexity [--threshold N] | --reduce-length [--max-lines N]] [--apply [--allow-returns]] [--json] [--function NAME] [--min-complexity N] [--max-complexity N] [--min-statements N] [--max-statements N] [--max-read-vars N] [--max-write-vars N] [--num-leading-stmts N]",
 		MinArgs:     0,
@@ -35,6 +37,7 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "analyze-diff",
+		ReadOnly:    true,
 		Description: "Analyze a diff file and generate a refactoring plan",
 		Usage:       "analyze-diff <diff.patch> [output-plan.json]",
 		MinArgs:     1,
@@ -43,6 +46,7 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "analyze-file-sizes",
+		ReadOnly:    true,
 		Description: "Analyze Go files in a directory for size issues and extraction opportunities",
 		Usage:       "analyze-file-sizes <directory> [--max-size N] [--format json|text]",
 		MinArgs:     1,
@@ -52,6 +56,7 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "exec",
+		Mutates:     true,
 		Description: "Execute a single operation from inline JSON or stdin (supports piping)",
 		Usage:       "exec [json|-]",
 		MinArgs:     0,
@@ -61,6 +66,8 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "lint",
+		ReadOnly:    true,
+		MCPTool:     true,
 		Description: "Run structural lints (file size, duplicates) [--fix [--verify]] [--json] [--max N] [--fail-only]",
 		Usage:       "lint [path] [--fix] [--verify] [--fix-level safe|aggressive] [--baseline] [--write-baseline] [--baseline-file PATH] [--baseline-ratchet REF] [--json] [--quiet] [--fail-only] [--info] [--verbose] [--max N] [--rule NAME] [--skip-rule NAME] [--fail-on error|warning] [--config PATH] [--profile NAME]",
 		MinArgs:     0,
@@ -92,6 +99,8 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "find-callers",
+		ReadOnly:    true,
+		MCPTool:     true,
 		Description: "Find all callers of a function or method [--in path] [--json]",
 		Usage:       "find-callers <Func|Receiver:Method> [--in path] [--json]",
 		MinArgs:     1,
@@ -101,6 +110,8 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "find-uses",
+		ReadOnly:    true,
+		MCPTool:     true,
 		Description: "Find all uses of a symbol [--in path] [--json]",
 		Usage:       "find-uses <Symbol|Receiver:Method> [--in path] [--json]",
 		MinArgs:     1,
@@ -110,6 +121,8 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "find-implementations",
+		ReadOnly:    true,
+		MCPTool:     true,
 		Description: "Find all types that implement an interface [--in path] [--json]",
 		Usage:       "find-implementations <Interface> [--in path] [--json]",
 		MinArgs:     1,
@@ -119,6 +132,8 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "find-package-deps",
+		ReadOnly:    true,
+		MCPTool:     true,
 		Description: "Analyze package dependencies and detect circular imports [--json]",
 		Usage:       "find-package-deps <dir> [--json]",
 		MinArgs:     1,
@@ -128,6 +143,8 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "inspect",
+		ReadOnly:    true,
+		MCPTool:     true,
 		Description: "One-page summary of a Go file: decls, sizes, lint issues, extraction candidates",
 		Usage:       "inspect <file.go> [--max N]",
 		MinArgs:     1,
@@ -137,6 +154,7 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "init-agent-rules",
+		ReadOnly:    true,
 		Description: "Write the gorefactor agent-rules snippet into CLAUDE.md / .cursorrules / AGENTS.md [--target ...]; with --mcp also emit a .mcp.json pointing a client at `gorefactor mcp`",
 		Usage:       "init-agent-rules [--target claude.md|cursor|agents.md|all] [--mcp] [--mcp-only]",
 		MinArgs:     0,
@@ -146,6 +164,8 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "suggest-plan",
+		ReadOnly:    true,
+		MCPTool:     true,
 		Description: "Suggest refactoring opportunities for a file [--output plan.json] [--json] [--patterns]",
 		Usage:       "suggest-plan <file.go> [--output plan.json] [--json] [--patterns]",
 		MinArgs:     1,
@@ -155,6 +175,7 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "repl",
+		ReadOnly:    true,
 		Description: "Interactive REPL mode for step-by-step refactoring",
 		Usage:       "repl",
 		MinArgs:     0,
@@ -163,6 +184,7 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "architect",
+		ReadOnly:    true,
 		Description: "Generate a starter go-arch-lint.yml from the current import graph [--suggest] [--output path] [dir]",
 		Usage:       "architect --suggest [--output path] [dir]",
 		MinArgs:     0,

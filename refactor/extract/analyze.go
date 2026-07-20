@@ -1,4 +1,4 @@
-package main
+package extract
 
 import (
 	"fmt"
@@ -9,6 +9,15 @@ import (
 
 	"golang.org/x/tools/go/packages"
 )
+
+// paramSpec describes one inferred parameter or return value of the extracted
+// block.
+type paramSpec struct {
+	name   string
+	typeS  string
+	object types.Object
+	outer  bool // a pre-existing variable the block mutates (write-back at call site with =, not :=)
+}
 
 func analyzeBlockTypes(pkg *packages.Package, fileAST *ast.File, enclosing *ast.FuncDecl, stmts []ast.Stmt) (params, returns []paramSpec, err error) {
 	info := pkg.TypesInfo
@@ -125,7 +134,6 @@ func analyzeBlockTypes(pkg *packages.Package, fileAST *ast.File, enclosing *ast.
 	// generated signature and call site are deterministic across runs.
 	sort.Slice(returns, func(i, j int) bool { return returns[i].object.Pos() < returns[j].object.Pos() })
 	return params, returns, nil
-
 }
 
 func processStmts(stmts []ast.Stmt, markRoot func(e ast.Expr)) {

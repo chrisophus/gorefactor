@@ -89,13 +89,11 @@ type TargetSpecification struct {
     CodePattern       string
     VariableNames     []string
     FunctionCalls     []string
-    ControlStructures []string
-    Comments          []string
     
-    // Context-based
-    BeforePattern     string
-    AfterPattern      string
-    SurroundingCode   map[string]string
+    // Declaration-level
+    TypeName          string
+    ConstName         string
+    VarName           string
 }
 ```
 
@@ -140,8 +138,7 @@ type TargetSpecification struct {
       "file": "api/handlers.go",
       "target": {
         "functionName": "handleRequest",
-        "codePattern": "if err != nil {",
-        "controlStructures": ["if", "return"]
+        "codePattern": "if err != nil {"
       },
       "parameters": {
         "methodName": "handleError"

@@ -1,19 +1,12 @@
 package main
 
 import (
-	"bytes"
+	"errors"
 	"fmt"
-	"go/ast"
-	"go/printer"
-	"go/token"
-	"go/types"
-	"os"
-	"path/filepath"
+	"strconv"
 	"strings"
 
-	"github.com/chrisophus/gorefactor/orchestrator"
-
-	"golang.org/x/tools/go/packages"
+	"github.com/chrisophus/gorefactor/refactor/extract"
 )
 
 // extractFlags: --allow-returns opts into lifting return-bearing blocks into a
@@ -24,6 +17,9 @@ var extractFlags = mutFlagSpec(map[string]bool{"--allow-returns": false})
 func init() {
 	registerCommand(Command{
 		Name:        "extract",
+		Mutates:     true,
+		MCPTool:     true,
+		TxnSafe:     true,
 		Description: "Extract a code block into a new function (--allow-returns lifts return-bearing blocks). Args: <file> <startLine> <endLine> <methodName>",
 		Usage:       "extract <file> <startLine> <endLine> <methodName> [--allow-returns] [--json] [--dry-run] [--gate]",
 		MinArgs:     4,
@@ -33,207 +29,87 @@ func init() {
 	})
 }
 
-func findFileInPackages(pkgs []*packages.Package, absFile string) (*packages.Package, *ast.File) {
-	for _, p := range pkgs {
-		for i, f := range p.CompiledGoFiles {
-			abs, _ := filepath.Abs(f)
-			if abs == absFile {
-				if i < len(p.Syntax) {
-					return p, p.Syntax[i]
-				}
-			}
-		}
-		for i, f := range p.GoFiles {
-			abs, _ := filepath.Abs(f)
-			if abs == absFile {
-				if i < len(p.Syntax) {
-					return p, p.Syntax[i]
-				}
-			}
-		}
+// extractCommand is a thin CLI wrapper over the refactor/extract engine: it
+// parses flags, calls extract.PlanMethod, maps the engine's classified errors
+// onto the CLI's rich DetailedError output, and applies the rewrite through the
+// mutation lifecycle (dry-run / gate / JSON / undo).
+func extractCommand(args []string) error {
+	pos, flags := parseFlags(args, extractFlags)
+	if len(pos) < 4 {
+		return usageErrorf("usage: extract <file> <startLine> <endLine> <methodName> [--allow-returns]")
 	}
-	return nil, nil
-}
+	file := pos[0]
+	m := &mutation{op: "extract", file: file}
+	m.setCommonFlags(flags)
+	startLine, err := strconv.Atoi(pos[1])
+	if err != nil || startLine < 1 {
+		return m.fail(usageErrorf("invalid startLine: %q", pos[1]))
+	}
+	endLine, err := strconv.Atoi(pos[2])
+	if err != nil || endLine < startLine {
+		return m.fail(usageErrorf("invalid endLine: %q", pos[2]))
+	}
+	methodName := pos[3]
 
-func findExtractionTarget(fileAST *ast.File, fset *token.FileSet, startLine, endLine int) (*ast.FuncDecl, []ast.Stmt, error) {
-	var enclosing *ast.FuncDecl
-	for _, decl := range fileAST.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Body == nil {
-			continue
-		}
-		s := fset.Position(fn.Body.Lbrace).Line
-		e := fset.Position(fn.Body.Rbrace).Line
-		if s <= startLine && e >= endLine {
-			enclosing = fn
-			break
-		}
-	}
-	if enclosing == nil {
-		return nil, nil, fmt.Errorf("no function body contains lines %d-%d", startLine, endLine)
-	}
-	var stmts []ast.Stmt
-	for _, stmt := range enclosing.Body.List {
-		ss := fset.Position(stmt.Pos()).Line
-		se := fset.Position(stmt.End()).Line
-		if ss >= startLine && se <= endLine {
-			stmts = append(stmts, stmt)
-		}
-	}
-	if len(stmts) == 0 {
-		return nil, nil, noStatementsError(fset, enclosing, fset.File(enclosing.Pos()).Name(), startLine, endLine)
-	}
-	return enclosing, stmts, nil
-}
-
-type paramSpec struct {
-	name   string
-	typeS  string
-	object types.Object
-	outer  bool // a pre-existing variable the block mutates (write-back at call site with =, not :=)
-}
-
-func isLocalToFunc(obj types.Object, fn *ast.FuncDecl, info *types.Info) bool {
-	if obj.Parent() == nil {
-		return false
-	}
-	if fn.Type == nil {
-		return false
-	}
-	scope := info.Scopes[fn.Type]
-	if scope == nil {
-		return false
-	}
-	for s := obj.Parent(); s != nil; s = s.Parent() {
-		if s == scope {
-			return true
-		}
-	}
-	if fn.Body != nil {
-		if bs, ok := info.Scopes[fn.Body]; ok {
-			for s := obj.Parent(); s != nil; s = s.Parent() {
-				if s == bs {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
-func relativeToPkg(p *types.Package) types.Qualifier {
-	return func(other *types.Package) string {
-		if other == nil || other == p {
-			return ""
-		}
-		return other.Name()
-	}
-}
-
-func buildExtractedFunc(fset *token.FileSet, methodName string, stmts []ast.Stmt, params, returns []paramSpec) (newFunc string, callSite string, err error) {
-	var body bytes.Buffer
-	for i, stmt := range stmts {
-		if i > 0 {
-			body.WriteString("\n")
-		}
-		if err := printer.Fprint(&body, fset, stmt); err != nil {
-			return "", "", err
-		}
-	}
-	newFunc = buildExtractedFuncDecl(methodName, body.String(), params, returns)
-	callSite = buildExtractedCallSite(methodName, params, returns)
-	return newFunc, callSite, nil
-
-}
-
-func buildExtractedFuncDecl(methodName, body string, params, returns []paramSpec) string {
-	var sb strings.Builder
-	sb.WriteString("\nfunc ")
-	sb.WriteString(methodName)
-	sb.WriteString("(")
-	for i, p := range params {
-		if i > 0 {
-			sb.WriteString(", ")
-		}
-		fmt.Fprintf(&sb, "%s %s", p.name, p.typeS)
-	}
-	sb.WriteString(")")
-	if len(returns) == 1 {
-		fmt.Fprintf(&sb, " %s", returns[0].typeS)
-	} else if len(returns) > 1 {
-		sb.WriteString(" (")
-		for i, r := range returns {
-			if i > 0 {
-				sb.WriteString(", ")
-			}
-			sb.WriteString(r.typeS)
-		}
-		sb.WriteString(")")
-	}
-	sb.WriteString(" {\n")
-	sb.WriteString(body)
-	if len(returns) > 0 {
-		sb.WriteString("\n\treturn ")
-		for i, r := range returns {
-			if i > 0 {
-				sb.WriteString(", ")
-			}
-			sb.WriteString(r.name)
-		}
-	}
-	sb.WriteString("\n}\n")
-	return sb.String()
-}
-
-func buildExtractedCallSite(methodName string, params, returns []paramSpec) string {
-	var args []string
-	for _, p := range params {
-		args = append(args, p.name)
-	}
-	if len(returns) == 0 {
-		return fmt.Sprintf("%s(%s)", methodName, strings.Join(args, ", "))
-	}
-	var names []string
-	allOuter := true
-	for _, r := range returns {
-		names = append(names, r.name)
-		if !r.outer {
-			allOuter = false
-		}
-	}
-
-	assign := ":="
-	if allOuter {
-		assign = "="
-	}
-	return fmt.Sprintf("%s %s %s(%s)", strings.Join(names, ", "), assign, methodName, strings.Join(args, ", "))
-}
-
-func rewriteExtraction(filePath string, fset *token.FileSet, enclosing *ast.FuncDecl, stmts []ast.Stmt, newFunc, callSite string) error {
-	src, err := os.ReadFile(filePath)
+	plan, err := extract.PlanMethod(file, startLine, endLine, methodName, flags["--allow-returns"] != "")
 	if err != nil {
-		return err
+		return m.fail(extractMapError(err))
 	}
-	startOff := fset.Position(stmts[0].Pos()).Offset
-	endOff := fset.Position(stmts[len(stmts)-1].End()).Offset
-	if startOff < 0 || endOff > len(src) || startOff >= endOff {
-		return fmt.Errorf("block offset computation failed")
-	}
-	encEndOff := fset.Position(enclosing.End()).Offset
 
-	var out bytes.Buffer
-	out.Write(src[:startOff])
-	out.WriteString(callSite)
-	out.Write(src[endOff:encEndOff])
-	out.WriteString("\n")
-	out.WriteString(newFunc)
-	out.Write(src[encEndOff:])
+	return m.run(func() (string, error) {
+		if err := plan.Apply(); err != nil {
+			return "", err
+		}
+		msg := fmt.Sprintf("Extracted %s (params=%d, returns=%d)", plan.MethodName, plan.NumParams, plan.NumReturns)
+		if plan.LiftedReturns > 0 {
+			msg = fmt.Sprintf("Extracted %s (params=%d, lifted returns=%d)", plan.MethodName, plan.NumParams, plan.LiftedReturns)
+		}
+		if plan.Warning != "" {
+			msg += "\n" + plan.Warning
+		}
+		return msg, nil
+	})
+}
 
-	if err := os.WriteFile(filePath, out.Bytes(), 0644); err != nil {
-		return err
+// extractMapError turns the engine's classified errors into the CLI's rich,
+// LLM-oriented DetailedError payloads. Already-classified CLI errors (exit
+// codes from cerr) pass through unchanged.
+func extractMapError(err error) error {
+	var refused *extract.ReturnsRefusedError
+	if errors.As(err, &refused) {
+		return ExampleReturnStatementError(refused.File, refused.StartLine, refused.EndLine, refused.ReturnLines)
 	}
-	if err := orchestrator.FormatImports(filePath); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", filePath, err)
+	var typeErr *extract.TypeAnalysisError
+	if errors.As(err, &typeErr) {
+		return extractWrapTypeAnalysisError(typeErr.Err, typeErr.File, typeErr.StartLine, typeErr.EndLine)
 	}
-	return nil
+	return err
+}
+
+// extractWrapTypeAnalysisError builds the rich DetailedError for a
+// type-inference failure during extraction, distinguishing undefined-variable
+// cases (expand the range) from general type conflicts.
+func extractWrapTypeAnalysisError(err error, file string, startLine, endLine int) error {
+	stderr := err.Error()
+
+	if strings.Contains(stderr, "undefined") || strings.Contains(stderr, "not defined") {
+		return NewDetailedError(ErrVariableOutOfScope, fmt.Sprintf("Cannot extract: %v", err)).
+			WithContext(file, startLine, endLine, "Type analysis failed - undefined variables in extraction range").
+			WithRootCause(stderr).
+			WithSuggestion("expand_range",
+				"Include variable definitions in extraction range (expand start line)",
+				0.85).
+			WithSuggestion("make_global",
+				"Promote undefined variables to package level",
+				0.30).
+			WithDetail("error", stderr)
+	}
+
+	return NewDetailedError(ErrTypeConflict, fmt.Sprintf("Cannot extract: %v", err)).
+		WithContext(file, startLine, endLine, "Type analysis failed").
+		WithRootCause(stderr).
+		WithSuggestion("review_types",
+			"Review variable types in extraction range",
+			0.70).
+		WithDetail("error", stderr)
 }

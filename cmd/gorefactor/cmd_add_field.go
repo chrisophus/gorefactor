@@ -19,6 +19,9 @@ var addFieldFlags = mutFlagSpec(map[string]bool{
 func init() {
 	registerCommand(Command{
 		Name:        "add-field",
+		Mutates:     true,
+		MCPTool:     true,
+		TxnSafe:     true,
 		Description: "Add a field to a struct type; optionally rewrite positional literals to keyed form",
 		Usage:       "add-field <file> <Struct> \"<Name> <Type> [`tag`]\" [--after FieldName] [--update-literals] [--json] [--dry-run] [--gate]",
 		MinArgs:     3,

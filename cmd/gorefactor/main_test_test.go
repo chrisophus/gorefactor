@@ -55,6 +55,8 @@ func TestDeleteCommand(t *testing.T) {
 
 func TestRenameCommand(t *testing.T) {
 	dir := t.TempDir()
+	// Types-aware rename loads the package with go/packages, which needs a module.
+	writeTempGo(t, dir, "go.mod", "module x\n\ngo 1.21\n")
 	path := writeTempGo(t, dir, "f.go", "package x\n\nfunc helper() int { return 1 }\n\nfunc use() int { return helper() + 1 }\n")
 	if err := renameCommand([]string{path, "helper", "doMath"}); err != nil {
 		t.Fatalf("renameCommand: %v", err)

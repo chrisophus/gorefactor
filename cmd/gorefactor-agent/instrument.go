@@ -80,7 +80,11 @@ func blastRadiusScore(dir, sym string) int {
 	if strings.TrimSpace(sym) == "" {
 		return -1
 	}
-	out, err := runIn(dir, gorefactorBin(), "blast-radius", sym, "--json")
+	bin, ok := findGorefactorBin()
+	if !ok {
+		return -1
+	}
+	out, err := runIn(dir, bin, "blast-radius", sym, "--json")
 	if err != nil || strings.TrimSpace(out) == "" {
 		return -1
 	}
@@ -91,6 +95,7 @@ func blastRadiusScore(dir, sym string) int {
 		return -1
 	}
 	return br.Score
+
 }
 
 // specBlastRadius is the convenience the drivers call: extract the

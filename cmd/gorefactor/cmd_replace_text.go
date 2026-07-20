@@ -19,6 +19,9 @@ var replaceTextFlags = mutFlagSpec(map[string]bool{
 func init() {
 	registerCommand(Command{
 		Name:        "replace-text",
+		Mutates:     true,
+		MCPTool:     true,
+		TxnSafe:     true,
 		Description: "Replace literal text inside a function/method body (safe text find/replace)",
 		Usage:       "replace-text <file> <Func|Receiver:Method> <old-text> <new-text> [--first] [--occurrence N] [--json] [--dry-run] [--gate]",
 		MinArgs:     4,
@@ -139,11 +142,4 @@ func replaceNthOccurrence(s, old, new string, n int) string {
 		}
 		offset = idx + len(old)
 	}
-}
-
-func parseLocatorParts(s string) (funcName, methodName, receiverType string) {
-	if i := strings.Index(s, ":"); i >= 0 {
-		return "", s[i+1:], s[:i]
-	}
-	return s, "", ""
 }

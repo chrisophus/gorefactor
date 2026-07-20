@@ -57,18 +57,6 @@ func parseSplitDecls(filePath string) ([]splitDecl, error) {
 	return out, nil
 }
 
-func receiverTypeName(expr ast.Expr) string {
-	switch t := expr.(type) {
-	case *ast.StarExpr:
-		if id, ok := t.X.(*ast.Ident); ok {
-			return id.Name
-		}
-	case *ast.Ident:
-		return t.Name
-	}
-	return ""
-}
-
 func groupSplitDecls(decls []splitDecl) []splitGroup {
 	groups := map[string]*splitGroup{}
 	getOrCreate := func(key string) *splitGroup {

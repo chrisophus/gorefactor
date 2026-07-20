@@ -27,7 +27,12 @@ large-scale changes.
 
 | Path | What it is |
 |---|---|
-| `cmd/gorefactor/` | CLI: command registry (`registry.go`), all commands (`cmd_*.go`), lint rules, MCP server. Also currently hosts the extract-method and change-signature engines (an acknowledged layering flaw). |
+| `cmd/gorefactor/` | CLI: command registry (`registry.go`), all commands (`cmd_*.go`), lint rules, MCP server. Commands are thin wrappers over the engines below. |
+| `refactor/extract` | Extract-method engine (`PlanMethod`/`Apply`) — importable without `package main`. |
+| `refactor/changesig` | Change-signature engine (`Plan`/`Apply`) — importable without `package main`. |
+| `internal/astcache` | Parse cache + call-graph index (`ParseCache`, `CallIndexCache`). |
+| `internal/goload` | Shared package-loading, AST, and type helpers used by the engines and CLI. |
+| `internal/cerr` | Semantic CLI error classification (exit codes, candidates, did-you-mean). |
 | `analyzer/` | Complexity/length metrics, lint detectors, diff analysis, symbol/call analysis. |
 | `orchestrator/` | The mutation engine: operations, `CodeInserter`, targeting, snapshots/undo, dry-run. |
 | `doctor/` | Report/diagnose engine (substrates, fingerprints) behind `doctor --report`. |
@@ -55,8 +60,11 @@ Conventions: methods are addressed as `Receiver:Method`; `-` as the last arg rea
 `--` ends flag parsing when values start with `-`.
 
 `Write`/`Edit` are fine for non-Go files, and as a documented fallback when no command fits.
-Caution: `rename` is currently name-match based (not type-aware) — verify its diff, or use gopls
-for anything exported or shadow-prone.
+Note: `rename` is type-aware — it resolves the symbol with `go/types` and rewrites only the
+identifiers that share the same object (shadowing locals and same-named fields are left alone),
+following it across every file in the package. It requires the package to type-check and is scoped
+to **unexported** symbols; use gopls for exported symbols, which may be referenced from packages the
+command does not load.
 
 ## Build, test, gate
 

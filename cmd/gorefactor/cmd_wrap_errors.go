@@ -19,6 +19,7 @@ var wrapErrorsFlags = mutFlagSpec(nil)
 func init() {
 	registerCommand(Command{
 		Name:        "wrap-errors",
+		Mutates:     true,
 		Description: "Rewrite bare 'return err' in 'if err != nil' blocks to fmt.Errorf wrapping with context",
 		Usage:       "wrap-errors <file> [<Func|Receiver:Method>] [--json] [--dry-run] [--gate]",
 		MinArgs:     1,

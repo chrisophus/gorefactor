@@ -49,10 +49,10 @@ func TestProviderForModel(t *testing.T) {
 func TestBuildCellsCartesian(t *testing.T) {
 	cells := buildCells(corpusOpts{
 		model: "claude-sonnet-4-6", provider: "anthropic",
-		models: "claude-haiku-4-5,gpt-4o-mini", modes: "agentic,single-shot",
+		models: "claude-haiku-4-5,gpt-4o-mini", modes: "agentic",
 	})
-	if len(cells) != 4 {
-		t.Fatalf("expected 2x2=4 cells, got %d", len(cells))
+	if len(cells) != 2 {
+		t.Fatalf("expected 2x1=2 cells, got %d", len(cells))
 	}
 	// Provider inferred per model.
 	for _, c := range cells {

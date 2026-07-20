@@ -13,6 +13,8 @@ import (
 func init() {
 	registerCommand(Command{
 		Name:        "parse",
+		ReadOnly:    true,
+		MCPTool:     true,
 		Description: "Parse a Go file and output its structure",
 		Usage:       "parse <file.go>",
 		MinArgs:     1,
@@ -21,6 +23,8 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "list-functions",
+		ReadOnly:    true,
+		MCPTool:     true,
 		Description: "List all functions in a Go file",
 		Usage:       "list-functions <file.go>",
 		MinArgs:     1,
@@ -29,6 +33,7 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "generate-templates",
+		ReadOnly:    true,
 		Description: "Generate JSON template files for refactoring plans",
 		Usage:       "generate-templates <output-dir>",
 		MinArgs:     1,

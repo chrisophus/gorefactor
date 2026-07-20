@@ -153,20 +153,23 @@ Edit one of the generated templates or create your own JSON file:
 **Pros**: Finds code by function calls
 **Cons**: Function calls must be distinctive
 
-### 7. Context-based Targeting
+### 7. Combining semantic fields
+
+Prefer combining `functionName` / `codePattern` / `variableNames` / `functionCalls` rather than
+context patterns that are not scored.
 
 ```json
 {
   "target": {
     "functionName": "HandleRequest",
-    "beforePattern": "log.Info(",
-    "afterPattern": "return response"
+    "codePattern": "log.Info(",
+    "variableNames": ["response"]
   }
 }
 ```
 
-**Pros**: Uses surrounding context
-**Cons**: Requires stable surrounding code
+**Pros**: Uses multiple scored signals
+**Cons**: Over-specific combinations can miss after refactors
 
 ## Fallback Strategies
 
@@ -429,8 +432,7 @@ Always test your plans on sample code before running them on production code.
       "file": "api/handlers.go",
       "target": {
         "functionName": "handleRequest",
-        "codePattern": "if err != nil {",
-        "controlStructures": ["if", "return"]
+        "codePattern": "if err != nil {"
       },
       "parameters": {
         "methodName": "handleError"

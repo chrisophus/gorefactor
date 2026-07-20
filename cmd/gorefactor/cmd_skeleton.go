@@ -14,6 +14,8 @@ var skeletonFlags = map[string]bool{"--json": false}
 func init() {
 	registerCommand(Command{
 		Name:        "skeleton",
+		ReadOnly:    true,
+		MCPTool:     true,
 		Description: "Print a file with function bodies elided — token-cheap file shape [--json]",
 		Usage:       "skeleton <file.go> [--json]",
 		MinArgs:     1,

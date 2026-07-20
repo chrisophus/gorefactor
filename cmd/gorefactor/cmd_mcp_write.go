@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os/exec"
-	"sort"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -26,54 +25,28 @@ import (
 //   - Each tool is annotated destructive so clients prompt for approval.
 
 // mcpWriteTools is the allowlist of registered mutation commands exposed as MCP
-// tools when --allow-write is set. Like mcpReadOnlyTools it is explicit rather
-// than "everything not read-only", so a new command is never auto-exposed for
-// writing without a deliberate addition here.
-var mcpWriteTools = []string{
-	"create",
-	"insert",
-	"replace",
-	"replace-text",
-	"replace-body",
-	"move",
-	"rename",
-	"delete",
-	"inline",
-	"add-field",
-	"change-signature",
-	"change-receiver",
-	"set-doc",
-	"extract",
-	"format",
-	"txn",
-	"undo",
-}
-
-// mcpIdempotentWriteTools lists the write tools that have no additional effect
-// when called again with the same arguments, so we can set IdempotentHint
-// accurately (it informs client retry behaviour). `undo` is included because a
-// second undo of the same snapshot is a no-op; the rest of the guides change
-// the tree on each successful application.
-var mcpIdempotentWriteTools = map[string]bool{
-	"undo": true,
-	// format (gofmt+goimports) reaches a fixed point: re-running on an
-	// already-formatted tree changes nothing (improvement plan item 1).
-	"format": true,
+// tools when --allow-write is set. It is derived from the per-command I/O
+// metadata (MCPTool && Mutates) rather than hand-maintained, so a mutation
+// command is exposed for writing only by deliberately setting MCPTool at
+// registration — it can never drift out of sync with a parallel slice, nor be
+// auto-exposed without the flag.
+func mcpWriteTools() []string {
+	return commandsWhere(func(c Command) bool { return c.MCPTool && c.Mutates })
 }
 
 // registerMCPWriteTools adds the mutation guides to the server. It reuses the
 // same argv-reconstruction handler as the read-only tools; only the tool
-// annotations differ (destructive, not read-only).
+// annotations differ (destructive, not read-only). The IdempotentHint comes
+// from the command's own Idempotent metadata (e.g. format reaches a gofmt fixed
+// point, a repeated undo of the same entry is a no-op).
 func registerMCPWriteTools(server *mcp.Server, cmds map[string]Command) {
-	names := append([]string(nil), mcpWriteTools...)
-	sort.Strings(names)
 	destructive := true
-	for _, name := range names {
+	for _, name := range mcpWriteTools() {
 		cmd, ok := cmds[name]
 		if !ok {
 			continue
 		}
-		idempotent := mcpIdempotentWriteTools[name]
+		idempotent := cmd.Idempotent
 		tool := &mcp.Tool{
 			Name:        name,
 			Description: writeToolDescription(cmd),

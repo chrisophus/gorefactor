@@ -14,6 +14,7 @@ var reorderFuncorderFlags = mutFlagSpec(nil)
 func init() {
 	registerCommand(Command{
 		Name:        "reorder-funcorder",
+		Mutates:     true,
 		Description: "Reorder struct constructors/methods and top-level functions to satisfy funcorder placement rules (constructor after struct, exported methods/functions before unexported)",
 		Usage:       "reorder-funcorder <file> [--json] [--dry-run] [--gate]",
 		MinArgs:     1,

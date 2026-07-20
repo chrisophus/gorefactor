@@ -11,9 +11,7 @@
       "file": "api/handlers.go",
       "target": {
         "functionName": "handleRequest",
-        "codePattern": "if err != nil {",
-        "controlStructures": ["if", "return"],
-        "comments": ["TODO: Extract error handling"]
+        "codePattern": "if err != nil {"
       },
       "parameters": {
         "methodName": "handleError"
@@ -34,8 +32,14 @@
       "target": {
         "methodName": "Validate",
         "receiverType": "User",
-        "variableNames": ["user", "errors"],
-        "functionCalls": ["validateEmail", "validateAge"]
+        "variableNames": [
+          "user",
+          "errors"
+        ],
+        "functionCalls": [
+          "validateEmail",
+          "validateAge"
+        ]
       },
       "parameters": {
         "methodName": "validateUserData"
@@ -64,8 +68,14 @@
       "target": {
         "functionName": "LoadConfig",
         "codePattern": "viper.SetConfig",
-        "variableNames": ["config", "viper"],
-        "functionCalls": ["viper.ReadInConfig", "viper.Unmarshal"]
+        "variableNames": [
+          "config",
+          "viper"
+        ],
+        "functionCalls": [
+          "viper.ReadInConfig",
+          "viper.Unmarshal"
+        ]
       },
       "parameters": {
         "methodName": "loadConfigFile"
@@ -81,9 +91,15 @@
     }
   ],
   "metadata": {
-    "tags": ["refactoring", "extraction", "api", "models", "repository"],
+    "tags": [
+      "refactoring",
+      "extraction",
+      "api",
+      "models",
+      "repository"
+    ],
     "priority": "high",
     "estimatedTime": "2 hours",
     "risk": "low"
   }
-} 
+}

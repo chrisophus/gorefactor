@@ -103,7 +103,7 @@ func TestAlpha(t *testing.T) {}
 // TestStrandedComment_ZeroFindingsOnTree is the plan item's acceptance
 // criterion: the rule must be silent on the current repository. The two
 // stranded comments it found on its first run (dispatch_tool.go,
-// run_interactive_agentic_driver.go) were fixed in the same change.
+// run_agentic_driver.go) were fixed in the same change.
 func TestStrandedComment_ZeroFindingsOnTree(t *testing.T) {
 	files, err := analyzer.WalkGoFiles("../..", analyzer.DefaultWalkOptions())
 	if err != nil {

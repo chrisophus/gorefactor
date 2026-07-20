@@ -32,7 +32,7 @@ func main() {
 	provider := flag.String("provider", "anthropic", "corpus: agent provider")
 	model := flag.String("model", "claude-sonnet-4-6", "corpus: agent model")
 	models := flag.String("models", "", "corpus: comma-separated model sweep (provider inferred per model; overrides -model)")
-	modes := flag.String("modes", "", "corpus: comma-separated harness-mode sweep (agentic|single-shot)")
+	modes := flag.String("modes", "", "corpus: comma-separated harness-mode sweep (agentic)")
 	budget := flag.Int("budget", 500000, "corpus: per-task token budget")
 	flag.Parse()
 

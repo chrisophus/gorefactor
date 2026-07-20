@@ -50,6 +50,8 @@ func TestDeleteCommandDidYouMean(t *testing.T) {
 
 func TestRenameCommandMissingSymbol(t *testing.T) {
 	t.Chdir(t.TempDir())
+	// Types-aware rename loads the package with go/packages, which needs a module.
+	writeTempGo(t, ".", "go.mod", "module x\n\ngo 1.21\n")
 	path := writeTempGo(t, ".", "f.go", "package x\n\nfunc helper() int { return 1 }\n")
 	before := readFile(t, path)
 

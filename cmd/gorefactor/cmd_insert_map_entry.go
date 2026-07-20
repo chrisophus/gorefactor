@@ -14,6 +14,7 @@ var insertMapEntryFlags = mutFlagSpec(nil)
 func init() {
 	registerCommand(Command{
 		Name:        "insert-map-entry",
+		Mutates:     true,
 		Description: "Append an element to a composite literal (a package-level var, or the literal returned by a func)",
 		Usage:       "insert-map-entry <file> <VarOrFunc> <element|-> [--json] [--dry-run] [--gate]",
 		MinArgs:     2,

@@ -66,7 +66,7 @@ func buildScenarios(root string) []scenario {
 			WriteEstimate:  fileSize(root, agent+"agent_tools.go"),
 			GoRefactorArgs: []string{"rename", agent + "agent_tools.go", "emitRunMetrics", "emitMetrics"},
 			VerifyBuild:    true,
-			RestoreFiles:   []string{agent + "agent_tools.go", agent + "run_agentic_driver.go", agent + "run_interactive_agentic_driver.go"},
+			RestoreFiles:   []string{agent + "agent_tools.go", agent + "run_agentic_driver.go"},
 		},
 		{
 			Name:           "delete --safe: senseListSymbols (has callers → refused)",

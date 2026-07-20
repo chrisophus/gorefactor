@@ -18,6 +18,7 @@ var extractVarFlags = mutFlagSpec(map[string]bool{"--all": false})
 func init() {
 	registerCommand(Command{
 		Name:        "extract-var",
+		Mutates:     true,
 		Description: "Extract an expression inside a function into a named local variable (name := expr)",
 		Usage:       "extract-var <file> <Func|Receiver:Method> <expr> <name> [--all] [--json] [--dry-run] [--gate]",
 		MinArgs:     4,
@@ -27,6 +28,7 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "extract-const",
+		Mutates:     true,
 		Description: "Extract a constant expression inside a function into a named local const (const name = expr)",
 		Usage:       "extract-const <file> <Func|Receiver:Method> <expr> <name> [--all] [--json] [--dry-run] [--gate]",
 		MinArgs:     4,

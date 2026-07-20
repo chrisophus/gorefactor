@@ -74,8 +74,10 @@ New command `gorefactor mcp` (stdio server). Auto-generate one tool per
 - Build args from the JSON tool-call params using each command's `Flags`/arg
   bounds; invoke `Run` via `captureStdoutOf`; return stdout as the tool result.
 - Force `--json` where the command supports it so clients get structured data.
-- Maintain an explicit allowlist of read-only command names (don't expose
-  mutators yet).
+- Derive the read-only tool allowlist from per-command I/O metadata
+  (`MCPTool && ReadOnly` on `Command`, exposed via `mcpReadOnlyTools()`); a
+  command opts in by setting `MCPTool` at registration rather than being added
+  to a hand-synced slice, so mutators can never leak into the read-only surface.
 
 ### Phase 2 — long-lived index cache (the "index once" win) ✅ implemented
 codeindexer's speed comes from indexing once into a graph DB. gorefactor
@@ -113,10 +115,12 @@ Safety model, reusing what exists:
 - Annotate these tools as destructive in their MCP descriptions so clients
   prompt for approval.
 
-Implemented in `cmd/gorefactor/cmd_mcp_write.go`: an explicit `mcpWriteTools`
-allowlist (mirroring `mcpReadOnlyTools`), each tool annotated
-`DestructiveHint=true` with a "Modifies Go source on disk." description prefix,
-plus `undo` for snapshot rollback. `mcpRequireCleanWorktree` enforces the clean
+Implemented in `cmd/gorefactor/cmd_mcp_write.go`: the write-tool allowlist is
+derived from per-command I/O metadata (`MCPTool && Mutates`, via
+`mcpWriteTools()`, mirroring `mcpReadOnlyTools()`), each tool annotated
+`DestructiveHint=true` with a "Modifies Go source on disk." description prefix
+and an `IdempotentHint` taken from the command's `Idempotent` metadata, plus
+`undo` for snapshot rollback. `mcpRequireCleanWorktree` enforces the clean
 baseline at startup unless `--allow-dirty` is passed.
 
 ### Phase 4 — resources, prompts, installer ✅ (resources + installer implemented)

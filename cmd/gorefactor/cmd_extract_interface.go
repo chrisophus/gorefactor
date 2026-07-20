@@ -15,6 +15,7 @@ var extractInterfaceFlags = mutFlagSpec(map[string]bool{"--methods": true})
 func init() {
 	registerCommand(Command{
 		Name:        "extract-interface",
+		Mutates:     true,
 		Description: "Generate an interface declaration from a concrete type's exported method set",
 		Usage:       "extract-interface <file> <Type> <NewInterfaceName> [--methods m1,m2,...] [--json] [--dry-run] [--gate]",
 		MinArgs:     3,

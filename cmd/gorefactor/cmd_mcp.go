@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"sort"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -32,6 +31,7 @@ import (
 func init() {
 	registerCommand(Command{
 		Name:        "mcp",
+		ReadOnly:    true,
 		Description: "Run a stdio MCP server exposing gorefactor's Go code intelligence as MCP tools (read-only by default; --allow-write enables the mutation guides)",
 		Usage:       "mcp [--allow-write] [--allow-dirty]",
 		MinArgs:     0,
@@ -41,30 +41,13 @@ func init() {
 	})
 }
 
-// mcpReadOnlyTools is the allowlist of registered commands exposed as MCP
-// tools. Only read-only analysis commands appear here; mutators are withheld
-// until the Phase 3 --allow-write work. Keeping this explicit (rather than
-// "everything not a mutator") makes it impossible to leak a destructive
-// command into the server by accident.
-var mcpReadOnlyTools = []string{
-	"parse",
-	"list-functions",
-	"skeleton",
-	"inspect",
-	"context",
-	"callgraph",
-	"blast-radius",
-	"find-callers",
-	"find-uses",
-	"find-implementations",
-	"find-package-deps",
-	"search-ast",
-	"recommend",
-	"suggest-plan",
-	"review",
-	"api-diff",
-	"test-affected",
-	"lint",
+// mcpReadOnlyTools is the allowlist of registered commands exposed as read-only
+// MCP tools. It is derived from the per-command I/O metadata (MCPTool &&
+// ReadOnly) rather than hand-maintained, so a command opts into the server by
+// setting MCPTool at registration and cannot drift out of sync with a parallel
+// slice. Mutators are withheld until --allow-write (see mcpWriteTools).
+func mcpReadOnlyTools() []string {
+	return commandsWhere(func(c Command) bool { return c.MCPTool && c.ReadOnly })
 }
 
 // mcpSkipFlags are flags that must never be surfaced as tool parameters.
@@ -111,9 +94,7 @@ func newMCPServer(cmds map[string]Command, allowWrite bool) *mcp.Server {
 		Version: version.Version(),
 	}, nil)
 
-	names := append([]string(nil), mcpReadOnlyTools...)
-	sort.Strings(names)
-	for _, name := range names {
+	for _, name := range mcpReadOnlyTools() {
 		cmd, ok := cmds[name]
 		if !ok {
 			continue

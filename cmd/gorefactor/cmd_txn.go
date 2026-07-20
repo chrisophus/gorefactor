@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sort"
 	"strings"
 )
 
@@ -13,6 +12,8 @@ var txnFlags = map[string]bool{"--json": false, "--gate": false}
 func init() {
 	registerCommand(Command{
 		Name:        "txn",
+		Mutates:     true,
+		MCPTool:     true,
 		Description: "Apply a batch of mutation commands transactionally (all-or-nothing, single undo unit)",
 		Usage:       "txn [file|-] [--json] [--gate]",
 		MinArgs:     0,
@@ -22,83 +23,25 @@ func init() {
 	})
 }
 
-// txnAllowedCommands are the mutation commands routed through the shared
-// mutation runner — the only ones whose effects the transaction can capture
-// and roll back. Read-only commands are excluded on purpose: a txn script is
-// a write batch.
-var txnAllowedCommands = map[string]bool{
-	"create":          true,
-	"insert":          true,
-	"replace":         true,
-	"replace-text":    true,
-	"replace-body":    true,
-	"set-doc":         true,
-	"add-field":       true,
-	"inline":          true,
-	"change-receiver": true,
-	"delete":          true,
-	"rename":          true,
-	"move":            true,
-	"extract":         true,
-	"format":          true,
-	"split":           true,
+// txnSafeCommands are the mutation commands routed through the shared mutation
+// runner — the only ones whose effects the transaction can capture and roll
+// back. The set is derived from the per-command I/O metadata (TxnSafe) rather
+// than hand-maintained, so a command joins txn by setting TxnSafe at
+// registration. Read-only commands are excluded on purpose: a txn script is a
+// write batch.
+func txnSafeCommands() []string {
+	return commandsWhere(func(c Command) bool { return c.TxnSafe })
 }
 
-// txnCollector accumulates the union of pre-mutation file states across all
-// operations of a transaction. The first recorded state of each path wins —
-// that is the state the whole transaction restores to.
-type txnCollector struct {
-	before  map[string][]byte
-	created map[string]bool
-	seen    map[string]bool
+// isTxnAllowed reports whether a command may appear as a line in a txn script.
+func isTxnAllowed(name string) bool {
+	cmd, ok := getCommands()[name]
+	return ok && cmd.TxnSafe
 }
 
-// activeTxn, when non-nil, redirects mutation-runner journaling into the
-// collector (see mutation.run).
-var activeTxn *txnCollector
-
-func newTxnCollector() *txnCollector {
-	return &txnCollector{
-		before:  map[string][]byte{},
-		created: map[string]bool{},
-		seen:    map[string]bool{},
-	}
-}
-
-func (c *txnCollector) record(before map[string][]byte, created []string) {
-	for path, content := range before {
-		if !c.seen[path] {
-			c.seen[path] = true
-			c.before[path] = content
-		}
-	}
-	for _, path := range created {
-		if !c.seen[path] {
-			c.seen[path] = true
-			c.created[path] = true
-		}
-	}
-}
-
-// restore puts every touched file back to its pre-transaction state.
-func (c *txnCollector) restore() {
-	for path, content := range c.before {
-		_ = os.WriteFile(path, content, 0644)
-	}
-	for path := range c.created {
-		_ = os.Remove(path)
-	}
-}
-
-// touched returns all paths the transaction modified or created, sorted.
-func (c *txnCollector) touched() []string {
-	var paths []string
-	for p := range c.seen {
-		paths = append(paths, p)
-	}
-	sort.Strings(paths)
-	return paths
-}
+// The transaction batch (accumulate pre-mutation state, commit as one journal
+// entry, roll back as one unit) is owned by the orchestrator journal — see
+// orchestrator.Batch and BeginBatch. txn just drives it.
 
 // txnOpResult is the per-line result in --json output.
 type txnOpResult struct {

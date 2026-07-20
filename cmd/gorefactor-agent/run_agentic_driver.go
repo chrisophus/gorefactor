@@ -7,9 +7,9 @@ import (
 	"strings"
 )
 
-// RunAgenticDriver is Arm D's entry point. Mirror of RunDriver's safety
-// envelope (clean-worktree precondition, chdir, git rollback) but the
-// model drives via tool calls instead of one constrained plan.
+// RunAgenticDriver is the default agent entry point: a tool-calling loop
+// with a clean-worktree safety envelope, chdir into the target module,
+// and campaign-compatible RUN_METRICS emission.
 func RunAgenticDriver(ctx context.Context, tc toolChatter, cfg Config) (err error) {
 	if cfg.Out == nil {
 		cfg.Out = os.Stdout
@@ -50,7 +50,10 @@ func RunAgenticDriver(ctx context.Context, tc toolChatter, cfg Config) (err erro
 		// already committed or rolled back between steps.
 		if done, perr := agenticPuntOnBudget(cfg, tc, trace, step,
 			"; stopping with a clean summary rather than spending past the accuracy plateau"); done {
-			return perr
+			if perr != nil {
+				return fmt.Errorf("agentic: %w", perr)
+			}
+			return nil
 		}
 		fmt.Fprintf(cfg.Out, "\n── step %d/%d ──\n", step, cfg.MaxIter)
 		asst, cerr := tc.ChatTools(ctx, assembleHistory(messages, historyKeep), tools)
@@ -64,15 +67,21 @@ func RunAgenticDriver(ctx context.Context, tc toolChatter, cfg Config) (err erro
 
 		if len(asst.ToolCalls) == 0 {
 			if punted, perr := recordNoToolTurn(cfg, asst, step, &noTool, &trace); punted {
-				return perr
+				if perr != nil {
+					return fmt.Errorf("agentic: %w", perr)
+				}
+				return nil
 			}
 			messages = appendToolNudge(messages)
 			continue
 		}
 		noTool = 0
 
-		if done, rerr := agenticToolRound(cfg, asst, step, &gateFails, &trace, &messages, nil); done {
-			return rerr
+		if done, rerr := agenticToolRound(cfg, asst, step, &gateFails, &trace, &messages); done {
+			if rerr != nil {
+				return fmt.Errorf("agentic: %w", rerr)
+			}
+			return nil
 		}
 	}
 	return doPunt(cfg, "autopunt:budget", "tool-call budget exhausted", trace, cfg.MaxIter)
@@ -113,7 +122,7 @@ func appendToolNudge(messages []chatMessage) []chatMessage {
 			"If it cannot be done with these tools call punt(reason)."})
 }
 
-func agenticToolRound(cfg Config, asst chatMessage, step int, gateFails *int, trace *[]traceEntry, messages *[]chatMessage, pause func() bool) (done bool, err error) {
+func agenticToolRound(cfg Config, asst chatMessage, step int, gateFails *int, trace *[]traceEntry, messages *[]chatMessage) (done bool, err error) {
 	for _, call := range asst.ToolCalls {
 		content, status := dispatchTool(call, cfg, gateFails)
 		recordRejectedOp(".", call.Function.Name, call.Function.Arguments, content, cfg.Spec)
@@ -129,9 +138,6 @@ func agenticToolRound(cfg Config, asst chatMessage, step int, gateFails *int, tr
 			return true, nil
 		case stPunt:
 			return true, doPunt(cfg, "explicit", content, *trace, step, parseGap(call))
-		}
-		if pause != nil && pause() {
-			return true, doPunt(cfg, "user_stop", "user stopped interactively", *trace, step)
 		}
 	}
 	if *gateFails >= maxGateFails {

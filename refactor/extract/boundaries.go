@@ -1,4 +1,4 @@
-package main
+package extract
 
 import (
 	"fmt"
@@ -7,14 +7,14 @@ import (
 	"strings"
 )
 
-// nearestStatementRange scans the enclosing function body for the smallest set
+// NearestStatementRange scans the enclosing function body for the smallest set
 // of complete top-level statements that overlaps the requested [startLine,
 // endLine] range. It returns the line span of that set and its statement count.
 // ok is false when the function body has no statements at all.
 //
 // Used to turn the opaque "no complete statements in lines X-Y" rejection into
 // an actionable message that names a range the caller can actually extract.
-func nearestStatementRange(fset *token.FileSet, fn *ast.FuncDecl, startLine, endLine int) (rStart, rEnd, count int, ok bool) {
+func NearestStatementRange(fset *token.FileSet, fn *ast.FuncDecl, startLine, endLine int) (rStart, rEnd, count int, ok bool) {
 	if fn.Body == nil || len(fn.Body.List) == 0 {
 		return 0, 0, 0, false
 	}
@@ -47,10 +47,31 @@ func nearestStatementRange(fset *token.FileSet, fn *ast.FuncDecl, startLine, end
 	return fset.Position(first.Pos()).Line, fset.Position(first.End()).Line, 1, true
 }
 
+// FindJumpBarriers walks the selected statements and reports control-flow jumps
+// that would escape an extracted function. A continue/break is a barrier only
+// when it is NOT enclosed by its own loop/switch *within* the block: nested
+// loops introduced inside the selection capture their own break/continue and are
+// safe. return statements are handled separately (DirectReturns).
+func FindJumpBarriers(fset *token.FileSet, stmts []ast.Stmt) []JumpBarrier {
+	var barriers []JumpBarrier
+	for _, top := range stmts {
+		walkForBarriers(fset, top, 0, 0, &barriers)
+	}
+	return barriers
+}
+
+// JumpBarrier describes a continue/break/goto/fallthrough statement inside an
+// extraction candidate that targets an enclosing scope, making the block
+// impossible to extract without restructuring the caller.
+type JumpBarrier struct {
+	Kind string // "continue", "break", "goto", "fallthrough"
+	Line int
+}
+
 // noStatementsError builds the boundary-aware replacement for the old opaque
-// "no complete statements" rejection (improvement plan item 2).
+// "no complete statements" rejection.
 func noStatementsError(fset *token.FileSet, fn *ast.FuncDecl, file string, startLine, endLine int) error {
-	rStart, rEnd, count, ok := nearestStatementRange(fset, fn, startLine, endLine)
+	rStart, rEnd, count, ok := NearestStatementRange(fset, fn, startLine, endLine)
 	if !ok {
 		return fmt.Errorf("no complete statements in lines %d-%d (the enclosing function body is empty)", startLine, endLine)
 	}
@@ -61,31 +82,10 @@ func noStatementsError(fset *token.FileSet, fn *ast.FuncDecl, file string, start
 	)
 }
 
-// jumpBarrier describes a continue/break/goto/fallthrough statement inside an
-// extraction candidate that targets an enclosing scope, making the block
-// impossible to extract without restructuring the caller.
-type jumpBarrier struct {
-	kind string // "continue", "break", "goto", "fallthrough"
-	line int
-}
-
-// findJumpBarriers walks the selected statements and reports control-flow jumps
-// that would escape an extracted function. A continue/break is a barrier only
-// when it is NOT enclosed by its own loop/switch *within* the block: nested
-// loops introduced inside the selection capture their own break/continue and
-// are safe. return statements are handled separately (containsReturn).
-func findJumpBarriers(fset *token.FileSet, stmts []ast.Stmt) []jumpBarrier {
-	var barriers []jumpBarrier
-	for _, top := range stmts {
-		walkForBarriers(fset, top, 0, 0, &barriers)
-	}
-	return barriers
-}
-
 // walkForBarriers recursively inspects n, tracking how many enclosing loops
 // (loopDepth) and switch/select statements (switchDepth) sit between n's root
 // and the current node, all *within* the extracted block.
-func walkForBarriers(fset *token.FileSet, n ast.Node, loopDepth, switchDepth int, out *[]jumpBarrier) {
+func walkForBarriers(fset *token.FileSet, n ast.Node, loopDepth, switchDepth int, out *[]JumpBarrier) {
 	switch s := n.(type) {
 	case *ast.ForStmt:
 		walkChildren(fset, s.Body, loopDepth+1, switchDepth, out)
@@ -105,7 +105,7 @@ func walkForBarriers(fset *token.FileSet, n ast.Node, loopDepth, switchDepth int
 	case *ast.BranchStmt:
 		barrier := branchBarrier(s, loopDepth, switchDepth)
 		if barrier != "" {
-			*out = append(*out, jumpBarrier{kind: barrier, line: fset.Position(s.Pos()).Line})
+			*out = append(*out, JumpBarrier{Kind: barrier, Line: fset.Position(s.Pos()).Line})
 		}
 		return
 	}
@@ -137,7 +137,7 @@ func branchBarrier(s *ast.BranchStmt, loopDepth, switchDepth int) string {
 	return ""
 }
 
-func walkChildren(fset *token.FileSet, n ast.Node, loopDepth, switchDepth int, out *[]jumpBarrier) {
+func walkChildren(fset *token.FileSet, n ast.Node, loopDepth, switchDepth int, out *[]JumpBarrier) {
 	if n == nil {
 		return
 	}
@@ -146,8 +146,8 @@ func walkChildren(fset *token.FileSet, n ast.Node, loopDepth, switchDepth int, o
 	}
 }
 
-// directChildStmts returns the statement children of a node one level down,
-// so walkForBarriers can control loop/switch depth precisely instead of using
+// directChildStmts returns the statement children of a node one level down, so
+// walkForBarriers can control loop/switch depth precisely instead of using
 // ast.Inspect (which loses the nesting context).
 func directChildStmts(n ast.Node) []ast.Stmt {
 	var kids []ast.Stmt
@@ -164,12 +164,12 @@ func directChildStmts(n ast.Node) []ast.Stmt {
 	return kids
 }
 
-// jumpBarrierError formats the actionable message for improvement plan item 8.
-func jumpBarrierError(file string, startLine, endLine int, barriers []jumpBarrier) error {
+// jumpBarrierError formats the actionable message for a jump-barrier refusal.
+func jumpBarrierError(file string, startLine, endLine int, barriers []JumpBarrier) error {
 	kinds := make([]string, 0, len(barriers))
 	seen := map[string]bool{}
 	for _, b := range barriers {
-		label := fmt.Sprintf("%s (line %d)", b.kind, b.line)
+		label := fmt.Sprintf("%s (line %d)", b.Kind, b.Line)
 		if !seen[label] {
 			kinds = append(kinds, label)
 			seen[label] = true

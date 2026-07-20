@@ -48,7 +48,7 @@ func TestMCPToolsListSchema(t *testing.T) {
 	}
 
 	// Every allowlisted command must appear, and no mutator may leak.
-	for _, name := range mcpReadOnlyTools {
+	for _, name := range mcpReadOnlyTools() {
 		tool, ok := byName[name]
 		if !ok {
 			t.Errorf("tool %q missing from tools/list", name)

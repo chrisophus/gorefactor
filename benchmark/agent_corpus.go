@@ -21,7 +21,7 @@ type corpusOpts struct {
 	provider   string
 	model      string
 	models     string // comma-separated model sweep (overrides model when set)
-	modes      string // comma-separated harness-mode sweep: agentic|single-shot
+	modes      string // comma-separated harness-mode sweep (agentic only; kept for sweep cells)
 	budget     int
 	agentBin   string
 	verbose    bool
@@ -90,9 +90,6 @@ func runAgentTask(o corpusOpts, cell sweepCell, t agentTask) (taskResult, error)
 	}
 
 	args := []string{"-spec", t.Spec, "-provider", cell.provider, "-model", cell.model, "-dir", dir}
-	if cell.mode == "single-shot" {
-		args = append(args, "-single-shot")
-	}
 	if o.budget > 0 {
 		args = append(args, "-budget", fmt.Sprintf("%d", o.budget))
 	}

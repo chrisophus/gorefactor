@@ -11,9 +11,8 @@ import (
 // TestDocDrift_IterationDefaultsMatch pins the iteration-default claims in
 // README.md to the constants that implement them, in the same spirit as
 // cmd/gorefactor's TestDocDrift_RuleCountMatches: every count stated in prose
-// must be derivable from the code. README.md states the agentic default in two
-// places ("up to N iterations by default" and "N for agentic") and the
-// single-shot default once ("N for single-shot").
+// must be derivable from the code. README.md states the agentic default
+// ("up to N iterations by default" and "N for agentic").
 func TestDocDrift_IterationDefaultsMatch(t *testing.T) {
 	doc := readAgentReferenceDoc(t)
 	checks := []struct {
@@ -22,7 +21,6 @@ func TestDocDrift_IterationDefaultsMatch(t *testing.T) {
 	}{
 		{`up to (\d+) iterations by default`, maxToolCalls},
 		{`(\d+) for agentic`, maxToolCalls},
-		{`(\d+) for single-shot`, singleShotMaxIter},
 	}
 	for _, c := range checks {
 		re := regexp.MustCompile(c.pattern)

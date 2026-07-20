@@ -9,6 +9,7 @@ import (
 func init() {
 	registerCommand(Command{
 		Name:        "intent",
+		ReadOnly:    true,
 		Description: "Declare a deliberate API change so the doctor gate passes it: intent api-change <scope> <reason>. Scope is a package dir or symbol prefix (e.g. analyzer or analyzer.ComputeAPIDiff). [--list] [--clear]",
 		Usage:       "intent api-change <scope> <reason> | intent --list | intent --clear",
 		MinArgs:     0,

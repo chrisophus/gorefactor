@@ -11,6 +11,8 @@ var searchASTFlags = map[string]bool{"--json": false, "--in": true}
 func init() {
 	registerCommand(Command{
 		Name:        "search-ast",
+		ReadOnly:    true,
+		MCPTool:     true,
 		Description: "Structural search: match a Go statement/expression pattern, $_ is a wildcard [--in path] [--json]",
 		Usage:       "search-ast '<pattern>' [--in path] [--json]",
 		MinArgs:     1,
@@ -34,7 +36,7 @@ func searchASTCommand(args []string) error {
 	}
 
 	if flags["--json"] != "" {
-		emitJSON(map[string]interface{}{
+		emitEnvelope(true, "", map[string]interface{}{
 			"pattern": pattern,
 			"matches": matches,
 			"total":   len(matches),

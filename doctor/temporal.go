@@ -47,7 +47,8 @@ func (t Temporal) Run(ctx RunContext) ([]Finding, error) {
 		return nil, nil
 	}
 	if findings, ok, werr := runWorkflowcheck(ctx); ok {
-		return findings, werr
+		return findings, fmt.Errorf("workflowcheck: %w", werr)
+
 	}
 	return t.scanInProcess(ctx)
 }

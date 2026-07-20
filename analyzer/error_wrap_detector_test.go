@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"go/ast"
 	"os"
 	"path/filepath"
 	"testing"
@@ -82,5 +83,17 @@ func ReadFile(path string) ([]byte, error) {
 	}
 	if len(issues) != 1 {
 		t.Fatalf("expected 1 issue, got %d: %v", len(issues), issues)
+	}
+}
+func TestIsBareErrorIdent(t *testing.T) {
+	cases := map[string]bool{
+		"err": true, "e": true, "retErr": true, "cause": false,
+		"nil": false, "ErrSomething": false, "myError": true, "x": false,
+	}
+	for name, want := range cases {
+		got := isBareErrorIdent(&ast.Ident{Name: name})
+		if got != want {
+			t.Errorf("isBareErrorIdent(%q)=%v want %v", name, got, want)
+		}
 	}
 }

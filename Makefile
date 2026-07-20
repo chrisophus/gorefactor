@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt vet check clean install-tools help gate refactor refactor-campaign install
+.PHONY: build test lint fmt vet check clean install-tools help gate gate-self-clean refactor refactor-campaign install
 
 # Default target
 .DEFAULT_GOAL := help
@@ -53,6 +53,17 @@ gate: ## Doctor gate: build gorefactor, then lint + build + test (use as a commi
 	@# (e.g. a new lint rule baselining its backlog):
 	@#   BASELINE_GROWTH_OK=1 git commit ...
 	@test -n "$(BASELINE_GROWTH_OK)" || ./gorefactor lint . --baseline-ratchet HEAD
+
+
+# Sunset for non-empty baseline: 2026-10-19. Until then `make gate` allows a
+# shrinking baseline; `make gate-self-clean` is the aspirational bar (empty).
+BASELINE_SUNSET := 2026-10-19
+
+gate-self-clean: gate ## Fail unless the lint baseline is empty (self-clean release bar)
+	@test ! -f .gorefactor-lint-baseline.json && echo "$(GREEN)✓ no baseline (already self-clean)$(NC)" && exit 0; \
+	n=$$(python3 -c "import json; print(len(json.load(open('.gorefactor-lint-baseline.json')).get('issues',[])))"); \
+	if [ "$$n" -eq 0 ]; then echo "$(GREEN)✓ baseline empty (self-clean)$(NC)"; \
+	else echo "$(RED)✗ baseline has $$n entr(y/ies); self-clean bar not met (sunset $(BASELINE_SUNSET))$(NC)"; exit 1; fi
 
 refactor: ## Delegate a spec to gorefactor-agent, Haiku->Sonnet escalation. Usage: make refactor SPEC="..."
 	@go build -o gorefactor-agent ./cmd/gorefactor-agent

@@ -17,6 +17,7 @@ import (
 func init() {
 	registerCommand(Command{
 		Name:        "hoist-regexp",
+		Mutates:     true,
 		Description: "Hoist function-local regexp.MustCompile calls with constant patterns to package-level vars (the regexp-compile-in-func autofix). Optionally scoped to one function.",
 		Usage:       "hoist-regexp <file.go> [Func] [--json] [--dry-run] [--gate]",
 		MinArgs:     1,

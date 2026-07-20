@@ -54,7 +54,7 @@ Only use `Edit`/`Write` on `.go` files when:
 
 **High savings (use GoRefactor):**
 - Move method to new file: 99% savings (target by name, instant execution)
-- Rename variable: 99% savings (semantic find-replace)
+- Rename variable: 99% savings (go/types object-identity rewrite, unexported-only)
 - Delete unused function: 99% savings (just needs location)
 - Extract method: 95% savings (identify block, tool infers signature)
 - Batch refactoring (5 files): 80% savings (one plan, execute in parallel)
@@ -111,7 +111,7 @@ gorefactor replace-text <file> <Func> <old> <new>  # Replace text
 gorefactor replace-body <file> <Func> -    # Replace body
 gorefactor delete <file> <Func> --safe     # Delete with safety check
 gorefactor move <src> <Func> <dest>        # Move between files
-gorefactor rename <file> <old> <new>       # Rename symbol
+gorefactor rename <file> <old> <new>       # Rename unexported symbol (go/types object identity)
 gorefactor inline <file> <Func>            # Inline function
 gorefactor extract <file> <start> <end> <name>  # Extract block
 ```

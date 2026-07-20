@@ -116,37 +116,6 @@ func extractOldName(target *TargetSpecification) string {
 	return target.MethodName
 }
 
-func renameInFile(filename string, fileNode *ast.File, fset *token.FileSet, oldName, newName string, result *OperationResult) error {
-	changed := false
-	ast.Inspect(fileNode, func(n ast.Node) bool {
-		if ident, ok := n.(*ast.Ident); ok && ident.Name == oldName {
-			ident.Name = newName
-			changed = true
-		}
-		return true
-	})
-	if !changed {
-		return nil
-	}
-	var buf bytes.Buffer
-	if err := format.Node(&buf, fset, fileNode); err != nil {
-		return fmt.Errorf("failed to format %s: %w", filename, err)
-	}
-	normalized, nErr := format.Source(buf.Bytes())
-	if nErr != nil {
-		normalized = buf.Bytes()
-	}
-	if err := os.WriteFile(filename, normalized, 0644); err != nil {
-		return fmt.Errorf("failed to write %s: %w", filename, err)
-	}
-	result.Changes = append(result.Changes, &CodeChange{
-		Type:        "rename_declaration",
-		File:        filename,
-		Description: fmt.Sprintf("Renamed %q to %q in %s", oldName, newName, filename),
-	})
-	return nil
-}
-
 func appendDeclToFile(filePath, declCode, packageName string) error {
 	var content []byte
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {

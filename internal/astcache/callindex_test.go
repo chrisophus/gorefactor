@@ -1,8 +1,9 @@
-package main
+package astcache
 
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"sort"
 	"testing"
@@ -15,15 +16,12 @@ import (
 // cached builder must produce exactly the same defs and edges as a cold,
 // throwaway build over a real, multi-file package.
 func TestCallIndexCacheMatchesUncached(t *testing.T) {
-	files, err := collectGoFiles("../../analyzer", analyzer.DefaultWalkOptions())
-	if err != nil || len(files) == 0 {
-		t.Skipf("no analyzer sources to index: %v", err)
-	}
-	cached, err := buildCallIndex(files)
+	files := collectFiles(t, "../../analyzer")
+	cached, err := BuildCallIndex(files)
 	if err != nil {
 		t.Fatalf("cached build: %v", err)
 	}
-	cold, err := buildCallIndexUncached(files)
+	cold, err := BuildCallIndexUncached(files)
 	if err != nil {
 		t.Fatalf("uncached build: %v", err)
 	}
@@ -43,13 +41,13 @@ func TestParseCacheReusesUnchangedFiles(t *testing.T) {
 	b := writeTempGo(t, dir, "b.go", "package p\n\nfunc B() {}\n")
 	files := []string{a, b}
 
-	pc := newParseCache()
-	pc.load(files)
-	if got := pc.parseCount(); got != 2 {
+	pc := NewParseCache()
+	pc.Load(files)
+	if got := pc.ParseCount(); got != 2 {
 		t.Fatalf("cold load: want 2 parses, got %d", got)
 	}
-	pc.load(files)
-	if got := pc.parseCount(); got != 2 {
+	pc.Load(files)
+	if got := pc.ParseCount(); got != 2 {
 		t.Fatalf("warm load re-parsed unchanged files: parse count rose to %d", got)
 	}
 
@@ -60,8 +58,8 @@ func TestParseCacheReusesUnchangedFiles(t *testing.T) {
 	if err := os.Chtimes(a, future, future); err != nil {
 		t.Fatal(err)
 	}
-	pc.load(files)
-	if got := pc.parseCount(); got != 3 {
+	pc.Load(files)
+	if got := pc.ParseCount(); got != 3 {
 		t.Fatalf("after editing one file, want exactly 1 re-parse (total 3), got %d", got)
 	}
 }
@@ -73,13 +71,13 @@ func TestCallIndexCacheInvalidatesOnChange(t *testing.T) {
 	a := writeTempGo(t, dir, "a.go", "package p\n\nfunc A() { B() }\nfunc B() {}\nfunc C() {}\n")
 	files := []string{a}
 
-	pc := newParseCache()
-	cc := newCallIndexCache()
-	idx1, err := cc.buildWith(pc, files)
+	pc := NewParseCache()
+	cc := NewCallIndexCache()
+	idx1, err := cc.BuildWith(pc, files)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := cc.extractCount(); got != 1 {
+	if got := cc.ExtractCount(); got != 1 {
 		t.Fatalf("cold build: want 1 extraction, got %d", got)
 	}
 	edges1 := cgIndexEdges(idx1)
@@ -94,11 +92,11 @@ func TestCallIndexCacheInvalidatesOnChange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	idx2, err := cc.buildWith(pc, files)
+	idx2, err := cc.BuildWith(pc, files)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := cc.extractCount(); got != 2 {
+	if got := cc.ExtractCount(); got != 2 {
 		t.Fatalf("after edit: want 1 more extraction (total 2), got %d", got)
 	}
 	edges2 := cgIndexEdges(idx2)
@@ -107,7 +105,7 @@ func TestCallIndexCacheInvalidatesOnChange(t *testing.T) {
 	}
 
 	// Cached result must equal a fully cold rebuild of the new state.
-	cold, err := buildCallIndexUncached(files)
+	cold, err := BuildCallIndexUncached(files)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,11 +121,11 @@ func TestCallIndexCacheWarmSkipsExtraction(t *testing.T) {
 	a := writeTempGo(t, dir, "a.go", "package p\n\nfunc A() { B() }\nfunc B() {}\n")
 	files := []string{a}
 
-	pc := newParseCache()
-	cc := newCallIndexCache()
-	idx1, _ := cc.buildWith(pc, files)
-	idx2, _ := cc.buildWith(pc, files)
-	if got := cc.extractCount(); got != 1 {
+	pc := NewParseCache()
+	cc := NewCallIndexCache()
+	idx1, _ := cc.BuildWith(pc, files)
+	idx2, _ := cc.BuildWith(pc, files)
+	if got := cc.ExtractCount(); got != 1 {
 		t.Fatalf("warm rebuild re-extracted: extraction count is %d, want 1", got)
 	}
 	if !eqStrings(cgIndexEdges(idx1), cgIndexEdges(idx2)) {
@@ -139,10 +137,10 @@ func TestCallIndexCacheWarmSkipsExtraction(t *testing.T) {
 // (fresh caches) — the per-invocation cost a long-lived server pays without
 // Phase 2.
 func BenchmarkBuildCallIndexCold(b *testing.B) {
-	files := benchFiles(b, "../../analyzer")
+	files := collectFiles(b, "../../analyzer")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := buildCallIndexUncached(files); err != nil {
+		if _, err := BuildCallIndexUncached(files); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -151,14 +149,14 @@ func BenchmarkBuildCallIndexCold(b *testing.B) {
 // BenchmarkBuildCallIndexWarm reuses the process-global cache across iterations,
 // as the MCP server does — files are stat'd but never re-parsed or re-walked.
 func BenchmarkBuildCallIndexWarm(b *testing.B) {
-	files := benchFiles(b, "../../analyzer")
-	resetIndexCaches()
-	if _, err := buildCallIndex(files); err != nil { // prime
+	files := collectFiles(b, "../../analyzer")
+	ResetIndexCaches()
+	if _, err := BuildCallIndex(files); err != nil { // prime
 		b.Fatal(err)
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := buildCallIndex(files); err != nil {
+		if _, err := BuildCallIndex(files); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -167,12 +165,12 @@ func BenchmarkBuildCallIndexWarm(b *testing.B) {
 // BenchmarkFindCallersCold runs find-callers with a throwaway parse cache each
 // iteration (the cost without Phase 2).
 func BenchmarkFindCallersCold(b *testing.B) {
-	files := benchFiles(b, "../../analyzer")
+	files := collectFiles(b, "../../analyzer")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pc := newParseCache()
+		pc := NewParseCache()
 		ca := analyzer.NewCallAnalyzer(files)
-		ca.SeedASTs(pc.load(files))
+		ca.SeedASTs(pc.Load(files))
 		if _, err := ca.FindCallers("NewUseAnalyzer", ""); err != nil {
 			b.Fatal(err)
 		}
@@ -182,31 +180,51 @@ func BenchmarkFindCallersCold(b *testing.B) {
 // BenchmarkFindCallersWarm reuses the global parse cache, so the per-query work
 // is only definition/use collection over already-parsed ASTs.
 func BenchmarkFindCallersWarm(b *testing.B) {
-	files := benchFiles(b, "../../analyzer")
-	resetIndexCaches()
+	files := collectFiles(b, "../../analyzer")
+	ResetIndexCaches()
 	{
 		ca := analyzer.NewCallAnalyzer(files)
-		ca.SeedASTs(globalParseCache.load(files)) // prime
+		ca.SeedASTs(GlobalParseCache.Load(files)) // prime
 		_, _ = ca.FindCallers("NewUseAnalyzer", "")
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		ca := analyzer.NewCallAnalyzer(files)
-		ca.SeedASTs(globalParseCache.load(files))
+		ca.SeedASTs(GlobalParseCache.Load(files))
 		if _, err := ca.FindCallers("NewUseAnalyzer", ""); err != nil {
 			b.Fatal(err)
 		}
 	}
 }
 
+// collectFiles gathers the Go files under root using the analyzer's walker,
+// skipping the test when there is nothing to index.
+func collectFiles(tb testing.TB, root string) []string {
+	tb.Helper()
+	files, err := analyzer.WalkGoFiles(root, analyzer.DefaultWalkOptions())
+	if err != nil || len(files) == 0 {
+		tb.Skipf("no files under %s: %v", root, err)
+	}
+	return files
+}
+
+func writeTempGo(t *testing.T, dir, name, content string) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
 // cgIndexEdges renders an index's call edges as sorted "caller->callee" keys,
 // a representation that is independent of map order and pointer identity so two
 // indexes built different ways can be compared directly.
-func cgIndexEdges(idx *cgIndex) []string {
+func cgIndexEdges(idx *CgIndex) []string {
 	var out []string
-	for caller, callees := range idx.callees {
+	for caller, callees := range idx.Callees {
 		for _, c := range callees {
-			out = append(out, caller+"->"+c.key())
+			out = append(out, caller+"->"+c.Key())
 		}
 	}
 	sort.Strings(out)
@@ -214,10 +232,10 @@ func cgIndexEdges(idx *cgIndex) []string {
 }
 
 // cgIndexDefs renders an index's definitions as sorted "key@file:line" entries.
-func cgIndexDefs(idx *cgIndex) []string {
+func cgIndexDefs(idx *CgIndex) []string {
 	var out []string
-	for k, d := range idx.defs {
-		out = append(out, fmt.Sprintf("%s@%s:%d", k, d.file, d.line))
+	for k, d := range idx.Defs {
+		out = append(out, fmt.Sprintf("%s@%s:%d", k, d.File, d.Line))
 	}
 	sort.Strings(out)
 	return out
@@ -237,16 +255,4 @@ func eqStrings(a, b []string) bool {
 
 func contains(xs []string, want string) bool {
 	return slices.Contains(xs, want)
-
-}
-
-// --- Benchmarks: validate the cache actually saves work in server mode. ---
-
-func benchFiles(b *testing.B, root string) []string {
-	b.Helper()
-	files, err := collectGoFiles(root, analyzer.DefaultWalkOptions())
-	if err != nil || len(files) == 0 {
-		b.Skipf("no files under %s: %v", root, err)
-	}
-	return files
 }

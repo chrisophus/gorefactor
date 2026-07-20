@@ -93,7 +93,7 @@ func TestCommandMetadata_AllowlistsMatchGolden(t *testing.T) {
 		"extract", "format", "inline", "insert", "move", "rename", "replace",
 		"replace-body", "replace-text", "set-doc", "split",
 	}
-	wantIdempotent := []string{"format", "undo"}
+	wantIdempotent := []string{"format"}
 
 	assertNameSet(t, "mcp read-only tools", mcpReadOnlyTools(), wantReadOnly)
 	assertNameSet(t, "mcp write tools", mcpWriteTools(), wantWrite)

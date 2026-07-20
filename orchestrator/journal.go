@@ -5,8 +5,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
+
+// journalMu serializes journal file I/O and batch-mode state. The MCP server
+// and other long-lived hosts may invoke mutation tools concurrently; without
+// this lock, RecordOperation/UndoLast could interleave and corrupt journal.json
+// or fold unrelated operations into the same batch.
+var journalMu sync.Mutex
 
 // JournalFile records one file touched by a journaled operation.
 // Snapshot is the file name inside the operation's snapshot directory
@@ -29,18 +36,9 @@ type JournalEntry struct {
 
 // LoadJournal returns all journaled operations, oldest first.
 func LoadJournal() ([]JournalEntry, error) {
-	data, err := os.ReadFile(journalFilePath())
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("read file: %w", err)
-	}
-	var entries []JournalEntry
-	if err := json.Unmarshal(data, &entries); err != nil {
-		return nil, fmt.Errorf("corrupt journal %s: %w", journalFilePath(), err)
-	}
-	return entries, nil
+	journalMu.Lock()
+	defer journalMu.Unlock()
+	return loadJournal()
 }
 
 // RecordOperation snapshots the pre-mutation content of changed files and
@@ -51,6 +49,8 @@ func LoadJournal() ([]JournalEntry, error) {
 // into that batch instead — one journal entry is written for the whole batch
 // on Commit — and this returns (nil, nil).
 func RecordOperation(command, detail string, before map[string][]byte, created []string) (*JournalEntry, error) {
+	journalMu.Lock()
+	defer journalMu.Unlock()
 	if activeBatch != nil {
 		activeBatch.record(before, created)
 		return nil, nil
@@ -62,7 +62,9 @@ func RecordOperation(command, detail string, before map[string][]byte, created [
 // from the journal. It returns the undone entry and the number of files
 // restored or removed.
 func UndoLast() (*JournalEntry, int, error) {
-	entries, err := LoadJournal()
+	journalMu.Lock()
+	defer journalMu.Unlock()
+	entries, err := loadJournal()
 	if err != nil {
 		return nil, 0, fmt.Errorf("load journal: %w", err)
 	}
@@ -104,7 +106,9 @@ func UndoLast() (*JournalEntry, int, error) {
 // DropJournalEntry removes an entry (and its snapshots) without restoring
 // files. Used when the caller has already rolled back the operation.
 func DropJournalEntry(id string) error {
-	entries, err := LoadJournal()
+	journalMu.Lock()
+	defer journalMu.Unlock()
+	entries, err := loadJournal()
 	if err != nil {
 		return fmt.Errorf("load journal: %w", err)
 	}
@@ -119,10 +123,25 @@ func DropJournalEntry(id string) error {
 	return saveJournal(out)
 }
 
+func loadJournal() ([]JournalEntry, error) {
+	data, err := os.ReadFile(journalFilePath())
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read file: %w", err)
+	}
+	var entries []JournalEntry
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return nil, fmt.Errorf("corrupt journal %s: %w", journalFilePath(), err)
+	}
+	return entries, nil
+}
+
 // recordEntry writes a single journal entry unconditionally, ignoring any
 // active batch. It is the shared core of RecordOperation and Batch.Commit.
 func recordEntry(command, detail string, before map[string][]byte, created []string) (*JournalEntry, error) {
-	entries, err := LoadJournal()
+	entries, err := loadJournal()
 	if err != nil {
 		return nil, fmt.Errorf("load journal: %w", err)
 	}

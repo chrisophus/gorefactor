@@ -17,7 +17,7 @@ import (
 func findModuleInfo(dir string) (modPath, modRoot string, err error) {
 	d, err := filepath.Abs(dir)
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("abs: %w", err)
 	}
 	for {
 		data, rerr := os.ReadFile(filepath.Join(d, "go.mod"))

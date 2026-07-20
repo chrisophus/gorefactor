@@ -77,10 +77,10 @@ gorefactor lint . --fail-only      # Show only blocking (error-severity) issues
 gorefactor doctor                  # Lint + golangci-lint + build + test (final gate)
 ```
 
-The default rule set has 42 rules, grouped by concern (canonical list in `cmd/gorefactor/lint_registry_test.go`):
+The default rule set has 39 rules, grouped by concern (canonical list in `cmd/gorefactor/lint_registry_test.go`):
 
-- **Size & structure**: `file-size` (>500 lines, split hints by receiver/prefix), `long-function`, `deep-nesting`, `complexity` (cyclomatic), `extract-candidate`
-- **Duplication**: `duplicate-block` (>100-line clones with consolidation hints), `duplicate-bare-sentinel`
+- **Size & structure**: `file-size` (>500 lines, split hints by receiver/prefix), `deep-nesting`, `extract-candidate`. Function length and cyclomatic complexity are deliberately NOT gorefactor rules: golangci's `funlen`/`cyclop` (enabled in `.golangci.yml` at 75 lines / complexity 15) are the reporters — one engine per concern
+- **Duplication**: `duplicate-bare-sentinel`. Cross-file clone detection is golangci's `dupl`; `gorefactor doctor` additionally runs the cross-file duplicate check as its own stage
 - **Design smells**: `god-object`, `large-class`, `fat-interface`, `excessive-params`, `excessive-returns`, `data-clumps`, `type-switch`, `premature-abstraction`, `high-coupling`
 - **Error handling**: `error-not-wrapped` (bare `return err`), `if-err-log-return`, `wrap-log-return`, `wrap-bridge-log-return`
 - **Ordering**: `funcorder-constructor` (constructor must follow the struct, before its methods), `funcorder-struct-method` (exported methods before unexported), `funcorder-function` (exported top-level functions before unexported ones, excluding constructors and `init()`) — ports golangci-lint's `funcorder` default checks plus its opt-in `function` check
@@ -219,7 +219,7 @@ Methods use `Receiver:Method` (no `*` on the receiver). Many commands accept `-`
 
 | Command | Purpose |
 |---------|---------|
-| `lint` | 42 structural rules (size, duplication, smells, error handling, ordering, coverage, dead-code, arch); skips `vendor`/`.git`/`node_modules` and `*.gen.go`/`_gen.go`. `--fix` autofixes `file-size`, `dead-code`, `error-not-wrapped`, `complexity`, the log-propagation family, `funcorder-constructor`/`funcorder-struct-method`/`funcorder-function` (via `reorder-funcorder`) (add `--verify` to revert any fix that breaks build/test). `--fix-level aggressive` (requires `--fix --verify`) additionally autofixes `long-function`/`extract-candidate` by extraction, lifts return-bearing blocks, fixes non-adjacent log/return pairs, and deletes module-wide unreferenced exported functions. `--fail-only` shows blocking issues only |
+| `lint` | 39 structural rules (size, duplication, smells, error handling, ordering, coverage, dead-code, arch); skips `vendor`/`.git`/`node_modules` and `*.gen.go`/`_gen.go`. `--fix` autofixes `file-size`, `dead-code`, `error-not-wrapped`, the log-propagation family, `funcorder-constructor`/`funcorder-struct-method`/`funcorder-function` (via `reorder-funcorder`) (add `--verify` to revert any fix that breaks build/test). `--fix-level aggressive` (requires `--fix --verify`) additionally autofixes `extract-candidate` by extraction, lifts return-bearing blocks, fixes non-adjacent log/return pairs, and deletes module-wide unreferenced exported functions. `--fail-only` shows blocking issues only |
 | `doctor` | Lint + `go build` + `go test`; non-zero on failure. `--report` merges all substrates into one advisory report |
 | `adherence` | Harness self-audit: fraction of changed `.go` files edited via gorefactor vs raw Write/Edit |
 | `intent` | Declare a deliberate exported-API change so the apidiff gate passes it |

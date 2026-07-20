@@ -35,14 +35,14 @@ func architectCommand(args []string) error {
 
 	graph, err := analyzer.NewPackageGraph(root)
 	if err != nil {
-		return err
+		return fmt.Errorf("new package graph: %w", err)
 	}
 
 	var out io.Writer = os.Stdout
 	if outPath != "" {
 		f, err := os.Create(outPath)
 		if err != nil {
-			return err
+			return fmt.Errorf("create: %w", err)
 		}
 		defer f.Close()
 		out = f

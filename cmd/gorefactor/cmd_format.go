@@ -48,7 +48,7 @@ func formatCommand(args []string) error {
 				return nil
 			})
 			if err != nil {
-				return err
+				return fmt.Errorf("walk: %w", err)
 			}
 		} else if strings.HasSuffix(t, ".go") {
 			files = append(files, t)

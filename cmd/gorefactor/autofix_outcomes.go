@@ -140,7 +140,7 @@ func annotateIssuesWithOutcomes(root string, issues []lintIssue) {
 			}
 		case outcomeNoTarget:
 			switch issues[i].Rule {
-			case "long-function", "complexity", "extract-candidate":
+			case "extract-candidate":
 				issues[i].Note = "no mechanical extraction applies — needs restructuring, not extraction"
 			}
 		case outcomeVerified:

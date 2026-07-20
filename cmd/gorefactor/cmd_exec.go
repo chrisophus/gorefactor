@@ -40,7 +40,7 @@ func execOperation(args []string) error {
 	orch := orchestrator.NewOrchestrator()
 	result, err := orch.ExecuteOperations(ops)
 	if err != nil {
-		return err
+		return fmt.Errorf("execute operations: %w", err)
 	}
 
 	encoder := json.NewEncoder(os.Stdout)

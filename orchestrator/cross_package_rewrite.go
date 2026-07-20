@@ -34,7 +34,7 @@ func rewriteBareReferences(path, funcName, pkgName, importPath string) (bool, er
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("parse file: %w", err)
 	}
 	skip := nonReferenceIdents(node)
 	changed := false
@@ -82,7 +82,7 @@ func qualifyDeclCode(declCode, pkgName string, symbols []string) (string, error)
 	})
 	var buf bytes.Buffer
 	if err := format.Node(&buf, fset, node); err != nil {
-		return "", err
+		return "", fmt.Errorf("node: %w", err)
 	}
 	out := buf.String()
 	if idx := strings.Index(out, "\n"); idx >= 0 {
@@ -106,7 +106,7 @@ func addImportToFile(path, pkgName, importPath string) error {
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 	if err != nil {
-		return err
+		return fmt.Errorf("parse file: %w", err)
 	}
 	addImportSpec(fset, node, pkgName, importPath)
 	return writeFileAndImport(path, node, fset)
@@ -229,7 +229,7 @@ func dirImports(fset *token.FileSet, dir, pkgName, importPath string) bool {
 func importPathFor(modPath, modRoot, dir string) (string, error) {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("abs: %w", err)
 	}
 	rel, err := filepath.Rel(modRoot, abs)
 	if err != nil || strings.HasPrefix(rel, "..") {

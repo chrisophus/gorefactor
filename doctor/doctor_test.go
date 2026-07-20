@@ -74,7 +74,7 @@ func TestScoreWeightTiers(t *testing.T) {
 	}{
 		{"duplicate-block", SeverityWarning, 1},
 		{"error-not-wrapped", SeverityWarning, 1},
-		{"long-function", SeverityWarning, 0.5},
+		{"deep-nesting", SeverityWarning, 0.5},
 		{"excessive-params", SeverityInfo, 0.125},
 		{"funcorder-function", SeverityWarning, 0},
 		{"high-blast-radius", SeverityInfo, 0},
@@ -90,7 +90,7 @@ func TestScoreWeightTiers(t *testing.T) {
 	}
 
 	defect := &Report{Findings: []Finding{{Rule: "duplicate-block", Severity: SeverityWarning}}}
-	proxy := &Report{Findings: []Finding{{Rule: "long-function", Severity: SeverityWarning}}}
+	proxy := &Report{Findings: []Finding{{Rule: "deep-nesting", Severity: SeverityWarning}}}
 	defect.ComputeScore()
 	proxy.ComputeScore()
 	if !(*proxy.Score > *defect.Score) {

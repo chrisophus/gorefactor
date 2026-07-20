@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"sort"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -91,7 +92,7 @@ func mcpCommand(args []string) error {
 		// means every edit the server makes is reversible with a single
 		// `git reset --hard` (plus `git clean -fd`) back to this baseline.
 		if err := mcpRequireCleanWorktree("."); err != nil {
-			return err
+			return fmt.Errorf("mcp require clean worktree: %w", err)
 		}
 	}
 

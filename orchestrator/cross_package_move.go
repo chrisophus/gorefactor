@@ -37,10 +37,12 @@ func (mv *crossPackageMove) apply() error {
 	mv.srcNode.Decls = append(mv.srcNode.Decls[:declIndex], mv.srcNode.Decls[declIndex+1:]...)
 	mv.srcNode.Comments = remaining
 	if err := writeFileAndImport(mv.sourceFile, mv.srcNode, mv.fset); err != nil {
-		return err
+		return fmt.Errorf(
+
+			// Qualify references the moved code keeps into the source package.
+			"write file and import: %w", err)
 	}
 
-	// Qualify references the moved code keeps into the source package.
 	if len(mv.exportedRefs) > 0 {
 		declCode, err = qualifyDeclCode(declCode, mv.srcPkgName, mv.exportedRefs)
 		if err != nil {
@@ -50,17 +52,17 @@ func (mv *crossPackageMove) apply() error {
 
 	// Append to the destination with the destination's package name.
 	if err := appendDeclToFile(mv.destFile, declCode, mv.destPkgName); err != nil {
-		return err
+		return fmt.Errorf("append decl to file: %w", err)
 	}
 	if len(mv.exportedRefs) > 0 {
 		if err := addImportToFile(mv.destFile, mv.srcPkgName, mv.srcImport); err != nil {
-			return err
+			return fmt.Errorf("add import to file: %w", err)
 		}
 	}
 
 	rewritten, err := mv.rewriteCallSites()
 	if err != nil {
-		return err
+		return fmt.Errorf("rewrite call sites: %w", err)
 	}
 
 	mv.report = &CrossPackageMoveReport{
@@ -112,14 +114,14 @@ func (mv *crossPackageMove) rewriteQualifiedReferences(path string) (bool, error
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("parse file: %w", err)
 	}
 	srcAlias := importAlias(node, mv.srcImport, mv.srcPkgName)
 	destAlias := importAlias(node, mv.destImport, mv.destPkgName)
 
 	fileDir, err := filepath.Abs(filepath.Dir(path))
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("abs: %w", err)
 	}
 	inDestPackage := fileDir == mv.destDir && node.Name.Name == mv.destPkgName
 

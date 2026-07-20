@@ -70,11 +70,11 @@ func (o *Orchestrator) evaluateComplexityCondition(condition *Condition, operati
 	}
 	metrics, err := measureBlockMetrics(operation.File, target.StartLine, target.EndLine)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("measure block metrics: %w", err)
 	}
 	actual, err := metrics.property(condition.Property)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("property: %w", err)
 	}
 	expected, ok := toFloat(condition.Value)
 	if !ok {
@@ -136,7 +136,7 @@ func (o *Orchestrator) findDefaultTarget(filePath string) (*TargetLocation, erro
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse file: %w", err)
 	}
 
 	var firstFunc *ast.FuncDecl

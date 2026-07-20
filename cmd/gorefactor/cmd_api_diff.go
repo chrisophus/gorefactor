@@ -31,7 +31,7 @@ func apiDiffCommand(args []string) error {
 
 	res, err := analyzer.ComputeAPIDiff(".", ref)
 	if err != nil {
-		return err
+		return fmt.Errorf("compute apidiff: %w", err)
 	}
 	if flags["--json"] != "" {
 		emitJSON(res)
@@ -64,7 +64,7 @@ func printAPIDiff(res *analyzer.APIDiffResult) {
 func gitShowPrefix() (string, error) {
 	out, err := exec.Command("git", "rev-parse", "--show-prefix").Output()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("output: %w", err)
 	}
 	return strings.TrimSpace(string(out)), nil
 }

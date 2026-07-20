@@ -154,11 +154,11 @@ func entrySnapshotDir(id string) string {
 
 func saveJournal(entries []JournalEntry) error {
 	if err := os.MkdirAll(filepath.Dir(journalFilePath()), 0755); err != nil {
-		return err
+		return fmt.Errorf("mkdir all: %w", err)
 	}
 	data, err := json.MarshalIndent(entries, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal indent: %w", err)
 	}
 	return os.WriteFile(journalFilePath(), data, 0644)
 }

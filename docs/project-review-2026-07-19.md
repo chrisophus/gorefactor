@@ -394,3 +394,32 @@ speculative parts is to subject them to the same standard the project already ap
 findings: **execution results outrank static claims**. Measure campaign mode or cut it; implement
 semantic targeting or delete it; and let golangci do the linting it already does, so gorefactor's
 sensors can be the ones nobody else has.
+
+---
+
+## Execution log (2026-07-20)
+
+P0 and the rule diet were executed on this branch. Three decisions deviated from or refined the
+letter of the recommendations above, each on execution evidence, and are recorded here:
+
+- **`complexity`, `long-function`, `duplicate-block`: deleted as recommended.** golangci's
+  `cyclop`/`funlen`/`dupl` (already enabled, same thresholds) are the reporters. The extraction
+  capability survives via `extract-candidate` (aggressive, verify-gated) and
+  `recommend --reduce-length/--reduce-complexity`. Baseline: 79 → 38 entries.
+- **`funcorder-*`: kept, contra recommendation 7.** The bespoke detection is a faithful port of
+  upstream's checks (a trial run of upstream `funcorder` on this tree found zero findings our rules
+  missed — the tree is clean *because* our fused `reorder-funcorder` autofix keeps it so), and
+  upstream has no autofix. Enabling upstream alongside would create exactly the double-reporting
+  this diet removes. One-engine-per-concern is satisfied with gorefactor as that engine.
+- **`dead-code`: kept, contra recommendation 7.** Same fused-fixer logic: detection drives the
+  `delete --safe` autofix, campaign mode, and the outcome-journal demotion loop. `unused` remains
+  the stronger general detector (vars/consts/fields/types); the narrow double-report on unexported
+  functions is accepted until the doctor unification (recommendation 9) revisits it.
+- **`error-not-wrapped` → `wrapcheck`: measured, partially executed, enablement deferred.**
+  A trial run measured what the spelled-"err" detector misses: wrapcheck reports ~120 unwrapped
+  error returns on a tree our rule called clean. 27 were autofixed this wave via `wrap-errors`
+  (landed); 93 remain (80 excluding intra-module returns, which already carry engine context).
+  Enabling wrapcheck as a CI gate with 80 open findings would drown a review in churn, so the
+  enablement + remaining fixes + `error-not-wrapped` deletion are deferred to a dedicated wave;
+  until then the bespoke rule stays as the interim reporter. The numbers above are the wave's
+  starting ledger.

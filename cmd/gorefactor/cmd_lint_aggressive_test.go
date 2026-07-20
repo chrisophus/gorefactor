@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,36 +29,6 @@ func TestParseLintOptions_FixLevel(t *testing.T) {
 	}
 	if _, err := parseLintOptions([]string{"--fix", "--verify", "--fix-level", "bogus"}); err == nil {
 		t.Fatal("unknown fix level must be rejected")
-	}
-}
-
-// TestLongFunctionRule_AutoFixAggressiveOnly verifies the long-function
-// extraction autofix is attached only at the aggressive level (where it is
-// always verify-gated) and never at the safe level.
-func TestLongFunctionRule_AutoFixAggressiveOnly(t *testing.T) {
-	path := writeLongFunctionModule(t)
-
-	safe := (longFunctionRule{}).Run(LintContext{Files: []string{path}, FixLevel: fixLevelSafe})
-	if len(safe) == 0 {
-		t.Fatal("safe: expected a long-function issue")
-	}
-	for _, iss := range safe {
-		if iss.AutoFixCmd != "" || iss.AutoFix != "" {
-			t.Errorf("safe: long-function must not attach an autofix; got %q/%q", iss.AutoFix, iss.AutoFixCmd)
-		}
-	}
-
-	aggressive := (longFunctionRule{}).Run(LintContext{Files: []string{path}, FixLevel: fixLevelAggressive})
-	if len(aggressive) == 0 {
-		t.Fatal("aggressive: expected a long-function issue")
-	}
-	for _, iss := range aggressive {
-		if iss.AutoFixCmd == "" {
-			t.Errorf("aggressive: long-function must attach a --reduce-length autofix; got empty AutoFixCmd")
-		}
-		if !strings.Contains(iss.AutoFixCmd, "--reduce-length") {
-			t.Errorf("aggressive: autofix cmd %q should use --reduce-length", iss.AutoFixCmd)
-		}
 	}
 }
 
@@ -138,32 +107,6 @@ var _ = UsedExported()
 	}
 }
 
-// writeLongFunctionModule builds a module whose single function is over the
-// long-function threshold with one large self-contained block.
-func writeLongFunctionModule(t *testing.T) string {
-	t.Helper()
-	var b strings.Builder
-	b.WriteString("package lfmod\n\nfunc Big(xs []int) int {\n\ttotal := 0\n")
-	// A ~40-line self-contained block: declares its own accumulator and
-	// folds it into total via a single trailing assignment... kept simple:
-	// one big for block that only touches loop-locals and a slice it owns.
-	b.WriteString("\tout := make([]int, 0, len(xs))\n\tfor _, x := range xs {\n")
-	for i := 0; i < 40; i++ {
-		fmt.Fprintf(&b, "\t\tout = append(out, x+%d)\n", i)
-	}
-	b.WriteString("\t}\n")
-	for i := 0; i < 40; i++ {
-		fmt.Fprintf(&b, "\ttotal += %d\n", i)
-	}
-	b.WriteString("\ttotal += len(out)\n\treturn total\n}\n")
-
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module lfmod\n\ngo 1.24\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(dir, "big.go")
-	if err := os.WriteFile(path, []byte(strings.ReplaceAll(b.String(), " ", " ")), 0644); err != nil {
-		t.Fatal(err)
-	}
-	return path
-}
+// A ~40-line self-contained block: declares its own accumulator and
+// folds it into total via a single trailing assignment... kept simple:
+// one big for block that only touches loop-locals and a slice it owns.

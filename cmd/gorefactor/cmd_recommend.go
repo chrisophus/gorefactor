@@ -133,7 +133,7 @@ func recommendExtractions(
 
 	recommendations, err := analyzer.RecommendExtractions(args[0], functionName, config)
 	if err != nil {
-		return err
+		return fmt.Errorf("recommend extractions: %w", err)
 	}
 
 	if shortMode {

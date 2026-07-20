@@ -46,14 +46,14 @@ func initAgentRulesCommand(args []string) error {
 		}
 		for _, path := range paths {
 			if err := writeAgentRules(path); err != nil {
-				return err
+				return fmt.Errorf("write agent rules: %w", err)
 			}
 		}
 	}
 
 	if writeMCP {
 		if err := writeMCPClientConfig(mcpClientConfigPath); err != nil {
-			return err
+			return fmt.Errorf("write mcpclient config: %w", err)
 		}
 	}
 	return nil
@@ -91,11 +91,11 @@ func writeMCPClientConfig(path string) error {
 
 	out, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal indent: %w", err)
 	}
 	out = append(out, '\n')
 	if err := os.WriteFile(path, out, 0o644); err != nil {
-		return err
+		return fmt.Errorf("write file: %w", err)
 	}
 	fmt.Printf("%s: wrote gorefactor MCP server config\n", path)
 	return nil
@@ -132,7 +132,7 @@ func writeAgentRules(path string) error {
 		content = strings.TrimRight(string(existing), "\n") + "\n\n" + agentRulesTemplate
 	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		return err
+		return fmt.Errorf("write file: %w", err)
 	}
 	fmt.Printf("%s: wrote gorefactor agent-rules\n", path)
 	return nil

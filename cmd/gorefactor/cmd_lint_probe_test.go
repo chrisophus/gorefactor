@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -69,50 +68,10 @@ func TestProbeRecordsWouldRevert(t *testing.T) {
 	}
 }
 
-// The live no-target check annotates a long function the reducer cannot
-// help, and leaves one with a viable named block un-noted.
-func TestLongFunctionLiveNoTargetNote(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "f.go")
-	var b strings.Builder
-	b.WriteString("package p\n\nfunc straight(x int) int {\n")
-	for i := 0; i < 80; i++ {
-		b.WriteString("\tx += ")
-		b.WriteString(itoaFixture(i))
-		b.WriteString("\n")
-	}
-	b.WriteString("\treturn x\n}\n\nfunc withBlock(xs []int) int {\n\ttotal := 0\n")
-	for i := 0; i < 14; i++ {
-		b.WriteString("\t// accumulate positives\n\tfor _, x := range xs {\n\t\tif x > ")
-		b.WriteString(itoaFixture(i))
-		b.WriteString(" {\n\t\t\ttotal += x\n\t\t}\n\t}\n")
-	}
-	b.WriteString("\treturn total\n}\n")
-	writeFileT(t, path, b.String())
-
-	notes := map[string]string{}
-	var lRule longFunctionRule
-	for _, iss := range lRule.Run(LintContext{Root: dir, Files: []string{path}}) {
-		notes[strings.Fields(iss.Message)[0]] = iss.Note
-	}
-	if _, ok := notes["straight"]; !ok {
-		t.Fatal("straight must be flagged (80 logic lines)")
-	}
-	if !strings.Contains(notes["straight"], "restructuring") {
-		t.Errorf("straight note = %q, want no-target note (no extractable block)", notes["straight"])
-	}
-	if _, ok := notes["withBlock"]; !ok {
-		t.Fatal("withBlock must be flagged")
-	}
-	if notes["withBlock"] != "" {
-		t.Errorf("withBlock note = %q, want none (viable named extraction exists)", notes["withBlock"])
-	}
-}
-
 // A live note is not clobbered by a journal outcome for the same finding.
 func TestAnnotateDoesNotOverwriteLiveNote(t *testing.T) {
 	root := t.TempDir()
-	iss := lintIssue{File: "p/l.go", Rule: "long-function", Severity: "warning",
+	iss := lintIssue{File: "p/l.go", Rule: "extract-candidate", Severity: "warning",
 		Message: "f is 90 lines (threshold 75, line 1) — consider extracting", Note: "live note"}
 	appendAutofixOutcomes(root, []autofixOutcome{recordOutcome(iss, outcomeReverted, "x")})
 	issues := []lintIssue{iss}

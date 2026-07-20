@@ -25,13 +25,13 @@ func (h *CrossPackageOperationHandler) MoveAcrossPackages(sourceFile, destFile, 
 func (h *CrossPackageOperationHandler) moveAcrossPackages(sourceFile, destFile, funcName string) (*CrossPackageMoveReport, error) {
 	mv, err := h.planCrossPackageMove(sourceFile, destFile, funcName)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("plan cross package move: %w", err)
 	}
 	if err := mv.check(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("check: %w", err)
 	}
 	if err := mv.apply(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("apply: %w", err)
 	}
 	return mv.report, nil
 }
@@ -41,11 +41,11 @@ func (h *CrossPackageOperationHandler) moveAcrossPackages(sourceFile, destFile, 
 func (h *CrossPackageOperationHandler) planCrossPackageMove(sourceFile, destFile, funcName string) (*crossPackageMove, error) {
 	srcNode, err := h.parseSourceFile(sourceFile)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse source file: %w", err)
 	}
 	fn, _, err := h.findFunction(srcNode, funcName, sourceFile)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("find function: %w", err)
 	}
 	if fn.Recv != nil {
 		return nil, fmt.Errorf(
@@ -55,11 +55,11 @@ func (h *CrossPackageOperationHandler) planCrossPackageMove(sourceFile, destFile
 
 	srcDir, err := filepath.Abs(filepath.Dir(sourceFile))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("abs: %w", err)
 	}
 	destDir, err := filepath.Abs(filepath.Dir(destFile))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("abs: %w", err)
 	}
 
 	mv := &crossPackageMove{
@@ -76,7 +76,7 @@ func (h *CrossPackageOperationHandler) planCrossPackageMove(sourceFile, destFile
 
 	mv.destPkgName, err = detectPackageName(destFile)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("detect package name: %w", err)
 	}
 	if mv.destPkgName == mv.srcPkgName && srcDir == destDir {
 		return nil, fmt.Errorf("destination %s is in the same package as %s; use a plain move", destFile, sourceFile)
@@ -88,18 +88,18 @@ func (h *CrossPackageOperationHandler) planCrossPackageMove(sourceFile, destFile
 	}
 	mv.srcImport, err = importPathFor(modPath, modRoot, srcDir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("import path for: %w", err)
 	}
 	mv.destImport, err = importPathFor(modPath, modRoot, destDir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("import path for: %w", err)
 	}
 
 	if err := mv.analyzeMovedDeclRefs(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("analyze moved decl refs: %w", err)
 	}
 	if err := mv.findCallSites(modRoot); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("find call sites: %w", err)
 	}
 	mv.srcImportsDest = dirImports(mv.fset, srcDir, mv.srcPkgName, mv.destImport)
 	mv.destImportsSrc = dirImports(mv.fset, destDir, mv.destPkgName, mv.srcImport)
@@ -172,7 +172,7 @@ func (h *CrossPackageOperationHandler) parseDestinationFile(filePath string) (*a
 		if os.IsNotExist(err) {
 			return nil, ErrFileNotFound
 		}
-		return nil, err
+		return nil, fmt.Errorf("stat: %w", err)
 	}
 
 	return h.parseSourceFile(filePath)

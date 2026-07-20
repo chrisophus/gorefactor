@@ -60,7 +60,7 @@ func parseLintOptions(args []string) (lintOptions, error) {
 		n, ok, err := opts.parseFlagAt(args, i)
 
 		if err != nil {
-			return opts, err
+			return opts, fmt.Errorf("parse flag at: %w", err)
 		}
 		if ok {
 			i += n
@@ -81,7 +81,7 @@ func parseLintOptions(args []string) (lintOptions, error) {
 		return opts, fmt.Errorf("--baseline and --write-baseline are mutually exclusive (compare vs record)")
 	}
 	if err := opts.loadConfig(); err != nil {
-		return opts, err
+		return opts, fmt.Errorf("load config: %w", err)
 	}
 	return opts, nil
 
@@ -231,7 +231,7 @@ func (opts *lintOptions) parseConfigFlags(args []string, i int) (int, bool, erro
 func (opts *lintOptions) loadConfig() error {
 	cfg, err := config.Load(opts.configPath, opts.root)
 	if err != nil {
-		return err
+		return fmt.Errorf("load: %w", err)
 	}
 	opts.cfg = cfg
 	if cfg == nil {

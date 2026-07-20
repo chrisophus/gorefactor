@@ -47,11 +47,3 @@ func allTestLocations(locs []analyzer.Location) bool {
 	}
 	return len(locs) > 0
 }
-
-type duplicateRule struct{}
-
-func (duplicateRule) Name() string { return "duplicate-block" }
-
-func (r duplicateRule) Run(ctx LintContext) []lintIssue {
-	return checkDuplicates(ctx.Root, ctx.WalkOpts)
-}

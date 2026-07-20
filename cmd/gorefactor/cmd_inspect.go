@@ -33,11 +33,11 @@ func inspectCommand(args []string) error {
 
 	info, err := parser.ParseFile(file)
 	if err != nil {
-		return err
+		return fmt.Errorf("parse file: %w", err)
 	}
 	lines, err := fileLineCount(file)
 	if err != nil {
-		return err
+		return fmt.Errorf("file line count: %w", err)
 	}
 
 	fmt.Printf("File: %s\n", filepath.Clean(file))

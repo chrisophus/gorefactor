@@ -52,8 +52,8 @@ func TestAnnotateIssuesWithOutcomes(t *testing.T) {
 	root := t.TempDir()
 	dead := outcomeFixIssue("dead-code", "p/dead.go")
 	wrap := lintIssue{File: "p/w.go", Rule: "error-not-wrapped", Severity: "warning", Message: "bare err at line 9"}
-	long := lintIssue{File: "p/l.go", Rule: "long-function", Severity: "warning", Message: "f is 90 lines (threshold 75, line 1) — consider extracting"}
-	clean := lintIssue{File: "p/c.go", Rule: "duplicate-block", Severity: "warning", Message: "dup"}
+	long := lintIssue{File: "p/l.go", Rule: "extract-candidate", Severity: "warning", Message: "f is 90 lines (threshold 75, line 1) — consider extracting"}
+	clean := lintIssue{File: "p/c.go", Rule: "data-clumps", Severity: "warning", Message: "clump"}
 	appendAutofixOutcomes(root, []autofixOutcome{
 		recordOutcome(dead, outcomeReverted, "build broke"),
 		recordOutcome(wrap, outcomeReverted, "test broke"),
@@ -70,7 +70,7 @@ func TestAnnotateIssuesWithOutcomes(t *testing.T) {
 		t.Errorf("error-not-wrapped: severity=%q note=%q, want warning + contractual note", issues[1].Severity, issues[1].Note)
 	}
 	if !strings.Contains(issues[2].Note, "restructuring") {
-		t.Errorf("long-function note = %q, want needs-restructuring", issues[2].Note)
+		t.Errorf("extract-candidate note = %q, want needs-restructuring", issues[2].Note)
 	}
 	if issues[3].Note != "" || issues[3].Severity != "warning" {
 		t.Errorf("untouched issue changed: %+v", issues[3])

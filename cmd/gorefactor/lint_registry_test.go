@@ -11,8 +11,6 @@ func TestDefaultLintRules_ExpectedSet(t *testing.T) {
 	want := []string{
 		"file-size",
 		"extract-candidate",
-		"complexity",
-		"long-function",
 		"deep-nesting",
 		"error-not-wrapped",
 		"high-coupling",
@@ -37,7 +35,6 @@ func TestDefaultLintRules_ExpectedSet(t *testing.T) {
 		"large-class",
 		"data-clumps",
 		"type-switch",
-		"duplicate-block",
 		"dead-code",
 		"untested-package",
 		"untested-function",
@@ -94,10 +91,9 @@ func TestLintRules_RuleFieldMatchesName(t *testing.T) {
 func TestFixableRule_ExpectedSet(t *testing.T) {
 	want := map[string]bool{
 		"file-size": true,
-		// complexity extraction autofix stays disabled (unreliable). long-function's
-		// is aggressive-only + verify-gated now that the extractor handles
-		// return-lifting tails and type-switch bindings.
-		"long-function":           true,
+		// extract-candidate's extraction autofix is aggressive-only +
+		// verify-gated; funlen/cyclop (golangci) are the length/complexity
+		// reporters since the bespoke duplicates were deleted.
 		"extract-candidate":       true,
 		"dead-code":               true,
 		"error-not-wrapped":       true,

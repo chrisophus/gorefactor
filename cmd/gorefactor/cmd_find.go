@@ -27,13 +27,13 @@ func findCallersCommand(args []string) error {
 	name, recv := splitNameReceiver(target)
 	files, err := collectGoFiles(root, analyzer.DefaultWalkOptions())
 	if err != nil {
-		return err
+		return fmt.Errorf("collect go files: %w", err)
 	}
 	ca := analyzer.NewCallAnalyzer(files)
 	ca.SeedASTs(globalParseCache.load(files))
 	res, err := ca.FindCallers(name, recv)
 	if err != nil {
-		return err
+		return fmt.Errorf("find callers: %w", err)
 	}
 	if jsonOut {
 		return printJSON(res)
@@ -84,13 +84,13 @@ func findUsesCommand(args []string) error {
 	name, recv := splitNameReceiver(target)
 	files, err := collectGoFiles(root, analyzer.DefaultWalkOptions())
 	if err != nil {
-		return err
+		return fmt.Errorf("collect go files: %w", err)
 	}
 	ua := analyzer.NewUseAnalyzer(files)
 	ua.SeedASTs(globalParseCache.load(files))
 	uses, err := ua.FindAllUses(analyzer.SymbolQuery{Name: name, Receiver: recv})
 	if err != nil {
-		return err
+		return fmt.Errorf("find all uses: %w", err)
 	}
 	if jsonOut {
 		return printJSON(uses)
@@ -123,13 +123,13 @@ func findImplementationsCommand(args []string) error {
 	}
 	files, err := collectGoFiles(root, analyzer.DefaultWalkOptions())
 	if err != nil {
-		return err
+		return fmt.Errorf("collect go files: %w", err)
 	}
 	ia := analyzer.NewInterfaceAnalyzer(files)
 	ia.SeedASTs(globalParseCache.load(files))
 	res, err := ia.FindImplementations(target)
 	if err != nil {
-		return err
+		return fmt.Errorf("find implementations: %w", err)
 	}
 	if jsonOut {
 		return printJSON(res)

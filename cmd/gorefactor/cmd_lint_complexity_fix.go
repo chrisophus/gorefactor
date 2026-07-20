@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/chrisophus/gorefactor/analyzer"
 )
 
@@ -14,9 +16,12 @@ import (
 func reduceComplexityByExtraction(file, function string, threshold int, allowReturns bool) (int, error) {
 	res, err := analyzer.RecommendComplexityReduction(file, function, threshold)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf(
+
+			// Only extract blocks we can name meaningfully (see reduceLengthByExtraction).
+			"recommend complexity reduction: %w", err)
 	}
-	// Only extract blocks we can name meaningfully (see reduceLengthByExtraction).
+
 	var specs []extractionSpec
 	for _, e := range res.Extractions {
 		if analyzer.IsGeneratedFallbackName(e.Suggestion) {

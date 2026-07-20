@@ -137,7 +137,7 @@ func buildExtractedFunc(fset *token.FileSet, methodName string, stmts []ast.Stmt
 			body.WriteString("\n")
 		}
 		if err := printer.Fprint(&body, fset, stmt); err != nil {
-			return "", "", err
+			return "", "", fmt.Errorf("fprint: %w", err)
 		}
 	}
 	newFunc = buildExtractedFuncDecl(methodName, body.String(), params, returns)
@@ -212,7 +212,7 @@ func buildExtractedCallSite(methodName string, params, returns []paramSpec) stri
 func rewriteExtraction(filePath string, fset *token.FileSet, enclosing *ast.FuncDecl, stmts []ast.Stmt, newFunc, callSite string) error {
 	src, err := os.ReadFile(filePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("read file: %w", err)
 	}
 	startOff := fset.Position(stmts[0].Pos()).Offset
 	endOff := fset.Position(stmts[len(stmts)-1].End()).Offset
@@ -230,7 +230,7 @@ func rewriteExtraction(filePath string, fset *token.FileSet, enclosing *ast.Func
 	out.Write(src[encEndOff:])
 
 	if err := os.WriteFile(filePath, out.Bytes(), 0644); err != nil {
-		return err
+		return fmt.Errorf("write file: %w", err)
 	}
 	if err := orchestrator.FormatImports(filePath); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", filePath, err)

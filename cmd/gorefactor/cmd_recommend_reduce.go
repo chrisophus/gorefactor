@@ -7,6 +7,11 @@ import (
 	"github.com/chrisophus/gorefactor/analyzer"
 )
 
+// defaultComplexityThreshold is the cyclomatic-complexity ceiling recommend
+// --reduce-complexity targets by default (the same ceiling cyclop enforces in
+// CI).
+const defaultComplexityThreshold = 15
+
 // hasFlag reports whether flag appears anywhere in args.
 func hasFlag(args []string, flag string) bool {
 	return slices.Contains(args, flag)
@@ -20,7 +25,7 @@ func hasFlag(args []string, flag string) bool {
 func runReduceComplexity(args []string) error {
 	rf, err := parseReduceFlags(args, "--reduce-complexity", "--threshold", defaultComplexityThreshold)
 	if err != nil {
-		return err
+		return fmt.Errorf("parse reduce flags: %w", err)
 	}
 	if len(rf.positionals) < 2 {
 		return fmt.Errorf("usage: recommend --reduce-complexity <file> <Func> [--threshold N] [--json]")
@@ -31,7 +36,7 @@ func runReduceComplexity(args []string) error {
 	if rf.apply {
 		applied, err := reduceComplexityByExtraction(file, function, threshold, rf.allowReturns)
 		if err != nil {
-			return err
+			return fmt.Errorf("reduce complexity by extraction: %w", err)
 		}
 		if applied == 0 {
 			fmt.Printf("No blocks extracted from %s — complexity is concentrated in return-bearing branches the extract engine cannot lift.\n", function)
@@ -43,7 +48,7 @@ func runReduceComplexity(args []string) error {
 
 	res, err := analyzer.RecommendComplexityReduction(file, function, threshold)
 	if err != nil {
-		return err
+		return fmt.Errorf("recommend complexity reduction: %w", err)
 	}
 	if rf.jsonOut {
 		return printJSON(res)

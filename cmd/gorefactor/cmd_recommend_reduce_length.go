@@ -6,6 +6,11 @@ import (
 	"github.com/chrisophus/gorefactor/analyzer"
 )
 
+// longFunctionThreshold is the line count above which recommend
+// --reduce-length targets a function by default (the same default funlen
+// enforces in CI).
+const longFunctionThreshold = analyzer.DefaultLongFunctionLines
+
 // runReduceLength implements `gorefactor recommend --reduce-length <file>
 // <Func|Receiver:Method> [--max-lines N] [--json] [--apply [--allow-returns]]`
 // — the line-count analog of --reduce-complexity. It finds the minimum set of
@@ -14,7 +19,7 @@ import (
 func runReduceLength(args []string) error {
 	rf, err := parseReduceFlags(args, "--reduce-length", "--max-lines", longFunctionThreshold)
 	if err != nil {
-		return err
+		return fmt.Errorf("parse reduce flags: %w", err)
 	}
 	if len(rf.positionals) < 2 {
 		return fmt.Errorf("usage: recommend --reduce-length <file> <Func|Receiver:Method> [--max-lines N] [--json] [--apply [--allow-returns]]")
@@ -25,7 +30,7 @@ func runReduceLength(args []string) error {
 	if rf.apply {
 		applied, err := reduceLengthByExtraction(file, function, maxLines, rf.allowReturns)
 		if err != nil {
-			return err
+			return fmt.Errorf("reduce length by extraction: %w", err)
 		}
 		if applied == 0 {
 			fmt.Printf("No blocks extracted from %s — no top-level block the extract engine can lift.\n", function)
@@ -37,7 +42,7 @@ func runReduceLength(args []string) error {
 
 	res, err := analyzer.RecommendLengthReduction(file, function, maxLines)
 	if err != nil {
-		return err
+		return fmt.Errorf("recommend length reduction: %w", err)
 	}
 	if rf.jsonOut {
 		return printJSON(res)
@@ -65,11 +70,14 @@ func runReduceLength(args []string) error {
 func reduceLengthByExtraction(file, function string, maxLines int, allowReturns bool) (int, error) {
 	res, err := analyzer.RecommendLengthReduction(file, function, maxLines)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf(
+
+			// Only extract blocks we can name meaningfully. An unnameable block (the
+			// extractBlockL<line> fallback) is typically a guard clause; lifting it into
+			// a many-parameter helper reduces line count but hurts readability.
+			"recommend length reduction: %w", err)
 	}
-	// Only extract blocks we can name meaningfully. An unnameable block (the
-	// extractBlockL<line> fallback) is typically a guard clause; lifting it into
-	// a many-parameter helper reduces line count but hurts readability.
+
 	var specs []extractionSpec
 	for _, e := range res.Extractions {
 		if analyzer.IsGeneratedFallbackName(e.Suggestion) {

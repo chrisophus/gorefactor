@@ -75,7 +75,7 @@ func readContentArg(args []string, idx int) (string, error) {
 	}
 	b, err := io.ReadAll(os.Stdin)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("read all: %w", err)
 	}
 	return string(b), nil
 }
@@ -106,7 +106,7 @@ func createCommand(args []string) error {
 	path := pos[0]
 	content, err := readContentArg(pos, 1)
 	if err != nil {
-		return err
+		return fmt.Errorf("read content arg: %w", err)
 	}
 	m := &mutation{op: "create", file: path}
 	m.setCommonFlags(flags)

@@ -25,7 +25,7 @@ func historyCommand(args []string) error {
 	_, flags := parseFlags(args, historyFlags)
 	entries, err := orchestrator.LoadJournal()
 	if err != nil {
-		return err
+		return fmt.Errorf("load journal: %w", err)
 	}
 	if flags["--json"] != "" {
 		emitJSON(entries)

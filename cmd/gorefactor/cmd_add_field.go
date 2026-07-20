@@ -182,7 +182,7 @@ func rewritePositionalLiterals(lits []positionalLiteral, fieldNames []string) (i
 	for f, inserts := range byFile {
 		src, err := os.ReadFile(f)
 		if err != nil {
-			return count, err
+			return count, fmt.Errorf("read file: %w", err)
 		}
 		sort.Slice(inserts, func(i, j int) bool { return inserts[i].offset > inserts[j].offset })
 		out := src
@@ -197,7 +197,7 @@ func rewritePositionalLiterals(lits []positionalLiteral, fieldNames []string) (i
 			return count, parseErrorf("keyed-literal rewrite would produce a malformed file %s: %v", f, perr)
 		}
 		if err := os.WriteFile(f, out, 0644); err != nil {
-			return count, err
+			return count, fmt.Errorf("write file: %w", err)
 		}
 		if err := orchestrator.FormatImports(f); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", f, err)

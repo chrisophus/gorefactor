@@ -57,7 +57,7 @@ func applyTextEdits(edits []textEdit) error {
 		sort.Slice(list, func(i, j int) bool { return list[i].start > list[j].start })
 		src, err := os.ReadFile(file)
 		if err != nil {
-			return err
+			return fmt.Errorf("read file: %w", err)
 		}
 		for _, e := range list {
 			if e.start < 0 || e.end > len(src) || e.start > e.end {
@@ -70,7 +70,7 @@ func applyTextEdits(edits []textEdit) error {
 			return parseErrorf("internal: rewrite of %s does not parse, refusing to write: %v", file, perr)
 		}
 		if err := os.WriteFile(file, src, 0644); err != nil {
-			return err
+			return fmt.Errorf("write file: %w", err)
 		}
 		if err := orchestrator.FormatImports(file); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", file, err)

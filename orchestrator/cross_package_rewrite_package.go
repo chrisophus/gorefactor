@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -13,7 +14,7 @@ import (
 func packageGoFiles(dir string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read dir: %w", err)
 	}
 	var files []string
 	for _, e := range entries {
@@ -30,7 +31,7 @@ func packageGoFiles(dir string) ([]string, error) {
 func packageLevelSymbols(fset *token.FileSet, dir, pkgName string) (map[string]bool, error) {
 	files, err := packageGoFiles(dir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("package go files: %w", err)
 	}
 	symbols := map[string]bool{}
 	for _, path := range files {

@@ -358,8 +358,6 @@ func isTestFile(path string) bool {
 	return strings.HasSuffix(path, "_test.go")
 }
 
-const longFunctionTestFactor = 2
-
 type LintRule interface {
 	Name() string
 	Run(ctx LintContext) []lintIssue
@@ -374,8 +372,6 @@ func defaultLintRules() []LintRule {
 	rules := []LintRule{
 		fileSizeRule{},
 		extractableRule{},
-		complexityRule{},
-		longFunctionRule{},
 		deepNestingRule{},
 		errWrapRule{},
 		couplingRule{},
@@ -391,7 +387,6 @@ func defaultLintRules() []LintRule {
 	rules = append(rules, funcorderRules()...)
 	rules = append(rules, smellRules()...)
 	rules = append(rules,
-		duplicateRule{},
 		deadCodeRule{},
 		untestedPackageRule{},
 		untestedFunctionRule{},

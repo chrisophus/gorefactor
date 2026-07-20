@@ -45,8 +45,6 @@ const scoreProxyMultiplier = 0.5
 // code) shows up as the smaller win it is.
 var scoreProxyRules = map[string]bool{
 	"file-size":         true,
-	"long-function":     true,
-	"complexity":        true,
 	"deep-nesting":      true,
 	"god-object":        true,
 	"large-class":       true,

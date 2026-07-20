@@ -40,7 +40,7 @@ func enclosingResultTypes(fset *token.FileSet, fn *ast.FuncDecl) ([]string, erro
 	for _, f := range fn.Type.Results.List {
 		var buf bytes.Buffer
 		if err := printer.Fprint(&buf, fset, f.Type); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("fprint: %w", err)
 		}
 		n := len(f.Names)
 		if n == 0 {

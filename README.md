@@ -77,6 +77,40 @@ gorefactor lint . --fail-only      # Show only blocking (error-severity) issues
 gorefactor doctor                  # Lint + golangci-lint + build + test (final gate)
 ```
 
+**Rule tiers** (set in `.gorefactor.yaml` under `rules:`):
+
+| Tier | Role |
+|------|------|
+| `error` | Deterministic CI gate (`--fail-on error`, default) |
+| `warning` | Actionable debt; normally held by a committed baseline ratchet (`baseline.enabled: true`, `--fail-on warning`) |
+| `info` | Opt-in exploration (`--info`; hidden by default) |
+| `off` | Rule disabled |
+
+With `--quiet --fail-only`, lint exits silently when nothing reaches `--fail-on` — warnings and info below the gate are intentionally hidden.
+
+**Focused policy config** (optional YAML blocks):
+
+```yaml
+tracked_artifact:
+  allow_extensions: [.png, .ico, .tgz]
+  allow_path_prefixes: [docs/assets/, ui/vendor/]
+
+lint:
+  exclude_test_files: [error-not-wrapped]
+  exclude_packages:
+    high-coupling: [internal/domain, internal/wire]
+  thresholds:
+    high-coupling:
+      fan_in: 12
+      fan_out: 15
+
+baseline:
+  enabled: true
+  file: .gorefactor-lint-baseline.json
+```
+
+CLI baseline flags override YAML (`--baseline`, `--no-baseline`, `--baseline-file`). A future generalized per-rule policy DSL is deferred until multiple consumers need it — see `docs/project-review-2026-07-19.md` (P4).
+
 The default rule set has 42 rules, grouped by concern (canonical list in `cmd/gorefactor/lint_registry_test.go`):
 
 - **Size & structure**: `file-size` (>500 lines, split hints by receiver/prefix), `long-function`, `deep-nesting`, `complexity` (cyclomatic), `extract-candidate`

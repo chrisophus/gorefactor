@@ -41,6 +41,7 @@ type lintOptions struct {
 	writeBaseline      bool
 	baselineFile       string
 	baselineRatchetRef string
+	noBaseline         bool
 
 	// Hidden profiling flags (not advertised in help).
 	cpuProfile   string // --cpuprofile <path>: write a CPU profile of the rule phase
@@ -80,6 +81,9 @@ func parseLintOptions(args []string) (lintOptions, error) {
 	if opts.baseline && opts.writeBaseline {
 		return opts, fmt.Errorf("--baseline and --write-baseline are mutually exclusive (compare vs record)")
 	}
+	if opts.noBaseline && opts.baseline {
+		return opts, fmt.Errorf("--no-baseline and --baseline are mutually exclusive")
+	}
 	if err := opts.loadConfig(); err != nil {
 		return opts, err
 	}
@@ -106,6 +110,8 @@ func (opts *lintOptions) parseBaselineFlags(args []string, i int) (int, bool, er
 	switch args[i] {
 	case "--baseline":
 		opts.baseline = true
+	case "--no-baseline":
+		opts.noBaseline = true
 	case "--baseline-ratchet":
 		if i+1 >= len(args) {
 			return 0, true, fmt.Errorf("--baseline-ratchet requires a git ref")
@@ -243,7 +249,7 @@ func (opts *lintOptions) loadConfig() error {
 	}
 	// Item 6c: feed configured duplicate-ignore patterns to the analyzer.
 	analyzer.DuplicateIgnorePatterns = cfg.Lint.DuplicateIgnore
-	return nil
+	return cfg.ValidateKnownRules(knownLintRuleNames())
 }
 
 func filterLintRules(all []LintRule, opts lintOptions) []LintRule {

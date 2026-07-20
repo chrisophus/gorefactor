@@ -416,6 +416,14 @@ prove-or-cut experiments.
     `recommend` 0.7× negative result was caught *because* the project measures itself. Every new
     surface should ship with its ratio.
 
+### P4 — Generalized per-rule lint policy DSL (deferred)
+
+16. **Do not grow ad-hoc config keys forever.** The 2026-07 dogfood work added focused knobs
+    (`tracked_artifact`, `lint.exclude_test_files`, `lint.exclude_packages`,
+    `lint.thresholds.high-coupling`, `baseline.enabled/file`). When a second consumer needs path
+    globs, file-class exclusions, or rule-specific options, design a shared per-rule policy block
+    and migrate these keys rather than adding more one-offs.
+
 ### What to protect (explicitly not broken)
 
 - The dry-run sandbox design (`orchestrator/dry_run_execute.go`) — real executor in a temp copy,

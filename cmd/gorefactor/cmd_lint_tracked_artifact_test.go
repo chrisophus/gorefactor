@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/chrisophus/gorefactor/config"
 )
 
 func TestTrackedArtifact_FlagsBinariesAndCoverage(t *testing.T) {
@@ -35,6 +37,37 @@ func TestTrackedArtifact_FlagsBinariesAndCoverage(t *testing.T) {
 	}
 	if _, flagged := byFile["fixture"]; flagged {
 		t.Error("testdata binary fixture was flagged; testdata must be exempt")
+	}
+}
+
+func TestTrackedArtifact_AllowsConfiguredAssets(t *testing.T) {
+	binary := append([]byte("\x7fELF"), make([]byte, 64)...)
+	dir := initTestGitRepo(t, map[string][]byte{
+		"main.go":              []byte("package main\n"),
+		"docs/assets/logo.png": binary,
+		"ui/vendor/design.tgz": binary,
+		"bin/local-build":      binary,
+	})
+	cfgPath := filepath.Join(dir, ".gorefactor.yaml")
+	if err := os.WriteFile(cfgPath, []byte(`
+tracked_artifact:
+  allow_extensions: [.png, .tgz]
+  allow_path_prefixes: [docs/assets/, ui/vendor/]
+rules:
+  file-size: error
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(cfgPath, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issues := trackedArtifactRule{}.Run(LintContext{Root: dir, Config: cfg})
+	if len(issues) != 1 {
+		t.Fatalf("got %d issues, want 1 (local-build only): %+v", len(issues), issues)
+	}
+	if filepath.Base(issues[0].File) != "local-build" {
+		t.Fatalf("unexpected issue: %+v", issues[0])
 	}
 }
 

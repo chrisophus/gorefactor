@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/chrisophus/gorefactor/analyzer"
 	"gopkg.in/yaml.v3"
@@ -12,6 +13,9 @@ import (
 const (
 	defaultFileLengthSource = 500
 	defaultFileLengthTest   = 1000
+	defaultCouplingFanIn    = 8
+	defaultCouplingFanOut   = 10
+	defaultBaselineFile     = ".gorefactor-lint-baseline.json"
 )
 
 // Walk holds directory and file skip policy from YAML.
@@ -27,23 +31,48 @@ type Limits struct {
 	FileLengthTest   int `yaml:"file_length_test"`
 }
 
+// LintThresholds holds per-rule numeric thresholds from YAML.
+type LintThresholds struct {
+	FanIn  int `yaml:"fan_in"`
+	FanOut int `yaml:"fan_out"`
+}
+
 // Lint holds lint-specific tuning from YAML.
 type Lint struct {
 	// DuplicateIgnore lists normalized-code substring patterns excluded from
 	// duplicate-block detection, in addition to the built-in error idioms
 	// (improvement plan item 6c). e.g. "if err != nil", "t.Fatal".
-	DuplicateIgnore []string `yaml:"duplicate-ignore"`
+	DuplicateIgnore  []string                  `yaml:"duplicate-ignore"`
+	ExcludeTestFiles []string                  `yaml:"exclude_test_files"`
+	ExcludePackages  map[string][]string       `yaml:"exclude_packages"`
+	Thresholds       map[string]LintThresholds `yaml:"thresholds"`
+}
+
+// TrackedArtifact holds allowlists for the tracked-artifact rule.
+type TrackedArtifact struct {
+	AllowExtensions   []string `yaml:"allow_extensions"`
+	AllowPathPrefixes []string `yaml:"allow_path_prefixes"`
+}
+
+// Baseline holds committed baseline ratchet settings from YAML.
+type Baseline struct {
+	Enabled bool   `yaml:"enabled"`
+	File    string `yaml:"file"`
 }
 
 // File is the parsed gorefactor lint configuration file.
 type File struct {
-	Walk     Walk             `yaml:"walk"`
-	Limits   Limits           `yaml:"limits"`
-	Lint     Lint             `yaml:"lint"`
-	Rules    map[string]Tier  `yaml:"rules"`
-	Profiles map[string]Rules `yaml:"profiles"`
-	path     string
-	hasRules bool
+	Walk            Walk             `yaml:"walk"`
+	Limits          Limits           `yaml:"limits"`
+	Lint            Lint             `yaml:"lint"`
+	TrackedArtifact TrackedArtifact  `yaml:"tracked_artifact"`
+	Baseline        Baseline         `yaml:"baseline"`
+	Rules           map[string]Tier  `yaml:"rules"`
+	Profiles        map[string]Rules `yaml:"profiles"`
+	path            string
+	hasRules        bool
+	allowExtensions map[string]struct{}
+	allowPrefixes   []string
 }
 
 // Rules is a profile-specific rule tier map.
@@ -92,6 +121,7 @@ func normalizeFile(f *File) {
 			continue
 		}
 	}
+	f.normalizeTrackedArtifact()
 }
 
 func validateTier(name string, tier Tier) error {
@@ -162,6 +192,163 @@ func (f *File) RuleTier(name, profile string) (tier Tier, ok bool) {
 		}
 	}
 	return t, true
+}
+
+// NormalizeExtension lowercases and ensures a leading dot.
+func NormalizeExtension(ext string) string {
+	ext = strings.TrimSpace(ext)
+	if ext == "" {
+		return ""
+	}
+	ext = strings.ToLower(ext)
+	if !strings.HasPrefix(ext, ".") {
+		ext = "." + ext
+	}
+	return ext
+}
+
+// NormalizeRepoRelativePath normalizes a repo-relative path to slash form.
+func NormalizeRepoRelativePath(path string) string {
+	path = strings.TrimSpace(path)
+	path = filepath.ToSlash(path)
+	return strings.TrimPrefix(path, "./")
+}
+
+func (f *File) normalizeTrackedArtifact() {
+	if f == nil {
+		return
+	}
+	f.allowExtensions = make(map[string]struct{}, len(f.TrackedArtifact.AllowExtensions))
+	for _, ext := range f.TrackedArtifact.AllowExtensions {
+		if norm := NormalizeExtension(ext); norm != "" {
+			f.allowExtensions[norm] = struct{}{}
+		}
+	}
+	f.allowPrefixes = make([]string, 0, len(f.TrackedArtifact.AllowPathPrefixes))
+	for _, prefix := range f.TrackedArtifact.AllowPathPrefixes {
+		if norm := NormalizeRepoRelativePath(prefix); norm != "" {
+			f.allowPrefixes = append(f.allowPrefixes, norm)
+		}
+	}
+}
+
+// TrackedArtifactAllowed reports whether a tracked git path is exempt from the rule.
+func (f *File) TrackedArtifactAllowed(repoRelPath string) bool {
+	if f == nil {
+		return false
+	}
+	rel := NormalizeRepoRelativePath(repoRelPath)
+	if ext := NormalizeExtension(filepath.Ext(rel)); ext != "" {
+		if _, ok := f.allowExtensions[ext]; ok {
+			return true
+		}
+	}
+	for _, prefix := range f.allowPrefixes {
+		if rel == prefix || strings.HasPrefix(rel, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// CouplingThresholds returns fan-in and fan-out thresholds for high-coupling.
+func (f *File) CouplingThresholds() (fanIn, fanOut int) {
+	fanIn = defaultCouplingFanIn
+	fanOut = defaultCouplingFanOut
+	if f == nil {
+		return fanIn, fanOut
+	}
+	if th, ok := f.Lint.Thresholds["high-coupling"]; ok {
+		if th.FanIn > 0 {
+			fanIn = th.FanIn
+		}
+		if th.FanOut > 0 {
+			fanOut = th.FanOut
+		}
+	}
+	return fanIn, fanOut
+}
+
+// ExcludeTestFileRuleSet returns rules that skip _test.go files.
+func (f *File) ExcludeTestFileRuleSet() map[string]struct{} {
+	out := make(map[string]struct{})
+	if f == nil {
+		return out
+	}
+	for _, rule := range f.Lint.ExcludeTestFiles {
+		if rule = strings.TrimSpace(rule); rule != "" {
+			out[rule] = struct{}{}
+		}
+	}
+	return out
+}
+
+// ExcludedPackageSet returns excluded package paths for a rule.
+func (f *File) ExcludedPackageSet(rule string) map[string]struct{} {
+	out := make(map[string]struct{})
+	if f == nil || f.Lint.ExcludePackages == nil {
+		return out
+	}
+	for _, pkg := range f.Lint.ExcludePackages[rule] {
+		if norm := NormalizeRepoRelativePath(pkg); norm != "" {
+			out[norm] = struct{}{}
+		}
+	}
+	return out
+}
+
+// BaselineEnabled reports whether YAML enables baseline comparison.
+func (f *File) BaselineEnabled() bool {
+	return f != nil && f.Baseline.Enabled
+}
+
+// BaselineFile returns the configured baseline path or the default filename.
+func (f *File) BaselineFile() string {
+	if f == nil || strings.TrimSpace(f.Baseline.File) == "" {
+		return defaultBaselineFile
+	}
+	return strings.TrimSpace(f.Baseline.File)
+}
+
+// ValidateKnownRules rejects unknown rule names in policy sections.
+func (f *File) ValidateKnownRules(known map[string]struct{}) error {
+	if f == nil {
+		return nil
+	}
+	check := func(rule, section string) error {
+		if _, ok := known[rule]; !ok {
+			return fmt.Errorf("config %s: unknown rule %q", section, rule)
+		}
+		return nil
+	}
+	for _, rule := range f.Lint.ExcludeTestFiles {
+		if err := check(strings.TrimSpace(rule), "lint.exclude_test_files"); err != nil {
+			return err
+		}
+	}
+	for rule := range f.Lint.ExcludePackages {
+		if err := check(rule, "lint.exclude_packages"); err != nil {
+			return err
+		}
+	}
+	for rule := range f.Lint.Thresholds {
+		if err := check(rule, "lint.thresholds"); err != nil {
+			return err
+		}
+	}
+	for rule := range f.Rules {
+		if err := check(rule, "rules"); err != nil {
+			return err
+		}
+	}
+	for profile, rules := range f.Profiles {
+		for rule := range rules {
+			if err := check(rule, "profiles."+profile); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func discover(startDir string) (string, error) {

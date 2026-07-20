@@ -22,12 +22,12 @@ type TargetSpecification struct {
 	EndLine   *int `json:"endLine,omitempty"`
 
 	// Semantic targeting (resilient to code changes)
-	FunctionName      string   `json:"functionName,omitempty"`
-	MethodName        string   `json:"methodName,omitempty"`
-	ReceiverType      string   `json:"receiverType,omitempty"`
-	CodePattern       string   `json:"codePattern,omitempty"`
-	VariableNames     []string `json:"variableNames,omitempty"`
-	FunctionCalls     []string `json:"functionCalls,omitempty"`
+	FunctionName  string   `json:"functionName,omitempty"`
+	MethodName    string   `json:"methodName,omitempty"`
+	ReceiverType  string   `json:"receiverType,omitempty"`
+	CodePattern   string   `json:"codePattern,omitempty"`
+	VariableNames []string `json:"variableNames,omitempty"`
+	FunctionCalls []string `json:"functionCalls,omitempty"`
 
 	// Declaration-level targeting
 	TypeName  string `json:"typeName,omitempty"`  // For type declarations

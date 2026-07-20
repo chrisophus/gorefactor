@@ -3,6 +3,7 @@ package doctor
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -22,6 +23,7 @@ func TestToolBootstrapDisabled(t *testing.T) {
 }
 
 func TestFindGolangciLint_Cached(t *testing.T) {
+	withoutGolangciOnPath(t)
 	root := t.TempDir()
 	dest := cachedGolangciLintPath(root)
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
@@ -36,6 +38,7 @@ func TestFindGolangciLint_Cached(t *testing.T) {
 }
 
 func TestEnsureGolangciLint_BootstrapDisabled(t *testing.T) {
+	withoutGolangciOnPath(t)
 	root := t.TempDir()
 	t.Setenv(noToolBootstrapEnv, "1")
 	if _, err := EnsureGolangciLint(root); err == nil {
@@ -47,4 +50,27 @@ func TestProbeModuleOrPathTool_GoTool(t *testing.T) {
 	if err := probeModuleOrPathTool(".", "deadcode-not-installed-xyz", "deadcode"); err != nil {
 		t.Fatalf("expected go tool deadcode to be available: %v", err)
 	}
+}
+
+// withoutGolangciOnPath removes golangci-lint from PATH so toolresolve tests
+// exercise the module-local cache. CI installs golangci-lint onto PATH before
+// tests run, which would otherwise mask cache/bootstrap behavior.
+func withoutGolangciOnPath(t *testing.T) {
+	t.Helper()
+	path := os.Getenv("PATH")
+	var kept []string
+	sep := string(os.PathListSeparator)
+	for _, dir := range filepath.SplitList(path) {
+		if dir == "" {
+			continue
+		}
+		if isExecutable(filepath.Join(dir, "golangci-lint")) {
+			continue
+		}
+		kept = append(kept, dir)
+	}
+	if len(kept) == 0 {
+		kept = []string{t.TempDir()}
+	}
+	t.Setenv("PATH", strings.Join(kept, sep))
 }

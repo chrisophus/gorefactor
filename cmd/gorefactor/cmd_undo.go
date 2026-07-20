@@ -11,7 +11,7 @@ func init() {
 		Name:        "undo",
 		Mutates:     true,
 		MCPTool:     true,
-		Idempotent:  true,
+		Idempotent:  false,
 		Description: "Undo the most recent journaled mutation (restores files and pops the journal entry)",
 		Usage:       "undo",
 		MinArgs:     0,

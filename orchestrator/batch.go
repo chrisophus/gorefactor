@@ -11,6 +11,8 @@ import (
 // if a batch is already active — batches do not nest. Callers must pair it with
 // EndBatch (typically deferred).
 func BeginBatch() (*Batch, error) {
+	journalMu.Lock()
+	defer journalMu.Unlock()
 	if activeBatch != nil {
 		return nil, fmt.Errorf("a journal batch is already active")
 	}
@@ -59,6 +61,8 @@ func (b *Batch) Rollback() {
 // (bypassing the active-batch redirect) so it can run while the batch is still
 // active.
 func (b *Batch) Commit(command, detail string) (*JournalEntry, error) {
+	journalMu.Lock()
+	defer journalMu.Unlock()
 	created := make([]string, 0, len(b.created))
 	for p := range b.created {
 		created = append(created, p)
@@ -93,7 +97,11 @@ var activeBatch *Batch
 
 // EndBatch clears batch mode. Safe to defer and safe to call when no batch is
 // active.
-func EndBatch() { activeBatch = nil }
+func EndBatch() {
+	journalMu.Lock()
+	defer journalMu.Unlock()
+	activeBatch = nil
+}
 
 // canonicalPath resolves p to a cleaned absolute path so the same physical
 // file recorded under different spellings (e.g. a relative "a.go" from one

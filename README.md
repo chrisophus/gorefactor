@@ -21,8 +21,8 @@ See [CLAUDE.md](CLAUDE.md) for agent modes, developer workflow, and architectura
 
 ```bash
 # Pin to a release (recommended)
-go install github.com/chrisophus/gorefactor/cmd/gorefactor@v0.12.0
-go install github.com/chrisophus/gorefactor/cmd/gorefactor-agent@v0.12.0
+go install github.com/chrisophus/gorefactor/cmd/gorefactor@v0.13.0
+go install github.com/chrisophus/gorefactor/cmd/gorefactor-agent@v0.13.0
 
 # Or latest from main
 go install github.com/chrisophus/gorefactor/cmd/gorefactor@latest

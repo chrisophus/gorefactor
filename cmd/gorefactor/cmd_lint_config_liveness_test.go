@@ -56,6 +56,21 @@ func TestOrphanedConfigPath_UnwalkedDirsAreNotOrphans(t *testing.T) {
 	}
 }
 
+func TestOrphanedConfigPath_PrunesButRecognizesLiteralNodeModulesPath(t *testing.T) {
+	dir := writeLivenessFixture(t, map[string]string{
+		".golangci.yml": `version: "2"
+linters:
+  exclusions:
+    paths:
+      - ui/node_modules
+`,
+		"ui/node_modules/vendor/pkg.go": "package vendor\n",
+	})
+	if issues := (orphanedConfigPathRule{}).Run(LintContext{Root: dir}); len(issues) != 0 {
+		t.Fatalf("existing node_modules exemption flagged as orphaned: %+v", issues)
+	}
+}
+
 func TestOrphanedConfigPath_BaselineEntries(t *testing.T) {
 	baseline := `{"version":1,"issues":[
 		{"fingerprint":"a","file":"pkg/live.go","rule":"long-function","count":1},

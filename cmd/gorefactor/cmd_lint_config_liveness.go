@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -94,6 +95,9 @@ func golangciPathOrphans(root string, tree []string) []lintIssue {
 				break
 			}
 		}
+		if !alive && literalConfigPathExists(root, pat) {
+			alive = true
+		}
 		if !alive {
 			out = append(out, lintIssue{
 				File:     cfgPath,
@@ -105,6 +109,17 @@ func golangciPathOrphans(root string, tree []string) []lintIssue {
 		}
 	}
 	return out
+}
+
+// literalConfigPathExists handles exclusions for trees intentionally pruned by
+// listTreePaths, notably node_modules. Regex-shaped patterns still rely on the
+// tree scan; only a literal repository-relative path is safe to stat directly.
+func literalConfigPathExists(root, pattern string) bool {
+	if pattern == "" || strings.ContainsAny(pattern, `\.+*?()|[]{}^$`) {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(root, filepath.FromSlash(pattern)))
+	return err == nil
 }
 
 // baselinePathOrphans warns for every lint-baseline entry whose file no

@@ -75,63 +75,6 @@ type File struct {
 	allowPrefixes   []string
 }
 
-// Rules is a profile-specific rule tier map.
-type Rules map[string]Tier
-
-// Load reads config from path. When path is empty, discovers .gorefactor.yaml or gorefactor.yaml
-// starting at startDir (typically the lint root) and walking up to the module root.
-func Load(path, startDir string) (*File, error) {
-	if path == "" {
-		var err error
-		path, err = discover(startDir)
-		if err != nil {
-			return nil, fmt.Errorf("discover: %w", err)
-		}
-		if path == "" {
-			return nil, nil
-		}
-	}
-	data, err := os.ReadFile(path) // #nosec G304 -- explicit config path from user or discovery
-	if err != nil {
-		return nil, fmt.Errorf("read config %s: %w", path, err)
-	}
-	var f File
-	if err := yaml.Unmarshal(data, &f); err != nil {
-		return nil, fmt.Errorf("parse config %s: %w", path, err)
-	}
-	f.path = path
-	f.hasRules = len(f.Rules) > 0
-	normalizeFile(&f)
-	return &f, nil
-}
-
-func normalizeFile(f *File) {
-	if !f.Walk.SkipGeneratedGo && len(f.Walk.SkipDirSegments) == 0 && len(f.Walk.SkipFiles) == 0 {
-		f.Walk.SkipGeneratedGo = true
-	}
-	if f.Limits.FileLengthSource <= 0 {
-		f.Limits.FileLengthSource = defaultFileLengthSource
-	}
-	if f.Limits.FileLengthTest <= 0 {
-		f.Limits.FileLengthTest = defaultFileLengthTest
-	}
-	for name, tier := range f.Rules {
-		if err := validateTier(name, tier); err != nil {
-			// Should not happen if yaml unmarshals to Tier; kept for profile merge.
-			continue
-		}
-	}
-	f.normalizeTrackedArtifact()
-}
-
-func validateTier(name string, tier Tier) error {
-	if tier == "" {
-		return fmt.Errorf("rule %q: empty tier", name)
-	}
-	_, err := ParseTier(string(tier))
-	return err
-}
-
 // Path returns the loaded config file path, or empty when Load returned nil without error.
 func (f *File) Path() string {
 	if f == nil {
@@ -192,44 +135,6 @@ func (f *File) RuleTier(name, profile string) (tier Tier, ok bool) {
 		}
 	}
 	return t, true
-}
-
-// NormalizeExtension lowercases and ensures a leading dot.
-func NormalizeExtension(ext string) string {
-	ext = strings.TrimSpace(ext)
-	if ext == "" {
-		return ""
-	}
-	ext = strings.ToLower(ext)
-	if !strings.HasPrefix(ext, ".") {
-		ext = "." + ext
-	}
-	return ext
-}
-
-// NormalizeRepoRelativePath normalizes a repo-relative path to slash form.
-func NormalizeRepoRelativePath(path string) string {
-	path = strings.TrimSpace(path)
-	path = filepath.ToSlash(path)
-	return strings.TrimPrefix(path, "./")
-}
-
-func (f *File) normalizeTrackedArtifact() {
-	if f == nil {
-		return
-	}
-	f.allowExtensions = make(map[string]struct{}, len(f.TrackedArtifact.AllowExtensions))
-	for _, ext := range f.TrackedArtifact.AllowExtensions {
-		if norm := NormalizeExtension(ext); norm != "" {
-			f.allowExtensions[norm] = struct{}{}
-		}
-	}
-	f.allowPrefixes = make([]string, 0, len(f.TrackedArtifact.AllowPathPrefixes))
-	for _, prefix := range f.TrackedArtifact.AllowPathPrefixes {
-		if norm := NormalizeRepoRelativePath(prefix); norm != "" {
-			f.allowPrefixes = append(f.allowPrefixes, norm)
-		}
-	}
 }
 
 // TrackedArtifactAllowed reports whether a tracked git path is exempt from the rule.
@@ -323,32 +228,127 @@ func (f *File) ValidateKnownRules(known map[string]struct{}) error {
 	}
 	for _, rule := range f.Lint.ExcludeTestFiles {
 		if err := check(strings.TrimSpace(rule), "lint.exclude_test_files"); err != nil {
-			return err
+			return fmt.Errorf("validate lint policy: %w", err)
 		}
 	}
 	for rule := range f.Lint.ExcludePackages {
 		if err := check(rule, "lint.exclude_packages"); err != nil {
-			return err
+			return fmt.Errorf("validate lint policy: %w", err)
 		}
 	}
 	for rule := range f.Lint.Thresholds {
 		if err := check(rule, "lint.thresholds"); err != nil {
-			return err
+			return fmt.Errorf("validate lint policy: %w", err)
 		}
 	}
 	for rule := range f.Rules {
 		if err := check(rule, "rules"); err != nil {
-			return err
+			return fmt.Errorf("validate lint policy: %w", err)
 		}
 	}
 	for profile, rules := range f.Profiles {
 		for rule := range rules {
 			if err := check(rule, "profiles."+profile); err != nil {
-				return err
+				return fmt.Errorf("validate lint policy: %w", err)
 			}
 		}
 	}
 	return nil
+}
+
+func (f *File) normalizeTrackedArtifact() {
+	if f == nil {
+		return
+	}
+	f.allowExtensions = make(map[string]struct{}, len(f.TrackedArtifact.AllowExtensions))
+	for _, ext := range f.TrackedArtifact.AllowExtensions {
+		if norm := NormalizeExtension(ext); norm != "" {
+			f.allowExtensions[norm] = struct{}{}
+		}
+	}
+	f.allowPrefixes = make([]string, 0, len(f.TrackedArtifact.AllowPathPrefixes))
+	for _, prefix := range f.TrackedArtifact.AllowPathPrefixes {
+		if norm := NormalizeRepoRelativePath(prefix); norm != "" {
+			f.allowPrefixes = append(f.allowPrefixes, norm)
+		}
+	}
+}
+
+// Rules is a profile-specific rule tier map.
+type Rules map[string]Tier
+
+// Load reads config from path. When path is empty, discovers .gorefactor.yaml or gorefactor.yaml
+// starting at startDir (typically the lint root) and walking up to the module root.
+func Load(path, startDir string) (*File, error) {
+	if path == "" {
+		var err error
+		path, err = discover(startDir)
+		if err != nil {
+			return nil, fmt.Errorf("discover: %w", err)
+		}
+		if path == "" {
+			return nil, nil
+		}
+	}
+	data, err := os.ReadFile(path) // #nosec G304 -- explicit config path from user or discovery
+	if err != nil {
+		return nil, fmt.Errorf("read config %s: %w", path, err)
+	}
+	var f File
+	if err := yaml.Unmarshal(data, &f); err != nil {
+		return nil, fmt.Errorf("parse config %s: %w", path, err)
+	}
+	f.path = path
+	f.hasRules = len(f.Rules) > 0
+	normalizeFile(&f)
+	return &f, nil
+}
+
+// NormalizeExtension lowercases and ensures a leading dot.
+func NormalizeExtension(ext string) string {
+	ext = strings.TrimSpace(ext)
+	if ext == "" {
+		return ""
+	}
+	ext = strings.ToLower(ext)
+	if !strings.HasPrefix(ext, ".") {
+		ext = "." + ext
+	}
+	return ext
+}
+
+// NormalizeRepoRelativePath normalizes a repo-relative path to slash form.
+func NormalizeRepoRelativePath(path string) string {
+	path = strings.TrimSpace(path)
+	path = filepath.ToSlash(path)
+	return strings.TrimPrefix(path, "./")
+}
+
+func normalizeFile(f *File) {
+	if !f.Walk.SkipGeneratedGo && len(f.Walk.SkipDirSegments) == 0 && len(f.Walk.SkipFiles) == 0 {
+		f.Walk.SkipGeneratedGo = true
+	}
+	if f.Limits.FileLengthSource <= 0 {
+		f.Limits.FileLengthSource = defaultFileLengthSource
+	}
+	if f.Limits.FileLengthTest <= 0 {
+		f.Limits.FileLengthTest = defaultFileLengthTest
+	}
+	for name, tier := range f.Rules {
+		if err := validateTier(name, tier); err != nil {
+			// Should not happen if yaml unmarshals to Tier; kept for profile merge.
+			continue
+		}
+	}
+	f.normalizeTrackedArtifact()
+}
+
+func validateTier(name string, tier Tier) error {
+	if tier == "" {
+		return fmt.Errorf("rule %q: empty tier", name)
+	}
+	_, err := ParseTier(string(tier))
+	return err
 }
 
 func discover(startDir string) (string, error) {

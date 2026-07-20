@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-07-20
+
+### Added
+- **Importable refactor engines** — `refactor/extract`, `refactor/changesig`, and
+  `internal/astcache` (plus shared `internal/goload`, `internal/cerr`); CLI
+  commands are thin wrappers so MCP and library consumers need not import
+  `package main`.
+- **Types-aware `rename`** — rewrites identifiers by `go/types` object identity
+  across package files; shadowing locals and same-named fields are left alone.
+- **New lint sensors** — `test-only-live`, `advertised-but-unwired`, `god-package`,
+  and (from the P0 harness wave) `tracked-artifact` plus strengthened
+  `stranded-comment` / config-liveness checks.
+- **Command I/O metadata** — `ReadOnly` / `Mutates` / `Idempotent` / `MCPTool` /
+  `TxnSafe` on `Command`; MCP and `txn` allowlists are derived from metadata
+  instead of hand-synced slices.
+- **`make gate-self-clean`** — aspirational release bar for an empty lint
+  baseline (sunset **2026-10-19**); default `make gate` keeps the one-way ratchet.
+- **Doctor tool auto-provision** — bootstraps golangci-lint (into
+  `.gorefactor/tools/`), and uses `go tool` for deadcode/govulncheck when declared
+  in `go.mod` (`GOREFACTOR_NO_TOOL_BOOTSTRAP` to opt out).
+- **Campaign cost-of-pass** — junior Haiku vs frontier Sonnet matrix published in
+  `benchmark/FINDINGS.md` (keep campaign/agentic as headline agent surface).
+
+### Changed
+- **Doctor gate** — structural stage runs the full lint registry (same family as
+  `doctor --report`), not the legacy 3-check subset.
+- **One mutation path** — journal is the sole undo system; plan snapshots,
+  `SkipSnapshot`, and package-global `activeTxn` are removed; `orchestrator.Batch`
+  folds `txn` into the journal.
+- **`gorefactor-agent` campaign-or-cut** — `-single-shot` and `-interactive`
+  removed; triage, default agentic tool-calling, and `-campaign` remain.
+- **Go toolchain** — `go 1.26.5`.
+- **Doctor score** — size-normalized proxy tier, partial credit for threshold
+  proxies, data-clumps carrier false-positive fix.
+- **Lint diet** — keep autofix-backed gorefactor rules (`funcorder-*`,
+  `error-not-wrapped`, `complexity` / `long-function` with extract paths);
+  disable overlapping golangci `cyclop` / `funlen` / `dupl`.
+- **Phantom targeting retired** — unused `TargetSpecification` fields and example
+  plan references removed.
+
+### Fixed
+- **`doctor` temporal substrate** — do not wrap a nil workflowcheck error on
+  success.
+- **`undo` MCP hint** — marked non-idempotent so retries cannot pop multiple
+  journal entries.
+- **Journal concurrency** — serialize journal/batch I/O for concurrent MCP tool
+  calls.
+- **CI toolresolve tests** — isolate PATH so module-local golangci cache is
+  exercised when CI installs golangci-lint globally.
+- **`--fail-on warning`** — info-tier findings no longer fail the gate.
+
 ## [0.11.1] - 2026-07-17
 
 ### Fixed

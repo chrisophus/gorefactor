@@ -28,18 +28,11 @@ type TargetSpecification struct {
 	CodePattern       string   `json:"codePattern,omitempty"`
 	VariableNames     []string `json:"variableNames,omitempty"`
 	FunctionCalls     []string `json:"functionCalls,omitempty"`
-	ControlStructures []string `json:"controlStructures,omitempty"`
-	Comments          []string `json:"comments,omitempty"`
 
 	// Declaration-level targeting
 	TypeName  string `json:"typeName,omitempty"`  // For type declarations
 	ConstName string `json:"constName,omitempty"` // For const declarations
 	VarName   string `json:"varName,omitempty"`   // For var declarations
-
-	// Context-based targeting
-	BeforePattern   string            `json:"beforePattern,omitempty"`
-	AfterPattern    string            `json:"afterPattern,omitempty"`
-	SurroundingCode map[string]string `json:"surroundingCode,omitempty"`
 }
 
 // Condition represents a condition that must be met for the operation.

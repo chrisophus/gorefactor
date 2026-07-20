@@ -11,9 +11,7 @@
       "file": "api/handlers.go",
       "target": {
         "functionName": "handleRequest",
-        "codePattern": "if err != nil {",
-        "controlStructures": ["if", "return"],
-        "comments": ["TODO: Extract error handling"]
+        "codePattern": "if err != nil {"
       },
       "parameters": {
         "methodName": "handleError"

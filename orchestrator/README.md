@@ -153,21 +153,6 @@ Edit one of the generated templates or create your own JSON file:
 **Pros**: Finds code by function calls
 **Cons**: Function calls must be distinctive
 
-### 7. Context-based Targeting
-
-```json
-{
-  "target": {
-    "functionName": "HandleRequest",
-    "beforePattern": "log.Info(",
-    "afterPattern": "return response"
-  }
-}
-```
-
-**Pros**: Uses surrounding context
-**Cons**: Requires stable surrounding code
-
 ## Fallback Strategies
 
 ### Skip Operation
@@ -429,8 +414,7 @@ Always test your plans on sample code before running them on production code.
       "file": "api/handlers.go",
       "target": {
         "functionName": "handleRequest",
-        "codePattern": "if err != nil {",
-        "controlStructures": ["if", "return"]
+        "codePattern": "if err != nil {"
       },
       "parameters": {
         "methodName": "handleError"

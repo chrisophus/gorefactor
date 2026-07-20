@@ -89,13 +89,6 @@ type TargetSpecification struct {
     CodePattern       string
     VariableNames     []string
     FunctionCalls     []string
-    ControlStructures []string
-    Comments          []string
-    
-    // Context-based
-    BeforePattern     string
-    AfterPattern      string
-    SurroundingCode   map[string]string
 }
 ```
 

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Focused lint policy config** — `tracked_artifact` allowlists, `lint.exclude_test_files`,
+  `lint.exclude_packages`, `lint.thresholds.high-coupling`, and `baseline.enabled/file` in
+  `.gorefactor.yaml`; `--no-baseline` CLI override.
+- **Lint policy filter** — excluded findings are removed before severity remapping and baseline
+  comparison.
+
+### Changed
+- **Tier contract documented** — error = CI gate, warning = baselined debt, info = opt-in
+  (`README.md`, `config/tier.go`).
+
 ## [0.12.0] - 2026-07-20
 
 ### Added

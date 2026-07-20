@@ -146,10 +146,18 @@ func filterAgainstBaseline(issues []lintIssue, baseline map[string]int) []lintIs
 }
 
 // baselineFilePath resolves the baseline path for this run: an explicit
-// --baseline-file wins, otherwise the default at the lint root.
+// --baseline-file wins, otherwise config baseline.file, otherwise the default
+// at the lint root.
 func (opts lintOptions) baselineFilePath() string {
 	if opts.baselineFile != "" {
-		return opts.baselineFile
+		if filepath.IsAbs(opts.baselineFile) {
+			return opts.baselineFile
+		}
+		return filepath.Join(opts.root, opts.baselineFile)
 	}
-	return filepath.Join(opts.root, defaultBaselinePath)
+	file := defaultBaselinePath
+	if opts.cfg != nil {
+		file = opts.cfg.BaselineFile()
+	}
+	return filepath.Join(opts.root, file)
 }

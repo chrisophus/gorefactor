@@ -12,6 +12,15 @@ const (
 	defaultFanInThreshold  = 8
 )
 
+func couplingThresholds(ctx LintContext) (fanIn, fanOut int) {
+	fanIn = defaultFanInThreshold
+	fanOut = defaultFanOutThreshold
+	if ctx.Config != nil {
+		fanIn, fanOut = ctx.Config.CouplingThresholds()
+	}
+	return fanIn, fanOut
+}
+
 type couplingRule struct{}
 
 func (couplingRule) Name() string { return "high-coupling" }
@@ -49,6 +58,8 @@ func (r couplingRule) Run(ctx LintContext) []lintIssue {
 		}
 	}
 
+	fanInThreshold, fanOutThreshold := couplingThresholds(ctx)
+
 	var out []lintIssue
 	for _, p := range pkgs {
 		fanOut := 0
@@ -57,25 +68,25 @@ func (r couplingRule) Run(ctx LintContext) []lintIssue {
 				fanOut++
 			}
 		}
-		if fanOut > defaultFanOutThreshold {
+		if fanOut > fanOutThreshold {
 			out = append(out, lintIssue{
 				File:     p.Dir,
 				Rule:     "high-coupling",
 				Severity: "warning",
 				Message: fmt.Sprintf(
 					"package %s has fan-out %d (threshold %d) — depends on too many local packages; consider consolidating or inverting dependencies",
-					p.Path, fanOut, defaultFanOutThreshold,
+					p.Path, fanOut, fanOutThreshold,
 				),
 			})
 		}
-		if fanIn[p.Path] > defaultFanInThreshold {
+		if fanIn[p.Path] > fanInThreshold {
 			out = append(out, lintIssue{
 				File:     p.Dir,
 				Rule:     "high-coupling",
 				Severity: "info",
 				Message: fmt.Sprintf(
 					"package %s has fan-in %d (threshold %d) — many local packages depend on it; high blast radius for changes",
-					p.Path, fanIn[p.Path], defaultFanInThreshold,
+					p.Path, fanIn[p.Path], fanInThreshold,
 				),
 			})
 		}

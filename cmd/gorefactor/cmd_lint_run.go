@@ -29,6 +29,7 @@ func lintCommand(args []string) error {
 
 	rules := filterLintRules(defaultLintRules(), opts)
 	issues := runLintRules(rules, ctx, opts)
+	issues = filterIssuesByLintPolicy(issues, ctx)
 	issues = applyConfigSeverity(issues, opts)
 	sortLintIssues(issues)
 
@@ -131,7 +132,7 @@ func lintApplyBaselineMode(issues []lintIssue, opts lintOptions) ([]lintIssue, b
 		}
 		return issues, true, nil
 	}
-	if opts.baseline {
+	if opts.baselineCompareEnabled() {
 		base, err := loadBaseline(opts.baselineFilePath())
 		if err != nil {
 			return issues, false, err
@@ -144,6 +145,19 @@ func lintApplyBaselineMode(issues []lintIssue, opts lintOptions) ([]lintIssue, b
 		}
 	}
 	return issues, false, nil
+}
+
+func (opts lintOptions) baselineCompareEnabled() bool {
+	if opts.noBaseline {
+		return false
+	}
+	if opts.baseline {
+		return true
+	}
+	if opts.cfg != nil {
+		return opts.cfg.BaselineEnabled()
+	}
+	return false
 }
 
 func lintOutputJSON(outputIssues, issues []lintIssue, opts lintOptions, shouldFail bool) error {

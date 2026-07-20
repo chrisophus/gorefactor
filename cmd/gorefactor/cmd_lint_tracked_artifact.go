@@ -35,7 +35,7 @@ func (r trackedArtifactRule) Run(ctx LintContext) []lintIssue {
 	}
 	var issues []lintIssue
 	for _, rel := range strings.Split(string(out), "\x00") {
-		if rel == "" || underTestdata(rel) {
+		if rel == "" || underTestdata(rel) || trackedArtifactExempt(ctx, rel) {
 			continue
 		}
 		full := filepath.Join(root, rel)
@@ -69,6 +69,10 @@ func (r trackedArtifactRule) Run(ctx LintContext) []lintIssue {
 func underTestdata(rel string) bool {
 	rel = filepath.ToSlash(rel)
 	return strings.HasPrefix(rel, "testdata/") || strings.Contains(rel, "/testdata/")
+}
+
+func trackedArtifactExempt(ctx LintContext, repoRel string) bool {
+	return ctx.Config != nil && ctx.Config.TrackedArtifactAllowed(repoRel)
 }
 
 // isCoverageArtifact matches the generated coverage outputs Go tooling

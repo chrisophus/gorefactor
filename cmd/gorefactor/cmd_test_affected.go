@@ -16,6 +16,8 @@ var testAffectedFlags = map[string]bool{"--json": false, "--run": false, "--base
 func init() {
 	registerCommand(Command{
 		Name:        "test-affected",
+		ReadOnly:    true,
+		MCPTool:     true,
 		Description: "Map changed files (vs git base, default HEAD) to transitively affected packages and their tests [--run] [--json]",
 		Usage:       "test-affected [--run] [--base ref] [--json]",
 		MinArgs:     0,

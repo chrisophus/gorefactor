@@ -12,6 +12,10 @@ import (
 func init() {
 	registerCommand(Command{
 		Name:        "format",
+		Mutates:     true,
+		MCPTool:     true,
+		TxnSafe:     true,
+		Idempotent:  true,
 		Description: "Format Go files (gofmt + goimports) in-place; pass dir/file paths or default '.'",
 		Usage:       "format [path ...]",
 		MinArgs:     0,

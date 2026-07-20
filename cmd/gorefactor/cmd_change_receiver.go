@@ -19,6 +19,9 @@ var changeReceiverFlags = mutFlagSpec(map[string]bool{
 func init() {
 	registerCommand(Command{
 		Name:        "change-receiver",
+		Mutates:     true,
+		MCPTool:     true,
+		TxnSafe:     true,
 		Description: "Switch a method's receiver between value and pointer form",
 		Usage:       "change-receiver <file> <Type:Method> --pointer|--value [--json] [--dry-run] [--gate]",
 		MinArgs:     2,

@@ -22,24 +22,17 @@ type TargetSpecification struct {
 	EndLine   *int `json:"endLine,omitempty"`
 
 	// Semantic targeting (resilient to code changes)
-	FunctionName      string   `json:"functionName,omitempty"`
-	MethodName        string   `json:"methodName,omitempty"`
-	ReceiverType      string   `json:"receiverType,omitempty"`
-	CodePattern       string   `json:"codePattern,omitempty"`
-	VariableNames     []string `json:"variableNames,omitempty"`
-	FunctionCalls     []string `json:"functionCalls,omitempty"`
-	ControlStructures []string `json:"controlStructures,omitempty"`
-	Comments          []string `json:"comments,omitempty"`
+	FunctionName  string   `json:"functionName,omitempty"`
+	MethodName    string   `json:"methodName,omitempty"`
+	ReceiverType  string   `json:"receiverType,omitempty"`
+	CodePattern   string   `json:"codePattern,omitempty"`
+	VariableNames []string `json:"variableNames,omitempty"`
+	FunctionCalls []string `json:"functionCalls,omitempty"`
 
 	// Declaration-level targeting
 	TypeName  string `json:"typeName,omitempty"`  // For type declarations
 	ConstName string `json:"constName,omitempty"` // For const declarations
 	VarName   string `json:"varName,omitempty"`   // For var declarations
-
-	// Context-based targeting
-	BeforePattern   string            `json:"beforePattern,omitempty"`
-	AfterPattern    string            `json:"afterPattern,omitempty"`
-	SurroundingCode map[string]string `json:"surroundingCode,omitempty"`
 }
 
 // Condition represents a condition that must be met for the operation.
@@ -114,7 +107,4 @@ type ExecutionStatistics struct {
 // Orchestrator manages the execution of refactoring plans.
 type Orchestrator struct {
 	plans map[string]*RefactoringPlan
-	// SkipSnapshot disables the per-plan snapshot in ExecutePlan. Set by
-	// callers (e.g. direct CLI mutations) that journal snapshots themselves.
-	SkipSnapshot bool
 }

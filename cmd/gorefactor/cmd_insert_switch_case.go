@@ -16,6 +16,7 @@ var insertSwitchCaseFlags = mutFlagSpec(nil)
 func init() {
 	registerCommand(Command{
 		Name:        "insert-switch-case",
+		Mutates:     true,
 		Description: "Add a case to the switch statement inside a function (before default, else at end)",
 		Usage:       "insert-switch-case <file> <Func|Receiver:Method> <case-expr> [body|-] [--json] [--dry-run] [--gate]",
 		MinArgs:     3,

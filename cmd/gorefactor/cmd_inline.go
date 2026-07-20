@@ -16,6 +16,9 @@ var inlineFlags = mutFlagSpec(nil)
 func init() {
 	registerCommand(Command{
 		Name:        "inline",
+		Mutates:     true,
+		MCPTool:     true,
+		TxnSafe:     true,
 		Description: "Inline a simple function into its call sites and delete it (refuses anything complex)",
 		Usage:       "inline <file> <Func> [--json] [--dry-run] [--gate]",
 		MinArgs:     2,

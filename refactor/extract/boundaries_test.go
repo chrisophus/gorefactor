@@ -1,4 +1,4 @@
-package main
+package extract
 
 import (
 	"go/ast"
@@ -23,8 +23,8 @@ func run(items []int) int {
 	fset, fd := parseFuncBody(t, src, "run")
 	// The if-block containing the continue targets the enclosing for-loop.
 	ifStmt := fd.Body.List[1].(*ast.RangeStmt).Body.List[0]
-	barriers := findJumpBarriers(fset, []ast.Stmt{ifStmt})
-	if len(barriers) != 1 || barriers[0].kind != "continue" {
+	barriers := FindJumpBarriers(fset, []ast.Stmt{ifStmt})
+	if len(barriers) != 1 || barriers[0].Kind != "continue" {
 		t.Fatalf("expected one continue barrier, got %+v", barriers)
 	}
 }
@@ -44,7 +44,7 @@ func run(items []int) int {
 	fset, fd := parseFuncBody(t, src, "run")
 	// The whole for-loop captures its own continue — extracting it is safe.
 	forStmt := fd.Body.List[1]
-	if barriers := findJumpBarriers(fset, []ast.Stmt{forStmt}); len(barriers) != 0 {
+	if barriers := FindJumpBarriers(fset, []ast.Stmt{forStmt}); len(barriers) != 0 {
 		t.Fatalf("self-contained loop should have no barriers, got %+v", barriers)
 	}
 }
@@ -60,9 +60,9 @@ func run() {
 	fset, fd := parseFuncBody(t, src, "run")
 	// Request a line inside the body; expect the overlapping statement's span.
 	bLine := fset.Position(fd.Body.List[1].Pos()).Line
-	rStart, rEnd, count, ok := nearestStatementRange(fset, fd, bLine, bLine)
+	rStart, rEnd, count, ok := NearestStatementRange(fset, fd, bLine, bLine)
 	if !ok || count != 1 || rStart != bLine || rEnd != bLine {
-		t.Fatalf("nearestStatementRange = (%d,%d,%d,%v)", rStart, rEnd, count, ok)
+		t.Fatalf("NearestStatementRange = (%d,%d,%d,%v)", rStart, rEnd, count, ok)
 	}
 }
 
@@ -74,12 +74,12 @@ func run() {
 }`
 	fset, fd := parseFuncBody(t, src, "run")
 	// One statement extracted from a requested 10-line range → warn.
-	w := smallExtractionWarning(fset, "helper", fd.Body.List[:1], 3, 12)
+	w := SmallExtractionWarning(fset, "helper", fd.Body.List[:1], 3, 12)
 	if !strings.Contains(w, "Warning") {
 		t.Fatalf("expected small-extraction warning, got %q", w)
 	}
 	// Two statements over a tight range → no warning.
-	if w := smallExtractionWarning(fset, "helper", fd.Body.List, 3, 4); w != "" {
+	if w := SmallExtractionWarning(fset, "helper", fd.Body.List, 3, 4); w != "" {
 		t.Fatalf("expected no warning, got %q", w)
 	}
 }

@@ -7,7 +7,6 @@ import (
 	goparser "go/parser"
 	"go/token"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -37,9 +36,31 @@ func printJSON(v any) error {
 	return enc.Encode(v)
 }
 
+// emitJSON writes v as indented JSON to stdout. An encode failure is surfaced
+// on stderr rather than silently swallowed, so a broken --json payload is
+// visible instead of producing empty output that looks like success.
 func emitJSON(v interface{}) {
-	_ = printJSON(v)
+	if err := printJSON(v); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to encode JSON output: %v\n", err)
+	}
+}
 
+// jsonEnvelope is the shared top-level frame for structured command output
+// (P2 "one I/O contract"): a boolean ok, an optional error message, and the
+// command-specific payload under data. New commands should emit structured
+// results through emitEnvelope so consumers get one predictable shape; the
+// pre-existing bespoke shapes (mutationResult, txnResult, and the analysis
+// commands) are retained for backward compatibility.
+type jsonEnvelope struct {
+	OK    bool   `json:"ok"`
+	Error string `json:"error,omitempty"`
+	Data  any    `json:"data,omitempty"`
+}
+
+// emitEnvelope writes a jsonEnvelope to stdout. It is the single entry point
+// for the shared {ok, error, data} contract.
+func emitEnvelope(ok bool, errMsg string, data any) {
+	emitJSON(jsonEnvelope{OK: ok, Error: errMsg, Data: data})
 }
 
 // mutation runs a mutating command with universal snapshot/journal support,
@@ -183,15 +204,14 @@ func recordUndoToken(changed []string, before map[string][]byte, m *mutation, de
 				createdOnly = append(createdOnly, f)
 			}
 		}
-		if activeTxn != nil {
-			activeTxn.record(beforeChanged, createdOnly)
-		} else {
-			entry, jerr := orchestrator.RecordOperation(m.op, detail, beforeChanged, createdOnly)
-			if jerr != nil {
-				fmt.Fprintf(os.Stderr, "warning: journal write failed: %v\n", jerr)
-			} else {
-				undoToken = entry.ID
-			}
+		// RecordOperation folds into the active journal batch when one exists
+		// (inside `txn`), otherwise writes a standalone entry. Either way this
+		// is the single journal/undo path.
+		entry, jerr := orchestrator.RecordOperation(m.op, detail, beforeChanged, createdOnly)
+		if jerr != nil {
+			fmt.Fprintf(os.Stderr, "warning: journal write failed: %v\n", jerr)
+		} else if entry != nil {
+			undoToken = entry.ID
 		}
 	}
 	return undoToken
@@ -254,10 +274,8 @@ func buildAffectedPackages(changed []string) error {
 	}
 	sort.Strings(sorted)
 	for _, dir := range sorted {
-		cmd := exec.Command("go", "build", ".")
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("go build %s:\n%s", dir, strings.TrimSpace(string(out)))
+		if _, err := goGate(dir, "build", "."); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -293,7 +311,6 @@ func runPlanOps(name string, ops []*orchestrator.RefactoringOperation) error {
 		Operations: ops,
 	}
 	orch := orchestrator.NewOrchestrator()
-	orch.SkipSnapshot = true
 	if err := orch.RegisterPlan(plan); err != nil {
 		return err
 	}

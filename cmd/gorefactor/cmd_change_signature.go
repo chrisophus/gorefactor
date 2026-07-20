@@ -1,15 +1,11 @@
 package main
 
 import (
-	"go/ast"
 	"go/token"
-	"go/types"
-	"path/filepath"
 	"strconv"
 	"strings"
 
-	"github.com/chrisophus/gorefactor/orchestrator"
-	"golang.org/x/tools/go/packages"
+	"github.com/chrisophus/gorefactor/refactor/changesig"
 )
 
 var changeSignatureFlags = mutFlagSpec(map[string]bool{
@@ -25,6 +21,9 @@ var changeSignatureFlags = mutFlagSpec(map[string]bool{
 func init() {
 	registerCommand(Command{
 		Name:        "change-signature",
+		Mutates:     true,
+		MCPTool:     true,
+		TxnSafe:     true,
 		Description: "Change a function/method signature and update all call sites (add/remove/rename a parameter)",
 		Usage:       `change-signature <file> <Func|Receiver:Method> (--add-param "name type" [--position N] [--call-value EXPR] | --remove-param <name|index> | --rename-param <old> <new>) [--json] [--dry-run] [--gate]`,
 		MinArgs:     2,
@@ -34,26 +33,17 @@ func init() {
 	})
 }
 
-// sigAction is the parsed --add-param/--remove-param/--rename-param request.
-type sigAction struct {
-	kind      string // "add" | "remove" | "rename"
-	paramName string
-	paramType string
-	position  int // -1 = append at end
-	callValue string
-	removeRef string // name or 0-based index
-	oldName   string
-	newName   string
-}
-
-func parseSignatureAction(flags map[string]string, pos []string) (*sigAction, error) {
+// parseSignatureAction turns the parsed flags into a changesig.Action. Flag
+// parsing (and its usage errors) stay in the CLI; the engine consumes the
+// resulting Action.
+func parseSignatureAction(flags map[string]string, pos []string) (*changesig.Action, error) {
 	if flags["--reorder-params"] != "" {
 		return nil, usageErrorf("--reorder-params is not supported (out of scope for change-signature)")
 	}
 	if flags["--change-returns"] != "" {
 		return nil, usageErrorf("--change-returns is not supported (out of scope for change-signature)")
 	}
-	a := &sigAction{position: -1}
+	a := &changesig.Action{Position: -1}
 	count := 0
 	if v := flags["--add-param"]; v != "" {
 		count++
@@ -63,8 +53,8 @@ func parseSignatureAction(flags map[string]string, pos []string) (*sigAction, er
 	}
 	if v := flags["--remove-param"]; v != "" {
 		count++
-		a.kind = "remove"
-		a.removeRef = v
+		a.Kind = "remove"
+		a.RemoveRef = v
 	}
 	if v := flags["--rename-param"]; v != "" {
 		count++
@@ -79,25 +69,24 @@ func parseSignatureAction(flags map[string]string, pos []string) (*sigAction, er
 		return nil, err
 	}
 	return a, nil
-
 }
 
-func parseSigAddParam(a *sigAction, v string) error {
-	a.kind = "add"
+func parseSigAddParam(a *changesig.Action, v string) error {
+	a.Kind = "add"
 	fields := strings.Fields(v)
 	if len(fields) < 2 {
 		return usageErrorf(`--add-param wants "name type" (e.g. --add-param "ctx context.Context")`)
 	}
-	a.paramName = fields[0]
-	a.paramType = strings.Join(fields[1:], " ")
-	if !token.IsIdentifier(a.paramName) {
-		return usageErrorf("invalid parameter name %q", a.paramName)
+	a.ParamName = fields[0]
+	a.ParamType = strings.Join(fields[1:], " ")
+	if !token.IsIdentifier(a.ParamName) {
+		return usageErrorf("invalid parameter name %q", a.ParamName)
 	}
 	return nil
 }
 
-func parseSigRenameParam(a *sigAction, v string, pos []string) error {
-	a.kind = "rename"
+func parseSigRenameParam(a *changesig.Action, v string, pos []string) error {
+	a.Kind = "rename"
 	old, newName := v, ""
 	for _, sep := range []string{"=", ",", " "} {
 		if i := strings.Index(v, sep); i >= 0 {
@@ -114,26 +103,26 @@ func parseSigRenameParam(a *sigAction, v string, pos []string) error {
 	if !token.IsIdentifier(newName) {
 		return usageErrorf("invalid parameter name %q", newName)
 	}
-	a.oldName, a.newName = strings.TrimSpace(old), strings.TrimSpace(newName)
+	a.OldName, a.NewName = strings.TrimSpace(old), strings.TrimSpace(newName)
 	return nil
 }
 
-func parseSigActionModifiers(a *sigAction, flags map[string]string) error {
+func parseSigActionModifiers(a *changesig.Action, flags map[string]string) error {
 	if v, ok := flags["--position"]; ok {
-		if a.kind != "add" {
+		if a.Kind != "add" {
 			return usageErrorf("--position only applies to --add-param")
 		}
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 0 {
 			return usageErrorf("--position wants a non-negative integer, got %q", v)
 		}
-		a.position = n
+		a.Position = n
 	}
 	if v, ok := flags["--call-value"]; ok {
-		if a.kind != "add" {
+		if a.Kind != "add" {
 			return usageErrorf("--call-value only applies to --add-param")
 		}
-		a.callValue = v
+		a.CallValue = v
 	}
 	return nil
 }
@@ -151,117 +140,15 @@ func changeSignatureCommand(args []string) error {
 	if err != nil {
 		return m.fail(err)
 	}
-	loc, err := parseFuncLocator(locator)
+	edits, detail, err := changesig.Plan(file, locator, action)
 	if err != nil {
 		return m.fail(err)
 	}
-	if err := validateFuncTarget(file, loc); err != nil {
-		return m.fail(err)
-	}
-
-	pkgs, absFile, err := loadTypedPackages(file, true)
-	if err != nil {
-		return m.fail(err)
-	}
-	if msgs := packagesErrors(pkgs); len(msgs) > 0 {
-		return m.fail(parseErrorf("module does not type-check; fix these before changing signatures:\n  %s",
-			strings.Join(msgs, "\n  ")))
-	}
-	tgt, err := locateSignatureTarget(pkgs, absFile, loc)
-	if err != nil {
-		return m.fail(err)
-	}
-	if tp := tgt.fn.Type.TypeParams; tp != nil && len(tp.List) > 0 {
-		return m.fail(usageErrorf("change-signature does not support generic functions"))
-	}
-
-	edits, detail, err := buildSignatureEdits(pkgs, tgt, action, locator)
-	if err != nil {
-		return m.fail(err)
-	}
-	m.files = editFiles(edits)
+	m.files = changesig.EditedFiles(edits)
 	return m.run(func() (string, error) {
-		if err := applyTextEdits(edits); err != nil {
+		if err := changesig.Apply(edits); err != nil {
 			return "", err
 		}
 		return detail, nil
 	})
 }
-
-// sigTarget bundles the located declaration with its package context.
-type sigTarget struct {
-	pkg  *packages.Package
-	fn   *ast.FuncDecl
-	recv *types.Named // non-nil for methods
-}
-
-func locateSignatureTarget(pkgs []*packages.Package, absFile string, loc *orchestrator.InsertionLocation) (*sigTarget, error) {
-	var best *sigTarget
-	for _, p := range pkgs {
-		fileAST := syntaxFileIn(p, absFile)
-		if fileAST == nil {
-			continue
-		}
-		fn := findFuncDeclByLocator(fileAST, loc)
-		if fn == nil {
-			continue
-		}
-		t := &sigTarget{pkg: p, fn: fn}
-		if fn.Recv != nil && len(fn.Recv.List) > 0 {
-			recvName := receiverTypeName(fn.Recv.List[0].Type)
-			if obj, ok := p.Types.Scope().Lookup(recvName).(*types.TypeName); ok {
-				if named, ok := obj.Type().(*types.Named); ok {
-					t.recv = named
-				}
-			}
-		}
-		if p.ID == p.PkgPath {
-			return t, nil
-		}
-		if best == nil {
-			best = t
-		}
-	}
-	if best != nil {
-		return best, nil
-	}
-	name := loc.FunctionName
-	if name == "" {
-		name = loc.ReceiverType + ":" + loc.MethodName
-	}
-	return nil, notFoundErrorf("function %q not found in any loaded package for %s", name, absFile)
-}
-
-func syntaxFileIn(p *packages.Package, absFile string) *ast.File {
-	for _, f := range p.Syntax {
-		pos := p.Fset.Position(f.Pos())
-		if abs, err := filepath.Abs(pos.Filename); err == nil && abs == absFile {
-			return f
-		}
-	}
-	return nil
-}
-
-func findFuncDeclByLocator(fileAST *ast.File, loc *orchestrator.InsertionLocation) *ast.FuncDecl {
-	for _, decl := range fileAST.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok {
-			continue
-		}
-		if loc.MethodName != "" {
-			if fn.Recv == nil || len(fn.Recv.List) == 0 || fn.Name.Name != loc.MethodName {
-				continue
-			}
-			if receiverTypeName(fn.Recv.List[0].Type) == loc.ReceiverType {
-				return fn
-			}
-			continue
-		}
-		if fn.Recv == nil && fn.Name.Name == loc.FunctionName {
-			return fn
-		}
-	}
-	return nil
-}
-
-// placeholder

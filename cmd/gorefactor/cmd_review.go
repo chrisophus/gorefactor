@@ -13,6 +13,8 @@ import (
 func init() {
 	registerCommand(Command{
 		Name:        "review",
+		ReadOnly:    true,
+		MCPTool:     true,
 		Description: "Structural quality review of changed functions vs a git ref [--json]",
 		Usage:       "review [git-ref] [--json]",
 		MinArgs:     0,

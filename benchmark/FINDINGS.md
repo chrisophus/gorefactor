@@ -67,18 +67,40 @@ Best choice when the task is well-scoped and structural:
 ### Use gorefactor-agent (20–75K tokens per task)
 Worth it when:
 - The task is open-ended or multi-step and you'd otherwise spend frontier tokens iterating
-- Campaign mode for autonomous cleanup (no human in the loop)
+- Campaign mode (`-campaign`) for autonomous cleanup from lint findings
 - The task requires discovery before action (unknown callers, unknown file structure)
 
 Not worth it when:
 - You already know the exact operation (just call the CLI directly)
 - The task is pure analysis (use `find-callers` / `find-uses` directly)
 
+The agent is tool-calling only (default agentic loop, or `-campaign`). There is no single-shot plan mode and no interactive pause mode — use the direct CLI or an IDE for those workflows.
+
 ### Use Claude Code direct edit (for logic changes)
 When the change requires semantic understanding:
 - Bug fixes, algorithm rewrites, architectural changes
 - Error handling, new business logic
 - Type changes with semantic implications
+
+
+
+## 2026-07-19 — Campaign cost-of-pass (junior vs frontier)
+
+Method: `go run ./benchmark -agent-corpus-run -models claude-haiku-4-5,claude-sonnet-4-6 -modes agentic`
+against the 9-task agent corpus (easy/medium/hard). Agentic mode is the remaining
+product harness after campaign-or-cut (single-shot/interactive removed). List prices
+from `benchmark/pricing.go` (early-2026 rates; ranking input, not an invoice).
+
+| model | mode | pass | cost | cost/pass | tok/pass | avg_ms |
+|---|---|--:|--:|--:|--:|--:|
+| claude-haiku-4-5 | agentic | 9/9 | $0.3177 | $0.3177 | 300596 | 13180 |
+| claude-sonnet-4-6 | agentic | 9/9 | $0.5579 | $0.5579 | 175658 | 12891 |
+
+**Decision (keep campaign):** junior Haiku matched Sonnet at 100% on every solvable
+corpus class and was **~1.75× cheaper per pass** ($0.32 vs $0.56). Keep
+`gorefactor-agent` campaign/agentic as the headline LLM surface; escalate to frontier
+only when the junior stalls. Direct `./gorefactor` CLI remains strictly cheaper for
+scoped structural tasks (see tables above).
 
 ## Gaps identified (status)
 

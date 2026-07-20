@@ -48,18 +48,18 @@ func (r blastRadiusRule) Run(ctx LintContext) []lintIssue {
 		score int
 	}
 	var found []finding
-	for key, def := range idx.defs {
-		if strings.HasSuffix(def.file, "_test.go") {
+	for key, def := range idx.Defs {
+		if strings.HasSuffix(def.File, "_test.go") {
 			continue
 		}
-		if len(idx.transitiveCallers(def)) < highBlastRadiusTransitive {
+		if len(idx.TransitiveCallers(def)) < highBlastRadiusTransitive {
 			continue
 		}
 		br := computeBlastRadius(idx, def)
 		found = append(found, finding{
 			score: br.Score,
 			iss: lintIssue{
-				File:     def.file,
+				File:     def.File,
 				Rule:     "high-blast-radius",
 				Severity: "info",
 				Message: fmt.Sprintf(

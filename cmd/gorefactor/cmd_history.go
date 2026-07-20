@@ -12,6 +12,7 @@ var historyFlags = map[string]bool{"--json": false}
 func init() {
 	registerCommand(Command{
 		Name:        "history",
+		ReadOnly:    true,
 		Description: "List the journal of mutation operations (most recent last) [--json]",
 		Usage:       "history [--json]",
 		MinArgs:     0,

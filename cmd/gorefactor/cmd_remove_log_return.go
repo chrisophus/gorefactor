@@ -21,6 +21,7 @@ var removeLogReturnRules = map[string]bool{
 func init() {
 	registerCommand(Command{
 		Name:        "remove-log-return",
+		Mutates:     true,
 		Description: "Delete redundant log statements next to error-propagating returns; wrap bare 'return err' (--aggressive also fixes non-adjacent log/return pairs)",
 		Usage:       "remove-log-return <file> [--rule <if-err-log-return|wrap-log-return|wrap-bridge-log-return>] [--aggressive] [--json] [--dry-run] [--gate]",
 		MinArgs:     1,

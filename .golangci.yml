@@ -14,24 +14,19 @@ linters:
     # golangci's linters rather than a bespoke gorefactor rule; the doctor
     # golangci substrate maps these to the conc category.
     - contextcheck
-    - cyclop
-    - funlen
-    - dupl
+    # cyclop/funlen/dupl are intentionally NOT enabled: gorefactor owns the
+    # size/shape sensors (LogicLines, dispatch-shape) and their autofixes.
+    # Running both double-counts the same defects in doctor --report.
     - errcheck
     - gosec
     - govet
     - staticcheck
+    # unused stays as a type-aware second opinion; gorefactor dead-code is
+    # name-based and autofixable — doctor maps unused to dead category.
     - unused
     - gocritic
 
   settings:
-    cyclop:
-      max-complexity: 15
-    funlen:
-      lines: 75
-      statements: 50
-    dupl:
-      threshold: 100
     gosec:
       excludes:
         - G304  # file path from variable — intentional in a file-editing tool

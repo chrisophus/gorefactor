@@ -24,7 +24,7 @@ func TestMCPWriteToolsAbsentByDefault(t *testing.T) {
 	for _, tool := range res.Tools {
 		byName[tool.Name] = tool
 	}
-	for _, name := range mcpWriteTools {
+	for _, name := range mcpWriteTools() {
 		if _, ok := byName[name]; ok {
 			t.Errorf("write tool %q must not be exposed without --allow-write", name)
 		}
@@ -42,7 +42,7 @@ func TestMCPWriteToolsRegisteredWithAllowWrite(t *testing.T) {
 		byName[tool.Name] = tool
 	}
 
-	for _, name := range mcpWriteTools {
+	for _, name := range mcpWriteTools() {
 		tool, ok := byName[name]
 		if !ok {
 			t.Errorf("write tool %q missing with --allow-write", name)

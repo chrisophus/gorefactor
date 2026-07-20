@@ -12,6 +12,9 @@ var moveFlags = mutFlagSpec(nil)
 func init() {
 	registerCommand(Command{
 		Name:        "move",
+		Mutates:     true,
+		MCPTool:     true,
+		TxnSafe:     true,
 		Description: "Move a function or method to a different file",
 		Usage:       "move <source-file> <Func|Receiver:Method> <destination-file> [--json] [--dry-run] [--gate]",
 		MinArgs:     3,
@@ -82,7 +85,6 @@ func moveCode(args []string) error {
 		}
 
 		orch := orchestrator.NewOrchestrator()
-		orch.SkipSnapshot = true
 		if err := orch.RegisterPlan(plan); err != nil {
 			return "", fmt.Errorf("failed to register plan: %w", err)
 		}

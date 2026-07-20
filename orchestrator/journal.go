@@ -46,39 +46,16 @@ func LoadJournal() ([]JournalEntry, error) {
 // RecordOperation snapshots the pre-mutation content of changed files and
 // appends an entry to the journal. before maps path -> content as it was
 // before the mutation; created lists files the operation newly created.
+//
+// When a journal batch is active (see BeginBatch), the operation is folded
+// into that batch instead — one journal entry is written for the whole batch
+// on Commit — and this returns (nil, nil).
 func RecordOperation(command, detail string, before map[string][]byte, created []string) (*JournalEntry, error) {
-	entries, err := LoadJournal()
-	if err != nil {
-		return nil, fmt.Errorf("load journal: %w", err)
+	if activeBatch != nil {
+		activeBatch.record(before, created)
+		return nil, nil
 	}
-	journalSeq++
-	entry := JournalEntry{
-		ID:        fmt.Sprintf("%d-%d-%s", time.Now().UnixNano(), journalSeq, command),
-		Command:   command,
-		Detail:    detail,
-		Timestamp: time.Now(),
-	}
-	snapDir := entrySnapshotDir(entry.ID)
-	idx := 0
-	for path, content := range before {
-		if err := os.MkdirAll(snapDir, 0755); err != nil {
-			return nil, fmt.Errorf("create snapshot dir: %w", err)
-		}
-		name := fmt.Sprintf("f%03d.snap", idx)
-		idx++
-		if err := os.WriteFile(filepath.Join(snapDir, name), content, 0644); err != nil {
-			return nil, fmt.Errorf("write snapshot for %s: %w", path, err)
-		}
-		entry.Files = append(entry.Files, JournalFile{Path: path, Snapshot: name})
-	}
-	for _, path := range created {
-		entry.Files = append(entry.Files, JournalFile{Path: path, Created: true})
-	}
-	entries = append(entries, entry)
-	if err := saveJournal(entries); err != nil {
-		return nil, fmt.Errorf("save journal: %w", err)
-	}
-	return &entry, nil
+	return recordEntry(command, detail, before, created)
 }
 
 // UndoLast restores exactly the most recent journaled operation and pops it
@@ -140,6 +117,43 @@ func DropJournalEntry(id string) error {
 		out = append(out, e)
 	}
 	return saveJournal(out)
+}
+
+// recordEntry writes a single journal entry unconditionally, ignoring any
+// active batch. It is the shared core of RecordOperation and Batch.Commit.
+func recordEntry(command, detail string, before map[string][]byte, created []string) (*JournalEntry, error) {
+	entries, err := LoadJournal()
+	if err != nil {
+		return nil, fmt.Errorf("load journal: %w", err)
+	}
+	journalSeq++
+	entry := JournalEntry{
+		ID:        fmt.Sprintf("%d-%d-%s", time.Now().UnixNano(), journalSeq, command),
+		Command:   command,
+		Detail:    detail,
+		Timestamp: time.Now(),
+	}
+	snapDir := entrySnapshotDir(entry.ID)
+	idx := 0
+	for path, content := range before {
+		if err := os.MkdirAll(snapDir, 0755); err != nil {
+			return nil, fmt.Errorf("create snapshot dir: %w", err)
+		}
+		name := fmt.Sprintf("f%03d.snap", idx)
+		idx++
+		if err := os.WriteFile(filepath.Join(snapDir, name), content, 0644); err != nil {
+			return nil, fmt.Errorf("write snapshot for %s: %w", path, err)
+		}
+		entry.Files = append(entry.Files, JournalFile{Path: path, Snapshot: name})
+	}
+	for _, path := range created {
+		entry.Files = append(entry.Files, JournalFile{Path: path, Created: true})
+	}
+	entries = append(entries, entry)
+	if err := saveJournal(entries); err != nil {
+		return nil, fmt.Errorf("save journal: %w", err)
+	}
+	return &entry, nil
 }
 
 var journalSeq int

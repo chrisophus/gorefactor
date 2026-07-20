@@ -12,6 +12,7 @@ import (
 func init() {
 	registerCommand(Command{
 		Name:        "orchestrate",
+		Mutates:     true,
 		Description: "Execute refactoring operations from JSON plan files",
 		Usage:       "orchestrate <plan.json> [result-output.json] [--dry-run] [--test]",
 		MinArgs:     1,
@@ -63,8 +64,8 @@ func orchestrateRefactoring(args []string) error {
 	}
 
 	// Capture pre-execution content of every file the plan may touch so the
-	// run can be journaled alongside direct mutations (the legacy per-plan
-	// snapshot in .gorefactor/snapshots/<plan-name> is still written too).
+	// run can be journaled alongside direct mutations — the journal is the
+	// single undo system, so `undo` and `--test` rollback both use it.
 	planFiles := planAffectedFiles(plan)
 	before := map[string][]byte{}
 	for _, f := range planFiles {
@@ -88,14 +89,13 @@ func orchestrateRefactoring(args []string) error {
 	if runTests {
 		if testErr := runAffectedTests(plan, planFiles); testErr != nil {
 			fmt.Fprintf(os.Stderr, "\n[--test] Tests failed after plan execution:\n%v\n", testErr)
-			fmt.Fprintf(os.Stderr, "[--test] Restoring snapshot for plan %q ...\n", plan.Name)
-			snapDir := orchestrator.SnapshotDir(plan.Name)
-			if n, restoreErr := orchestrator.RestoreSnapshot(snapDir); restoreErr != nil {
-				fmt.Fprintf(os.Stderr, "[--test] Snapshot restore failed: %v\n", restoreErr)
+			fmt.Fprintf(os.Stderr, "[--test] Rolling back plan %q via journal ...\n", plan.Name)
+			if entry, n, undoErr := orchestrator.UndoLast(); undoErr != nil {
+				fmt.Fprintf(os.Stderr, "[--test] Journal rollback failed: %v\n", undoErr)
 			} else {
-				fmt.Fprintf(os.Stderr, "[--test] Restored %d file(s) from snapshot.\n", n)
+				fmt.Fprintf(os.Stderr, "[--test] Restored %d file(s) from journal entry %s.\n", n, entry.ID)
 			}
-			return gateErrorf("tests failed after plan execution; snapshot restored")
+			return gateErrorf("tests failed after plan execution; changes rolled back")
 		}
 		fmt.Printf("\n[--test] All tests passed.\n")
 	}

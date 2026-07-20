@@ -19,6 +19,8 @@ var splitFlags = map[string]bool{
 func init() {
 	registerCommand(Command{
 		Name:        "split",
+		Mutates:     true,
+		TxnSafe:     true,
 		Description: "Auto-split a Go file over the line limit into multiple files [--max N] [--dry-run]",
 		Usage:       "split <file.go> [--max N] [--dry-run] [--json] [--gate]",
 		MinArgs:     1,
@@ -95,7 +97,6 @@ func splitCommand(args []string) error {
 
 func splitExecuteMoves(file, stem string, moves [][2]string) (string, error) {
 	orch := orchestrator.NewOrchestrator()
-	orch.SkipSnapshot = true
 	plan := &orchestrator.RefactoringPlan{
 		Version:    "1.0",
 		Name:       "split-" + stem,

@@ -80,7 +80,6 @@ func TestDispatchRoutesToCrossPackage_ErrorPropagates(t *testing.T) {
 	}
 
 	orch := NewOrchestrator()
-	orch.SkipSnapshot = true
 	op := &RefactoringOperation{
 		Type: "move_method",
 		File: srcFile,
@@ -120,7 +119,6 @@ func oldName() {}
 	}
 
 	orch := NewOrchestrator()
-	orch.SkipSnapshot = true
 	op := &RefactoringOperation{
 		Type: "rename_declaration",
 		File: src,
@@ -167,7 +165,6 @@ func TestSimulateOperationChange_NoChanges(t *testing.T) {
 	}
 
 	orch := NewOrchestrator()
-	orch.SkipSnapshot = true
 	// An insert_code with no actual content change results in no diffs.
 	op := &RefactoringOperation{
 		Type: "rename_declaration",
@@ -204,7 +201,6 @@ func oldName() {}
 	}
 
 	orch := NewOrchestrator()
-	orch.SkipSnapshot = true
 	plan := &RefactoringPlan{
 		Version: "1.0",
 		Name:    "test-dryrun",

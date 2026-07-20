@@ -100,8 +100,8 @@ var mutationTools = map[string]bool{
 
 // recordRejectedOp appends a rejected-op entry to the corpus when the
 // tool is a mutation and its result is a rejection. Centralised at the
-// loop's dispatch site so every driver (agentic, interactive, campaign)
-// feeds the same corpus.
+// loop's dispatch site so every driver (agentic, campaign) feeds the
+// same corpus.
 func recordRejectedOp(dir, tool, args, result, spec string) {
 	if !mutationTools[tool] || !isOpRejection(result) {
 		return

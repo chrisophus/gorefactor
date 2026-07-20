@@ -37,14 +37,11 @@ func (o *Orchestrator) LoadPlan(filePath string) (*RefactoringPlan, error) {
 	return &plan, nil
 }
 
-// ExecutePlan executes a refactoring plan
+// ExecutePlan executes a refactoring plan. It never snapshots on its own: the
+// mutation journal (RecordOperation / UndoLast) is the single undo system, and
+// callers that want a plan run to be undoable journal it themselves (see
+// orchestrate's journalPlanRun and the CLI mutation runner).
 func (o *Orchestrator) ExecutePlan(planName string) (*ExecutionResult, error) {
-	if p, ok := o.plans[planName]; ok && !o.SkipSnapshot {
-		if err := o.createSnapshot(p, SnapshotDir(planName)); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: snapshot failed: %v\n", err)
-		}
-	}
-
 	plan, exists := o.plans[planName]
 	if !exists {
 		return nil, fmt.Errorf("plan '%s' not found", planName)

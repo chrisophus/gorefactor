@@ -24,6 +24,9 @@ var (
 func init() {
 	registerCommand(Command{
 		Name:        "create",
+		Mutates:     true,
+		MCPTool:     true,
+		TxnSafe:     true,
 		Description: "Create a new file with content from arg or stdin",
 		Usage:       "create <path> [content|-] [--json] [--dry-run] [--gate]",
 		MinArgs:     1,
@@ -33,6 +36,9 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "insert",
+		Mutates:     true,
+		MCPTool:     true,
+		TxnSafe:     true,
 		Description: "Insert code into a file at a location (at-end | at-beginning | before:Func | after:Func | inside:Func; Func may be Receiver:Method)",
 		Usage:       "insert <file> <at-end|at-beginning|before:Func|after:Func|inside:Func> [content|-] [--json] [--dry-run] [--gate]",
 		MinArgs:     2,
@@ -42,6 +48,9 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "replace",
+		Mutates:     true,
+		MCPTool:     true,
+		TxnSafe:     true,
 		Description: "Replace a code pattern inside a function/method (AST: pattern must be a full statement)",
 		Usage:       "replace <file> <Func|Receiver:Method> <old-stmt> <new-stmt> [--json] [--dry-run] [--gate]",
 		MinArgs:     4,
@@ -51,6 +60,9 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "delete",
+		Mutates:     true,
+		MCPTool:     true,
+		TxnSafe:     true,
 		Description: "Delete a declaration (function, method, or type) from a file",
 		Usage:       "delete <file> <Func|Receiver:Method> [--safe] [--json] [--dry-run] [--gate]",
 		MinArgs:     2,
@@ -60,6 +72,9 @@ func init() {
 	})
 	registerCommand(Command{
 		Name:        "rename",
+		Mutates:     true,
+		MCPTool:     true,
+		TxnSafe:     true,
 		Description: "Rename an unexported symbol across the package",
 		Usage:       "rename <file> <oldname> <newname> [--strict] [--json] [--dry-run] [--gate]",
 		MinArgs:     3,
@@ -78,24 +93,6 @@ func readContentArg(args []string, idx int) (string, error) {
 		return "", err
 	}
 	return string(b), nil
-}
-
-// validateGoSnippet checks that content parses as a complete Go file, as
-// top-level declarations, or as statements. Returns an exit-3 error when
-// none of the forms parse.
-func validateGoSnippet(content string) error {
-	fset := token.NewFileSet()
-	_, fileErr := goparser.ParseFile(fset, "snippet.go", content, 0)
-	if fileErr == nil {
-		return nil
-	}
-	if _, err := goparser.ParseFile(fset, "snippet.go", "package p\n"+content, 0); err == nil {
-		return nil
-	}
-	if _, err := goparser.ParseFile(fset, "snippet.go", "package p\nfunc _() {\n"+content+"\n}", 0); err == nil {
-		return nil
-	}
-	return parseErrorf("content does not parse as a Go file, declarations, or statements: %v", fileErr)
 }
 
 func createCommand(args []string) error {
@@ -197,16 +194,6 @@ func insertCommand(args []string) error {
 		}
 		return fmt.Sprintf("Inserted into %s at lines %d-%d", file, ins.StartLine, ins.EndLine), nil
 	})
-}
-
-func parseFuncLocator(s string) (*orchestrator.InsertionLocation, error) {
-	if i := strings.Index(s, ":"); i >= 0 {
-		return &orchestrator.InsertionLocation{
-			ReceiverType: s[:i],
-			MethodName:   s[i+1:],
-		}, nil
-	}
-	return &orchestrator.InsertionLocation{FunctionName: s}, nil
 }
 
 func deleteCommand(args []string) error {

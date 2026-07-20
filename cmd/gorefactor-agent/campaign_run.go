@@ -59,7 +59,8 @@ func RunCampaign(ctx context.Context, tc toolChatter, cfg Config) error {
 			}
 			handled++
 			if ferr := runCampaignFinding(ctx, tc, cfg, f, &fixed, &punted, &progressed); ferr != nil {
-				return ferr
+				return fmt.Errorf("campaign finding: %w", ferr)
+
 			}
 
 		}

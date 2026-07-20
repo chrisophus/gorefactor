@@ -18,6 +18,8 @@ var blastRadiusFlags = map[string]bool{
 func init() {
 	registerCommand(Command{
 		Name:        "blast-radius",
+		ReadOnly:    true,
+		MCPTool:     true,
 		Description: "Score the change-impact (blast radius) of a function/method by its transitive callers [--in path] [--json]",
 		Usage:       "blast-radius <Func|Receiver:Method> [--in path] [--json]",
 		MinArgs:     1,
@@ -52,16 +54,16 @@ type blastRadius struct {
 // can break); spanning many distinct files and being part of the exported API
 // add to the score because they widen who is affected.
 func computeBlastRadius(idx *cgIndex, def *cgDef) blastRadius {
-	closure := idx.transitiveCallers(def)
+	closure := idx.TransitiveCallers(def)
 
 	files := map[string]bool{}
 	pkgs := map[string]bool{}
 	for _, c := range closure {
-		files[c.file] = true
-		pkgs[filepath.Dir(c.file)] = true
+		files[c.File] = true
+		pkgs[filepath.Dir(c.File)] = true
 	}
 
-	exported := ast.IsExported(def.name)
+	exported := ast.IsExported(def.Name)
 	// Weights are deliberately simple and monotonic so the score stays
 	// human-readable: transitive reach is the dominant term, breadth across
 	// files/packages adds a little, and exported symbols carry an API premium.
@@ -71,38 +73,16 @@ func computeBlastRadius(idx *cgIndex, def *cgDef) blastRadius {
 	}
 
 	return blastRadius{
-		Target:            def.key(),
+		Target:            def.Key(),
 		Exported:          exported,
-		DirectCallers:     len(idx.callers[def.key()]),
+		DirectCallers:     len(idx.Callers[def.Key()]),
 		TransitiveCallers: len(closure),
 		FilesAffected:     len(files),
 		PackagesAffected:  len(pkgs),
 		Score:             score,
 		Level:             blastLevel(score),
-		TopCallers:        topCallerKeys(idx.callers[def.key()]),
+		TopCallers:        topCallerKeys(idx.Callers[def.Key()]),
 	}
-}
-
-// transitiveCallers returns every distinct definition that can reach def by
-// following caller edges (def itself excluded). Each key is enqueued at most
-// once, so cycles terminate.
-func (idx *cgIndex) transitiveCallers(def *cgDef) []*cgDef {
-	seen := map[string]bool{def.key(): true}
-	var out []*cgDef
-	queue := []*cgDef{def}
-	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
-		for _, caller := range idx.callers[cur.key()] {
-			if seen[caller.key()] {
-				continue
-			}
-			seen[caller.key()] = true
-			out = append(out, caller)
-			queue = append(queue, caller)
-		}
-	}
-	return out
 }
 
 // blastLevel buckets a score into a human label. Thresholds are advisory; the
@@ -121,7 +101,7 @@ func blastLevel(score int) string {
 func topCallerKeys(callers []*cgDef) []string {
 	keys := make([]string, 0, len(callers))
 	for _, c := range callers {
-		keys = append(keys, c.key())
+		keys = append(keys, c.Key())
 	}
 	sort.Strings(keys)
 	if len(keys) > 8 {
@@ -147,7 +127,7 @@ func blastRadiusCommand(args []string) error {
 		return err
 	}
 
-	def, err := idx.lookupTargetOrSuggest(target)
+	def, err := idx.LookupTargetOrSuggest(target)
 	if err != nil {
 		return err
 	}

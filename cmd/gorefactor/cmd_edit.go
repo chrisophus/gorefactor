@@ -30,6 +30,7 @@ var editFlags = mutFlagSpec(nil)
 func init() {
 	registerCommand(Command{
 		Name:        "edit",
+		Mutates:     true,
 		Description: "Replace old→new inside a function, auto-selecting statement-exact (replace) or body-text (replace-text) matching",
 		Usage:       "edit <file> <Func|Receiver:Method> <old> <new> [--json] [--dry-run] [--gate]",
 		MinArgs:     4,
@@ -81,8 +82,8 @@ func editShouldFallback(err error) bool {
 	if !errors.As(err, &ce) {
 		return false
 	}
-	if ce.code == exitParseError {
+	if ce.Code == exitParseError {
 		return true
 	}
-	return ce.code == exitNotFound && strings.Contains(ce.msg, "statement")
+	return ce.Code == exitNotFound && strings.Contains(ce.Msg, "statement")
 }

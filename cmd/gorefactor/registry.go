@@ -24,6 +24,52 @@ type Command struct {
 	// consumes a value argument (e.g. "--max N" -> true).
 	Flags map[string]bool
 	Run   func(args []string) error
+
+	// --- I/O contract metadata (P2 "one I/O contract") ---
+	//
+	// These fields are the single source of truth for the MCP tool and txn
+	// allowlists, which are derived from them (see mcpReadOnlyTools,
+	// mcpWriteTools, txnSafeCommands) rather than hand-maintained in parallel
+	// slices. registry_metadata_test.go pins the invariants below so a new
+	// command cannot silently skip classification.
+
+	// ReadOnly marks a sensor: its default behaviour does not modify Go source
+	// on disk. (A mutating opt-in flag the MCP layer strips, e.g. lint --fix,
+	// does not disqualify a command.) Exactly one of ReadOnly / Mutates must
+	// be set.
+	ReadOnly bool
+	// Mutates marks a command whose job is to edit or create Go source (or the
+	// undo/txn machinery over it). Exactly one of ReadOnly / Mutates must be set.
+	Mutates bool
+	// Idempotent marks a Mutates command that has no additional effect when
+	// re-run with the same arguments; it drives the MCP IdempotentHint. Only
+	// meaningful together with Mutates.
+	Idempotent bool
+	// MCPTool opts the command into the MCP server's tool surface. ReadOnly
+	// tools are always registered; Mutates tools are registered only under
+	// --allow-write. This replaces the hand-synced mcpReadOnlyTools /
+	// mcpWriteTools slices.
+	MCPTool bool
+	// TxnSafe marks a Mutates command that routes through the shared mutation
+	// runner and may therefore appear as a line in a `txn` script. This
+	// replaces the hand-synced txnAllowedCommands map. Only meaningful together
+	// with Mutates.
+	TxnSafe bool
+}
+
+// commandsWhere returns the sorted names of registered commands satisfying
+// pred. It is the single derivation primitive behind the MCP and txn
+// allowlists, so those surfaces stay in lockstep with the per-command metadata
+// instead of drifting from a hand-maintained parallel list.
+func commandsWhere(pred func(Command) bool) []string {
+	names := make([]string, 0, len(commandRegistry))
+	for name, cmd := range commandRegistry {
+		if pred(cmd) {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
 }
 
 var commandRegistry = map[string]Command{}
@@ -51,58 +97,13 @@ func commandNames() []string {
 	return names
 }
 
-// checkCommandArgs strictly validates args against the command's declared
-// flags and positional bounds. Unknown flags and unexpected extra positional
-// arguments are usage errors (exit code 1).
-func checkCommandArgs(cmd Command, args []string) error {
-	positional := 0
-	for i := 0; i < len(args); i++ {
-		a := args[i]
-		if a == "--" { // POSIX end-of-flags: everything after is positional
-			positional += len(args) - i - 1
-			break
-		}
-		if isFlagToken(a) {
-			name := a
-			hasInlineValue := false
-			if eq := strings.Index(a, "="); eq >= 0 {
-				name = a[:eq]
-				hasInlineValue = true
-			}
-			takesValue, known := cmd.Flags[name]
-			if !known {
-				return usageErrorf("unknown flag %s for %s\nusage: gorefactor %s", name, cmd.Name, cmd.usageLine())
-			}
-			if takesValue && !hasInlineValue {
-				if i+1 >= len(args) {
-					return usageErrorf("flag %s requires a value\nusage: gorefactor %s", name, cmd.usageLine())
-				}
-				i++
-			}
-			continue
-		}
-		positional++
-	}
-	if positional < cmd.MinArgs {
-		return usageErrorf("missing arguments for %s\nusage: gorefactor %s", cmd.Name, cmd.usageLine())
-	}
-	if cmd.MaxArgs >= 0 && positional > cmd.MaxArgs {
-		return usageErrorf("too many arguments for %s (got %d, max %d)\nusage: gorefactor %s",
-			cmd.Name, positional, cmd.MaxArgs, cmd.usageLine())
-	}
-	return nil
-}
-
-// isFlagToken reports whether an argument should be treated as a flag.
-// A bare "-" is positional by convention (read from stdin).
-func isFlagToken(a string) bool {
-	return len(a) > 1 && a[0] == '-'
-}
-
-// parseFlags splits args into positional arguments and a flag map using the
-// same rules as checkCommandArgs. spec maps flag name -> takes value.
-// Boolean flags are recorded with value "true".
-func parseFlags(args []string, spec map[string]bool) (positional []string, flags map[string]string) {
+// walkArgs is the single argument tokenizer behind both checkCommandArgs and
+// parseFlags, so validation and extraction can never disagree (P2 "one I/O
+// contract"). It splits args into positional values and a flag map using spec
+// (flag name -> takes value). In strict mode an unknown flag or a missing flag
+// value is a usage error; in lenient mode unknown flags are skipped (the caller
+// has already validated) and a value flag at end of args records an empty value.
+func walkArgs(spec map[string]bool, strict bool, args []string) (positional []string, flags map[string]string, err error) {
 	flags = map[string]string{}
 	for i := 0; i < len(args); i++ {
 		a := args[i]
@@ -117,18 +118,59 @@ func parseFlags(args []string, spec map[string]bool) (positional []string, flags
 		name, value, hasInlineValue := strings.Cut(a, "=")
 		takesValue, known := spec[name]
 		if !known {
-			continue // checkCommandArgs already rejected unknown flags
+			if strict {
+				return nil, nil, usageErrorf("unknown flag %s", name)
+			}
+			continue
 		}
 		if takesValue {
-			if !hasInlineValue && i+1 < len(args) {
-				value = args[i+1]
-				i++
+			if !hasInlineValue {
+				if i+1 < len(args) {
+					value = args[i+1]
+					i++
+				} else if strict {
+					return nil, nil, usageErrorf("flag %s requires a value", name)
+				}
 			}
 			flags[name] = value
 		} else {
 			flags[name] = "true"
 		}
 	}
+	return positional, flags, nil
+}
+
+// checkCommandArgs strictly validates args against the command's declared
+// flags and positional bounds. Unknown flags and unexpected extra positional
+// arguments are usage errors (exit code 1).
+func checkCommandArgs(cmd Command, args []string) error {
+	positional, _, err := walkArgs(cmd.Flags, true, args)
+	if err != nil {
+		return usageErrorf("%v for %s\nusage: gorefactor %s", err, cmd.Name, cmd.usageLine())
+	}
+	n := len(positional)
+	if n < cmd.MinArgs {
+		return usageErrorf("missing arguments for %s\nusage: gorefactor %s", cmd.Name, cmd.usageLine())
+	}
+	if cmd.MaxArgs >= 0 && n > cmd.MaxArgs {
+		return usageErrorf("too many arguments for %s (got %d, max %d)\nusage: gorefactor %s",
+			cmd.Name, n, cmd.MaxArgs, cmd.usageLine())
+	}
+	return nil
+}
+
+// isFlagToken reports whether an argument should be treated as a flag.
+// A bare "-" is positional by convention (read from stdin).
+func isFlagToken(a string) bool {
+	return len(a) > 1 && a[0] == '-'
+}
+
+// parseFlags splits args into positional arguments and a flag map using the
+// same tokenizer as checkCommandArgs (walkArgs). spec maps flag name -> takes
+// value. Boolean flags are recorded with value "true". Unknown flags are
+// skipped because checkCommandArgs already rejected them before the command ran.
+func parseFlags(args []string, spec map[string]bool) (positional []string, flags map[string]string) {
+	positional, flags, _ = walkArgs(spec, false, args)
 	return positional, flags
 }
 

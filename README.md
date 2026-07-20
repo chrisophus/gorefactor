@@ -102,15 +102,7 @@ Both `go-arch-lint` and `golangci-lint` are deliberately kept out of the `lint` 
 - **Manual scripts**: Fragile (line numbers, imports), easy to break
 
 ### 6. **Iteration and feedback**
-The agent supports interactive mode:
-```bash
-gorefactor-agent -spec "extract validation logic" -interactive
-# After each tool call, you see the changes and can provide feedback
-# Step 1: find_uses PaymentValidator
-#   → Found 3 callers. Continue? [c/f/r/s/a/?]
-```
-
-This bridges the gap between fully manual and fully autonomous refactoring.
+Campaign mode drives autonomous cleanup from lint findings; the default agentic mode is a tool-calling loop gated by `go build` + `go test`. For well-scoped structural tasks, prefer the direct CLI (see [benchmark/FINDINGS.md](benchmark/FINDINGS.md)).
 
 Build from source:
 
@@ -143,7 +135,7 @@ go build -o gorefactor-agent ./cmd/gorefactor-agent
 # Autofix oversized files where safe
 ./gorefactor lint . --fix
 
-# Final gate: structural lint + go build + go test
+# Final gate: full structural lint + golangci + arch + go build + go test
 ./gorefactor doctor
 
 # One-page summary of a file
@@ -219,8 +211,8 @@ Methods use `Receiver:Method` (no `*` on the receiver). Many commands accept `-`
 
 | Command | Purpose |
 |---------|---------|
-| `lint` | 42 structural rules (size, duplication, smells, error handling, ordering, coverage, dead-code, arch); skips `vendor`/`.git`/`node_modules` and `*.gen.go`/`_gen.go`. `--fix` autofixes `file-size`, `dead-code`, `error-not-wrapped`, `complexity`, the log-propagation family, `funcorder-constructor`/`funcorder-struct-method`/`funcorder-function` (via `reorder-funcorder`) (add `--verify` to revert any fix that breaks build/test). `--fix-level aggressive` (requires `--fix --verify`) additionally autofixes `long-function`/`extract-candidate` by extraction, lifts return-bearing blocks, fixes non-adjacent log/return pairs, and deletes module-wide unreferenced exported functions. `--fail-only` shows blocking issues only |
-| `doctor` | Lint + `go build` + `go test`; non-zero on failure. `--report` merges all substrates into one advisory report |
+| `lint` | 45 structural rules (size, duplication, smells, error handling, ordering, coverage, dead-code, arch); skips `vendor`/`.git`/`node_modules` and `*.gen.go`/`_gen.go`. `--fix` autofixes `file-size`, `dead-code`, `error-not-wrapped`, `complexity`, the log-propagation family, `funcorder-constructor`/`funcorder-struct-method`/`funcorder-function` (via `reorder-funcorder`) (add `--verify` to revert any fix that breaks build/test). `--fix-level aggressive` (requires `--fix --verify`) additionally autofixes `long-function`/`extract-candidate` by extraction, lifts return-bearing blocks, fixes non-adjacent log/return pairs, and deletes module-wide unreferenced exported functions. `--fail-only` shows blocking issues only |
+| `doctor` | Gate: full structural lint registry + golangci-lint + go-arch-lint + `go build` + `go test`; non-zero on failure. `--report` merges substrates into one advisory report (optional `--score`) |
 | `adherence` | Harness self-audit: fraction of changed `.go` files edited via gorefactor vs raw Write/Edit |
 | `intent` | Declare a deliberate exported-API change so the apidiff gate passes it |
 | `txn` | Apply a batch of mutation commands transactionally (all-or-nothing, single undo unit) |
@@ -479,16 +471,14 @@ agent/payment_test.go:89 - TestPaymentFlow calls ProcessPayment
 
 ## `gorefactor-agent` (summary)
 
-Requires `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` (or a local OpenAI-compatible endpoint via `-api-base`).
+Requires `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` (or a local OpenAI-compatible endpoint via `-api-base`). Tool-calling providers only.
 
 | Mode | Flag | Use when |
 |------|------|----------|
 | Agentic (default) | `-spec "..."` | Open-ended refactors; tool loop, up to 40 iterations by default |
-| Interactive | `-spec "..." -interactive` | Pause after each tool for review/feedback |
-| Single-shot | `-single-shot` | One constrained JSON plan (optional `-dry-run`) |
 | Campaign | `-campaign` | Fix `gorefactor lint` findings autonomously |
 
-`-max-iter` overrides the mode default (40 for agentic, 3 for single-shot). The agent’s `finish` gate runs **`go build` + `go test`** only. For lint + build + test, run **`gorefactor doctor`** yourself or in CI.
+`-max-iter` overrides the mode default (40 for agentic). The agent’s `finish` gate runs **`go build` + `go test`** only. For lint + build + test, run **`gorefactor doctor`** yourself or in CI.
 
 Before reaching for the agent, read [benchmark/FINDINGS.md](benchmark/FINDINGS.md) — for well-scoped structural tasks the direct CLI is strictly cheaper (~0 tokens vs 20–75K per task).
 
@@ -504,7 +494,7 @@ GoRefactor follows the **harness pattern** (Fowler): guides (feedforward—refus
 | **analyzer/** | Complexity scoring, extraction recommendations, dead code, duplicates, diff analysis, call graphs. Powers `recommend`, `inspect`, `lint` heuristics. |
 | **orchestrator/** | JSON plan execution, semantic targeting (function names + code patterns + variable usage), undo snapshots under `.gorefactor/`. Enables resilient batch refactoring. |
 | **cmd/gorefactor/** | CLI commands. 25+ `cmd_*.go` files (one per command). Extraction logic in `cmd_extract.go` (type-aware via `go/packages`). Direct-mutation commands here (create, insert, replace, delete, move, rename, extract, split, format). |
-| **cmd/gorefactor-agent/** | LLM harness. Proposes operations (never edits `.go` directly). Supports OpenAI-compatible and Anthropic providers. Modes: agentic (40-step loop), single-shot, campaign (autonomous), interactive. Completion gate: `go build` + `go test` (not lint). |
+| **cmd/gorefactor-agent/** | LLM harness. Proposes operations (never edits `.go` directly). Supports OpenAI-compatible and Anthropic providers. Modes: agentic (40-step tool loop) and campaign (autonomous). Completion gate: `go build` + `go test` (not lint). |
 
 **Design principle**: Use GoRefactor when the tool determines *where* and *how*; use Claude/LLM when it determines *what* to change. This minimizes token cost and keeps safety high (deterministic execution, not code generation).
 
@@ -540,7 +530,7 @@ make test               # tests with race + coverage
 - **20% clean punts** (warm report, warm handoff to human—not errors)
 - Mean time per task: **7 seconds**
 - **Zero frontier tokens** (all work is local; frontier spend only for unresolved hand-offs)
-- See [RELIABILITY.md](RELIABILITY.md) for full battery results.
+- See [benchmark/FINDINGS.md](benchmark/FINDINGS.md) for measured token economics and reliability findings.
 
 ## License
 

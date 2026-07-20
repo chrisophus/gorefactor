@@ -14,6 +14,7 @@ var wrapSentinelsFlags = mutFlagSpec(nil)
 func init() {
 	registerCommand(Command{
 		Name:        "wrap-sentinels",
+		Mutates:     true,
 		Description: "Wrap bare returns of an errors.New sentinel with fmt.Errorf(\"<context>: %w\", Sentinel)",
 		Usage:       "wrap-sentinels <file> <Sentinel> [--json] [--dry-run] [--gate]",
 		MinArgs:     2,

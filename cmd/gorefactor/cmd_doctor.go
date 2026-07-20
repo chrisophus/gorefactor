@@ -11,7 +11,8 @@ import (
 func init() {
 	registerCommand(Command{
 		Name:        "doctor",
-		Description: "Aggregate health gate: lint + golangci-lint + go-arch-lint + build + test. Exits non-zero on failure. [--json] [--fix [--fix-level safe|aggressive]]",
+		ReadOnly:    true,
+		Description: "Aggregate health gate: full structural lint registry + golangci-lint + go-arch-lint + build + test. Exits non-zero on failure. [--json] [--fix [--fix-level safe|aggressive]] [--report …]",
 		Usage:       "doctor [dir] [--json] [--fix] [--fix-level safe|aggressive] [--config PATH] [--report [--base REF] [--scoped] [--score]] | doctor install [--target claude.md|cursor|agents.md|all]",
 		MinArgs:     0,
 		MaxArgs:     1,
@@ -151,34 +152,32 @@ type doctorStage struct {
 }
 
 func doctorLintStage(root, configPath string) (doctorStage, error) {
-	opts := lintOptions{root: root, configPath: configPath}
+	opts := lintOptions{root: root, configPath: configPath, failOn: "error"}
 	if err := opts.loadConfig(); err != nil {
 		return doctorStage{}, err
 	}
 	ctx := opts.lintContext(nil)
-
 	files, err := collectGoFiles(root, ctx.WalkOpts)
 	if err != nil {
 		return doctorStage{}, err
 	}
-
-	var issues []lintIssue
-	for _, f := range files {
-		issues = append(issues, checkFileSize(f, effectiveMaxSizeForFile(f, ctx))...)
-	}
-	issues = append(issues, checkDuplicates(root, ctx.WalkOpts)...)
-	issues = append(issues, checkUntestedPackages(root, ctx.WalkOpts)...)
-	errCount := 0
+	ctx.Files = files
+	rules := filterLintRules(defaultLintRules(), opts)
+	issues := runLintRules(rules, ctx, opts)
+	issues = applyConfigSeverity(issues, opts)
+	errCount := failingIssueCount(issues, "error")
+	warnCount := 0
 	for _, iss := range issues {
-		if iss.Severity == "error" {
-			errCount++
+		if iss.Severity == "warning" {
+			warnCount++
 		}
 	}
 	return doctorStage{
 		name: "lint",
 		ok:   errCount == 0,
-		info: fmt.Sprintf("%d issue(s), %d error(s)", len(issues), errCount),
+		info: fmt.Sprintf("%d issue(s) (%d error, %d warning) across %d rules", len(issues), errCount, warnCount, len(rules)),
 	}, nil
+
 }
 
 func doctorGolangciStage(root string) doctorStage {
@@ -218,12 +217,8 @@ func doctorArchStage(root string) doctorStage {
 }
 
 func doctorGoStage(root, verb string) doctorStage {
-	cmd := exec.Command("go", verb, "./...")
-	cmd.Dir = root
-	cmd.Env = analyzer.SanitizedGitEnv()
-
-	out, err := cmd.CombinedOutput()
-	return doctorStage{name: verb, ok: err == nil, info: trimOutput(out)}
+	out, err := goGate(root, verb, "./...")
+	return doctorStage{name: verb, ok: err == nil, info: trimOutput([]byte(out))}
 }
 
 func reportDoctorStages(stages []doctorStage, jsonOut bool) {

@@ -17,6 +17,7 @@ var implementInterfaceFlags = mutFlagSpec(map[string]bool{"--iface-in": true})
 func init() {
 	registerCommand(Command{
 		Name:        "implement-interface",
+		Mutates:     true,
 		Description: "Generate compiling method stubs on a type for every interface method it doesn't implement yet",
 		Usage:       "implement-interface <file> <Type> <Interface> [--iface-in path] [--json] [--dry-run] [--gate]",
 		MinArgs:     3,
@@ -207,47 +208,4 @@ func receiverStyle(named *types.Named, typeName string) (name string, pointer bo
 		}
 	}
 	return name, pointer
-}
-
-// signatureText renders "(a int, b ...string)" and " (int, error)" parts of
-// a method signature with named parameters.
-func signatureText(sig *types.Signature, qual types.Qualifier) (params, results string) {
-	var ps []string
-	for i := 0; i < sig.Params().Len(); i++ {
-		p := sig.Params().At(i)
-		name := p.Name()
-		if name == "" || name == "_" {
-			name = fmt.Sprintf("p%d", i)
-		}
-		ts := types.TypeString(p.Type(), qual)
-		if sig.Variadic() && i == sig.Params().Len()-1 {
-			ts = "..." + strings.TrimPrefix(ts, "[]")
-		}
-		ps = append(ps, name+" "+ts)
-	}
-	params = strings.Join(ps, ", ")
-	switch sig.Results().Len() {
-	case 0:
-	case 1:
-		results = " " + types.TypeString(sig.Results().At(0).Type(), qual)
-	default:
-		var rs []string
-		for i := 0; i < sig.Results().Len(); i++ {
-			rs = append(rs, types.TypeString(sig.Results().At(i).Type(), qual))
-		}
-		results = " (" + strings.Join(rs, ", ") + ")"
-	}
-	return params, results
-}
-
-// qualifierFor qualifies types relative to target by package path, which is
-// stable across separate type-check universes (e.g. an interface loaded by
-// its own packages.Load call).
-func qualifierFor(target *types.Package) types.Qualifier {
-	return func(other *types.Package) string {
-		if other == nil || other.Path() == target.Path() {
-			return ""
-		}
-		return other.Name()
-	}
 }

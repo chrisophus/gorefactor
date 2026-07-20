@@ -16,7 +16,7 @@ import (
 type sweepCell struct {
 	provider string
 	model    string
-	mode     string // agentic | single-shot
+	mode     string // agentic (sole supported harness mode)
 }
 
 // splitList parses a comma-separated flag value, falling back to a single

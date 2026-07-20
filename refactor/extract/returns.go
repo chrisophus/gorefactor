@@ -1,4 +1,4 @@
-package main
+package extract
 
 import (
 	"bytes"
@@ -10,11 +10,11 @@ import (
 	"strings"
 )
 
-// directReturns collects the return statements that belong to the extracted
-// block itself. Returns inside function literals have their own activation
-// frame and never escape the block, so they are not lifted (and are no reason
-// to refuse extraction).
-func directReturns(stmts []ast.Stmt) []*ast.ReturnStmt {
+// DirectReturns collects the return statements that belong to the extracted
+// block itself. Returns inside function literals have their own activation frame
+// and never escape the block, so they are not lifted (and are no reason to
+// refuse extraction).
+func DirectReturns(stmts []ast.Stmt) []*ast.ReturnStmt {
 	var out []*ast.ReturnStmt
 	for _, s := range stmts {
 		ast.Inspect(s, func(n ast.Node) bool {
@@ -56,11 +56,11 @@ func enclosingResultTypes(fset *token.FileSet, fn *ast.FuncDecl) ([]string, erro
 // validateReturnLift checks that lifting the block's return statements into a
 // (results..., done bool) helper is a purely mechanical transform. It refuses
 // the cases where the rewrite would need semantic judgment: blocks that also
-// assign variables read after the block (the lifted returns and the
-// write-backs would race for the return statement), naked returns when the
-// enclosing function has results (their values live in the caller's named
-// result variables, invisible to the helper), and single-call multi-value
-// returns (appending `true` to `return f()` is not valid Go).
+// assign variables read after the block (the lifted returns and the write-backs
+// would race for the return statement), naked returns when the enclosing
+// function has results (their values live in the caller's named result
+// variables, invisible to the helper), and single-call multi-value returns
+// (appending `true` to `return f()` is not valid Go).
 func validateReturnLift(fset *token.FileSet, rets []*ast.ReturnStmt, nResults int, writes []paramSpec) error {
 	if len(writes) > 0 {
 		var names []string
@@ -82,9 +82,9 @@ func validateReturnLift(fset *token.FileSet, rets []*ast.ReturnStmt, nResults in
 }
 
 // liftResultNames picks collision-free names for the helper's named results:
-// r0..rN-1 for the lifted result values and done for the fell-through flag.
-// Any identifier appearing in the block or the parameter list forces a
-// numeric suffix bump so the generated names never capture existing ones.
+// r0..rN-1 for the lifted result values and done for the fell-through flag. Any
+// identifier appearing in the block or the parameter list forces a numeric
+// suffix bump so the generated names never capture existing ones.
 func liftResultNames(stmts []ast.Stmt, params []paramSpec, nResults int) (resultNames []string, doneName string) {
 	used := map[string]bool{}
 	for _, p := range params {
@@ -112,9 +112,9 @@ func liftResultNames(stmts []ast.Stmt, params []paramSpec, nResults int) (result
 	return resultNames, pick("done")
 }
 
-// returnLiftSpec bundles the inputs for synthesizing a return-lifting helper: parsed positions, the
-// block's statements, the inferred params/results, and the raw source bytes the body is spliced
-// from.
+// returnLiftSpec bundles the inputs for synthesizing a return-lifting helper:
+// parsed positions, the block's statements, the inferred params/results, and the
+// raw source bytes the body is spliced from.
 type returnLiftSpec struct {
 	fset        *token.FileSet
 	methodName  string
@@ -126,8 +126,8 @@ type returnLiftSpec struct {
 	isTail      bool
 }
 
-// blockIsFuncTail reports whether the extracted block ends the enclosing function body (its last
-// statement is the function's last statement).
+// blockIsFuncTail reports whether the extracted block ends the enclosing
+// function body (its last statement is the function's last statement).
 func blockIsFuncTail(blockStmts []ast.Stmt, fn *ast.FuncDecl) bool {
 	if fn.Body == nil || len(fn.Body.List) == 0 || len(blockStmts) == 0 {
 		return false
@@ -135,14 +135,16 @@ func blockIsFuncTail(blockStmts []ast.Stmt, fn *ast.FuncDecl) bool {
 	return fn.Body.List[len(fn.Body.List)-1] == blockStmts[len(blockStmts)-1]
 }
 
-// buildReturnLiftedFunc synthesizes the helper for a block that contains direct return statements.
-// The helper's results are the enclosing function's result types plus a trailing done flag, all
-// named so the final naked return yields zero values with done=false when the block falls through.
-// Every direct return in the block gets `, true` appended (or becomes `return true` when the
-// enclosing function has no results). The body is spliced from the original source bytes, so
-// comments and formatting inside the block survive. The call site propagates a taken return:
+// buildReturnLiftedFunc synthesizes the helper for a block that contains direct
+// return statements. The helper's results are the enclosing function's result
+// types plus a trailing done flag, all named so the final naked return yields
+// zero values with done=false when the block falls through. Every direct return
+// in the block gets `, true` appended (or becomes `return true` when the
+// enclosing function has no results). The body is spliced from the original
+// source bytes, so comments and formatting inside the block survive. The call
+// site propagates a taken return:
 //
-// if r0, done := helper(args); done { return r0 }
+//	if r0, done := helper(args); done { return r0 }
 func buildReturnLiftedFunc(spec returnLiftSpec) (newFunc, callSite string, err error) {
 	fset, stmts, src := spec.fset, spec.stmts, spec.src
 	methodName, params, rets, resultTypes, isTail := spec.methodName, spec.params, spec.rets, spec.resultTypes, spec.isTail

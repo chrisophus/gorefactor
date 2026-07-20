@@ -8,7 +8,6 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
-	"path/filepath"
 )
 
 func (o *Orchestrator) executeDeleteDeclaration(operation *RefactoringOperation, target *TargetLocation, result *OperationResult) error {
@@ -90,24 +89,15 @@ func (o *Orchestrator) executeRenameDeclaration(operation *RefactoringOperation,
 	if newName == "" {
 		return fmt.Errorf("newName parameter is required for rename_declaration")
 	}
+	if oldName == newName {
+		return fmt.Errorf("newName %q is the same as the old name", newName)
+	}
+	// Defense in depth: exported symbols may be referenced from packages this
+	// call does not load, so keep them on a type-aware external tool (gopls).
+	// The rename itself is object-identity based (see renameDeclarationTyped),
+	// not name-match.
 	if len(oldName) > 0 && oldName[0] >= 'A' && oldName[0] <= 'Z' {
 		return fmt.Errorf("rename_declaration only supports unexported identifiers; use gopls rename for exported symbols")
 	}
-	dir := filepath.Dir(operation.File)
-	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, dir, nil, parser.ParseComments)
-	if err != nil {
-		return fmt.Errorf("failed to parse package directory: %w", err)
-	}
-	for _, pkg := range pkgs {
-		for filename, fileNode := range pkg.Files {
-			if err := renameInFile(filename, fileNode, fset, oldName, newName, result); err != nil {
-				return err
-			}
-		}
-	}
-	if len(result.Changes) == 0 {
-		return fmt.Errorf("identifier %q not found in package", oldName)
-	}
-	return nil
+	return renameDeclarationTyped(operation.File, oldName, newName, result)
 }

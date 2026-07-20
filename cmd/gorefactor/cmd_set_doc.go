@@ -18,6 +18,9 @@ const docCommentWidth = 100
 func init() {
 	registerCommand(Command{
 		Name:        "set-doc",
+		Mutates:     true,
+		MCPTool:     true,
+		TxnSafe:     true,
 		Description: "Set or replace the doc comment on a top-level declaration (func, method, type, const/var)",
 		Usage:       "set-doc <file> <Decl|Receiver:Method> [text|-] [--json] [--dry-run] [--gate]",
 		MinArgs:     2,

@@ -16,6 +16,7 @@ var replaceInLiteralFlags = mutFlagSpec(nil)
 func init() {
 	registerCommand(Command{
 		Name:        "replace-in-literal",
+		Mutates:     true,
 		Description: "Replace a substring inside a single string literal, AST-scoped so surrounding code is never touched",
 		Usage:       "replace-in-literal <file> <old> <new> [--json] [--dry-run] [--gate]",
 		MinArgs:     3,

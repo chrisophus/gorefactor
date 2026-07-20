@@ -3,9 +3,22 @@
 **Date:** 2026-07-19. **Scope:** whole repository, reviewed from first principles, deliberately not
 anchored on the existing CLAUDE.md/docs framing. Evidence gathered by four independent subsystem
 audits (CLI, orchestrator/parser, agent/benchmark, analyzer/doctor/lint) plus the project's own
-benchmark data. File:line references throughout are as of commit `c706bf6`.
+benchmark data. File:line references throughout are as of commit `c706bf6` (see **Status update** below for later tip).
 
 ---
+
+## Status update (post score-to-80)
+
+**As of `origin/main` after the score-to-80 / toolchain work** (not the original `c706bf6` snapshot):
+
+- Honest full-substrate doctor score ~**88**/100; Go toolchain **1.26.5**; golangci/deadcode/govulncheck auto-provisioned via `go tool` / `.gorefactor/tools/`.
+- `CLAUDE.md` rewritten to a short rules file (~100 lines); README is the command survey.
+- P0 largely done: tracked binaries removed, `cmd/gorefactor-test/` deleted, stranded-comment sweep, campaign trailer removed, `rename_variable` no longer emitted, `tracked-artifact` sensor shipped.
+- Remaining execution follows the plan in `.cursor/plans/project_review_execution_*.plan.md`: finish P0 leftovers, then P1–P3 (phantom targeting, autofix-justified lint diet, doctor unify, campaign-or-cut, engine extraction, types-aware rename, one mutation/I/O path, new sensors, self-clean gate, cost-of-pass).
+- Lint diet decision: **keep** duplicate rules that own autofix (e.g. `funcorder-*`, `error-not-wrapped`); do not delete them merely because golangci has cousins.
+
+File:line citations below may lag this tip; prefer symbols and current tree when acting on the backlog.
+
 
 ## TL;DR verdict
 
@@ -31,6 +44,11 @@ Three large subsystems orbit that core without earning their keep:
 Meanwhile the genuinely differentiated work — the extract-method and change-signature engines, the
 autofix verify/bisect/outcome-journal pipeline, the harness-residue rules, the dry-run design — is
 either locked inside `package main` where nobody can import it, or under-celebrated.
+
+> **Status update:** the extract-method and change-signature engines have been lifted out of
+> `package main` into importable packages (`refactor/extract`, `refactor/changesig`), backed by
+> shared `internal/` packages (`astcache`, `goload`, `cerr`). The CLI commands are now thin wrappers,
+> so the MCP server and library consumers can drive the engines without importing `main`.
 
 **Recommendation in one sentence:** reposition gorefactor as an *edit-and-sense toolkit for coding
 agents* (CLI + MCP server, importable library underneath), cut or quarantine the agent binary and the
@@ -179,6 +197,20 @@ A third party — including our own MCP server story — cannot embed any of thi
 wrong seam.
 
 ### 2.2 Two mutation paths, two journals
+
+> **Status (P2 item 11 — resolved).** There is now one undo system. `ExecutePlan` no longer
+> snapshots; the plan-snapshot mechanism (`createSnapshot`/`RestoreSnapshot`/`SnapshotDir`/
+> `ListSnapshots`, the old `orchestrator/undo.go`) and the `Orchestrator.SkipSnapshot` field are
+> deleted, and `orchestrate --test` now rolls back through the journal (`UndoLast`). The
+> package-global `activeTxn`/`txnCollector` in `cmd_txn.go` are gone: transactions are an
+> orchestrator concern via `orchestrator.Batch` + `BeginBatch`/`EndBatch`, and the batch-aware
+> `RecordOperation` folds txn operations into one journal entry — so `mutation.go` no longer knows
+> about txn. The batch keys files by canonical absolute path so commands that disagree on path
+> spelling (e.g. `rename` vs `change-signature`) can't alias the same file into two undo entries.
+> The three build/test gate runners are one primitive (`cmd/gorefactor/gate.go:goGate`), shared by
+> the mutation runner, txn, `lint --fix --verify`, and `doctor`. `extract` and `change-signature`
+> now run through the mutation runner (engines live in `refactor/extract` and `refactor/changesig`).
+> The original description below is retained for context.
 
 `mutation.go` captures its own before-state and journals via `orchestrator.RecordOperation`, while
 `runPlanOps` sets `orch.SkipSnapshot = true` to suppress the orchestrator's *other* snapshot
@@ -348,26 +380,38 @@ prove-or-cut experiments.
     `refactor/changesig`, `internal/astcache`, `internal/cli`. This is the single highest-value
     structural change — ~2K LOC of the best code in the repo becomes usable by the MCP server, the
     library API, and third parties. No import cycles exist; it is a mechanical, multi-day move.
-11. **One mutation path.** Route every mutator through the orchestrator's operation/journal/snapshot
-    path; delete `SkipSnapshot`, `activeTxn`, the duplicate gate runners, and the double
-    journaling. One undo system.
-12. **One I/O contract.** Single flag parser, single `--json` envelope (`{ok, error, data}`),
-    registry metadata (`ReadOnly`/`Mutates` on `Command`) generating the MCP/txn allowlists instead
-    of four hand-synced lists.
+11. **One mutation path.** ✅ *Done (see §2.2 status).* The journal is the single undo system:
+    `SkipSnapshot`, `activeTxn`, and the separate plan-snapshot mechanism are deleted; txn is an
+    orchestrator concern (`orchestrator.Batch`); and the duplicate build/test gate runners collapse
+    to one `goGate` primitive. `change-signature` now joins `extract` in `txnAllowedCommands`.
+12. **One I/O contract.** ✅ *Largely done.* `Command` now carries I/O metadata
+    (`ReadOnly`/`Mutates`/`Idempotent`/`MCPTool`/`TxnSafe` in `registry.go`), and the four
+    hand-synced allowlists (`mcpReadOnlyTools`, `mcpWriteTools`, `mcpIdempotentWriteTools`,
+    `txnAllowedCommands`) are deleted — each is now a one-line predicate over that metadata
+    (`mcpReadOnlyTools()`, `mcpWriteTools()`, `txnSafeCommands()`/`isTxnAllowed`). A single
+    tokenizer (`walkArgs`) backs both `checkCommandArgs` and `parseFlags` so validation and
+    extraction can't diverge, and `emitJSON` no longer swallows encode errors. `registry_metadata_test.go`
+    pins the invariants (every command is `ReadOnly` xor `Mutates`; every MCP write tool is `TxnSafe`
+    or explicitly exempt; golden allowlists) so a new command cannot skip classification. The shared
+    `{ok, error, data}` envelope (`emitEnvelope`) is in place with `search-ast` migrated as the
+    reference; rolling the remaining ~15 bespoke `--json` shapes onto it is the residual follow-up.
 13. **Fix `rename` properly**: bind identifiers via `go/types` object identity (the repo already
     does this elsewhere) or delegate to gopls. The current algorithm should not ship under the name
     "rename."
 
 ### P3 — Prove or cut (ongoing)
 
-13a. **Adopt "self-clean, no baseline" as the release gate**, and turn Part 2.5's table into the
-    sensor backlog: each defect class this review found gets a sensor or a documented
-    out-of-scope decision. The repo is the benchmark; a tool that keeps other projects clean
-    must demonstrably keep itself clean first.
+13a. **Adopt "self-clean, no baseline" as the release gate** — **partially done.** `make gate-self-clean`
+    fails when `.gorefactor-lint-baseline.json` has any entries; default `make gate` still uses the
+    one-way ratchet. Baseline sunset for an empty file: **2026-10-19**. Part 2.5 sensors
+    `test-only-live`, `advertised-but-unwired`, and `god-package` are registered. Remaining
+    baseline debt is mostly size/shape proxies (`long-function`/`complexity`/`data-clumps`) plus
+    intentional `god-package` findings on `cmd/gorefactor` and `analyzer`.
 
-14. **Run the cost-of-pass sweep and publish frontier-vs-junior numbers.** The campaign-mode
-    economic thesis is the project's most novel claim and its infrastructure is already built. If
-    the numbers are good, that's the headline; if not, cut the binary to the triage fast-path.
+14. **Run the cost-of-pass sweep and publish frontier-vs-junior numbers** — **done** (2026-07-19).
+    Haiku and Sonnet both 9/9 on the agent corpus; Haiku ~1.75× cheaper per pass ($0.32 vs $0.56).
+    **Keep** campaign/agentic as the headline agent surface; publish matrix in
+    [benchmark/FINDINGS.md](../benchmark/FINDINGS.md).
 15. **Keep the honest-measurement culture** (FINDINGS.md, integrity reviews) and extend it: the
     `recommend` 0.7× negative result was caught *because* the project measures itself. Every new
     surface should ship with its ratio.

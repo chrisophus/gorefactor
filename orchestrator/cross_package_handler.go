@@ -120,15 +120,13 @@ func (h *CrossPackageOperationHandler) CanMoveSafely(
 	// Parse source file
 	sourcePkg, err := h.parseSourceFile(sourceFile)
 	if err != nil {
-		return false, warnings, fmt.Errorf(
-
-			// Check destination file if it exists
-			"parse source file: %w", err)
+		return false, warnings, fmt.Errorf("parse source file: %w", err)
 	}
 
 	destPkg, destErr := h.parseDestinationFile(destFile)
 	if destErr != nil && destErr != ErrFileNotFound {
-		return false, warnings, destErr
+		return false, warnings, fmt.Errorf("parse destination file: %w", destErr)
+
 	}
 
 	// If destination exists, verify packages match

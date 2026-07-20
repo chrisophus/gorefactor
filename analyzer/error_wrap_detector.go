@@ -44,7 +44,7 @@ func FileErrorWrapIssues(file string) ([]ErrorWrapIssue, error) {
 			}
 			for _, expr := range ret.Results {
 				ident, ok := expr.(*ast.Ident)
-				if !ok || ident.Name != "err" {
+				if !ok || !isBareErrorIdent(ident) {
 					continue
 				}
 				line := fset.Position(ret.Pos()).Line
@@ -68,9 +68,17 @@ func FuncReturnsError(fn *ast.FuncDecl) bool {
 		return false
 	}
 	for _, field := range fn.Type.Results.List {
-		if ident, ok := field.Type.(*ast.Ident); ok && ident.Name == "error" {
-			return true
+		switch t := field.Type.(type) {
+		case *ast.Ident:
+			if t.Name == "error" {
+				return true
+			}
+		case *ast.SelectorExpr:
+			if t.Sel != nil && t.Sel.Name == "error" {
+				return true
+			}
 		}
 	}
 	return false
+
 }

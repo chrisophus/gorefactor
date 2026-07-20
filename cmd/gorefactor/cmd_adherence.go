@@ -32,6 +32,7 @@ import (
 func init() {
 	registerCommand(Command{
 		Name:        "adherence",
+		ReadOnly:    true,
 		Description: "Audit how much of the current .go diff went through gorefactor vs raw edits (advisory; modifications only, creates reported separately)",
 		Usage:       "adherence [--since <ref>] [--json]",
 		MinArgs:     0,

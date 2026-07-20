@@ -19,6 +19,7 @@ var addTestFlags = mutFlagSpec(nil)
 func init() {
 	registerCommand(Command{
 		Name:        "add-test",
+		Mutates:     true,
 		Description: "Generate a table-driven test scaffold for an exported function or method",
 		Usage:       "add-test <file> <Func|Receiver:Method> [--json] [--dry-run]",
 		MinArgs:     2,

@@ -12,32 +12,6 @@ import (
 	"time"
 )
 
-// Provider is the minimal LLM surface the driver needs: turn a
-// (system, user) pair into a single completion string. Keeping the
-// interface this small is deliberate harness engineering -- the model
-// only ever fills a constrained schema, so we never need streaming,
-// tools, or multi-turn state here.
-type Provider interface {
-	Complete(ctx context.Context, system, user string) (string, error)
-}
-
-// mockProvider returns scripted responses. It exists so the whole
-// driver loop can be tested deterministically and offline -- the
-// "mock" sensor in harness terms.
-type mockProvider struct {
-	responses []string
-	calls     int
-}
-
-func (m *mockProvider) Complete(_ context.Context, _, _ string) (string, error) {
-	if m.calls >= len(m.responses) {
-		return "", fmt.Errorf("mockProvider: no scripted response for call %d", m.calls+1)
-	}
-	r := m.responses[m.calls]
-	m.calls++
-	return r, nil
-}
-
 // openAIProvider talks to any OpenAI-compatible /chat/completions
 // endpoint. That single shape covers cloud OpenAI, Anthropic via an
 // OpenAI-compat gateway, and local servers (llama.cpp, Ollama, vLLM) --
@@ -51,10 +25,6 @@ type openAIProvider struct {
 	// cumulative local-model token usage (free, but the proxy for
 	// frontier tokens the junior avoided spending).
 	promptToks, completionToks int
-}
-
-func (p *openAIProvider) Complete(ctx context.Context, system, user string) (string, error) {
-	return p.complete(ctx, system, user, "")
 }
 
 // ChatTools implements toolChatter for any OpenAI-compatible endpoint.
@@ -192,18 +162,11 @@ func newOpenAIProvider(baseURL, apiKey, model string) *openAIProvider {
 	}
 }
 
-// schemaCompleter is implemented by providers that can enforce a JSON
-// schema at decode time. The loop type-asserts for it and falls back
-// to plain Complete (mock, Anthropic) when absent.
-type schemaCompleter interface {
-	CompleteSchema(ctx context.Context, system, user, schema string) (string, error)
-}
-
-// --- Tool-calling surface (Arm D) -----------------------------------
+// --- Tool-calling surface -------------------------------------------
 //
-// The agentic loop needs multi-turn function calling, not single-shot
-// completion. These types mirror the OpenAI /chat/completions tool
-// protocol, which Ollama (qwen2.5-coder) honors.
+// The agentic loop needs multi-turn function calling. These types
+// mirror the OpenAI /chat/completions tool protocol, which Ollama
+// (qwen2.5-coder) honors.
 
 type chatMessage struct {
 	Role       string     `json:"role"`
@@ -239,10 +202,10 @@ type toolChatter interface {
 	ChatTools(ctx context.Context, messages []chatMessage, tools []toolDef) (chatMessage, error)
 }
 
-// providerFromFlags builds the real provider from CLI/env config.
-// kind selects the wire protocol: "anthropic" for the native Messages
-// API (cheap Claude models), anything else for OpenAI-compatible.
-func providerFromFlags(kind, baseURL, model string) Provider {
+// providerFromFlags builds the real tool-calling provider from CLI/env
+// config. kind selects the wire protocol: "anthropic" for the native
+// Messages API (cheap Claude models), anything else for OpenAI-compatible.
+func providerFromFlags(kind, baseURL, model string) toolChatter {
 	switch strings.ToLower(kind) {
 	case "anthropic":
 		key := os.Getenv("ANTHROPIC_API_KEY")

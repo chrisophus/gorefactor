@@ -13,6 +13,8 @@ var apiDiffFlags = map[string]bool{"--json": false}
 func init() {
 	registerCommand(Command{
 		Name:        "api-diff",
+		ReadOnly:    true,
+		MCPTool:     true,
 		Description: "Compare the exported API surface of the working tree against a git ref (default HEAD) [--json]",
 		Usage:       "api-diff [git-ref] [--json]",
 		MinArgs:     0,

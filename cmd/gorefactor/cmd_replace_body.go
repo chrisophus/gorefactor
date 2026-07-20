@@ -15,6 +15,9 @@ var replaceBodyFlags = mutFlagSpec(nil)
 func init() {
 	registerCommand(Command{
 		Name:        "replace-body",
+		Mutates:     true,
+		MCPTool:     true,
+		TxnSafe:     true,
 		Description: "Replace a function/method body wholesale with new statements from arg or stdin",
 		Usage:       "replace-body <file> <Func|Receiver:Method> [content|-] [--json] [--dry-run] [--gate]",
 		MinArgs:     2,

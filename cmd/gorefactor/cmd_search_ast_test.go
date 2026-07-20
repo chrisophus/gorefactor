@@ -68,14 +68,24 @@ func TestSearchASTExpressionPattern(t *testing.T) {
 			t.Errorf("search-ast --json: %v", err)
 		}
 	})
-	var res struct {
-		Pattern string              `json:"pattern"`
-		Matches []analyzer.ASTMatch `json:"matches"`
-		Total   int                 `json:"total"`
+	// search-ast emits the shared {ok, error, data} envelope (P2 "one I/O
+	// contract"); the match payload lives under data.
+	var env struct {
+		OK    bool   `json:"ok"`
+		Error string `json:"error"`
+		Data  struct {
+			Pattern string              `json:"pattern"`
+			Matches []analyzer.ASTMatch `json:"matches"`
+			Total   int                 `json:"total"`
+		} `json:"data"`
 	}
-	if err := json.Unmarshal([]byte(out), &res); err != nil {
+	if err := json.Unmarshal([]byte(out), &env); err != nil {
 		t.Fatalf("invalid JSON: %v\n%s", err, out)
 	}
+	if !env.OK || env.Error != "" {
+		t.Fatalf("expected ok envelope, got %+v", env)
+	}
+	res := env.Data
 	if res.Total != 2 || len(res.Matches) != 2 {
 		t.Fatalf("expected 2 matches, got %+v", res)
 	}

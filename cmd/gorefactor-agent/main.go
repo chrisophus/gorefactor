@@ -1,13 +1,12 @@
 // Command gorefactor-agent drives gorefactor with a cheap or local LLM.
 //
-// It is the inferential half of a harness: a small model proposes a
-// constrained RefactoringPlan from an already-disambiguated spec, while
-// gorefactor (deterministic) applies it and the Go toolchain gates it.
-// The model never edits code and never sees line numbers.
+// It is the inferential half of a harness: a small model proposes
+// deterministic gorefactor ops (via tool calling), while gorefactor applies
+// them and the Go toolchain gates them. The model never edits code and
+// never sees line numbers.
 package main
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"flag"
@@ -23,15 +22,11 @@ func main() {
 		providerK   = flag.String("provider", "openai", "model provider: openai (OpenAI-compatible) or anthropic")
 		model       = flag.String("model", "gpt-4o-mini", "model name (cheap/local is the point)")
 		apiBase     = flag.String("api-base", "", "provider base URL (default per provider; set for local/proxy)")
-		maxIter     = flag.Int("max-iter", 0, "max steps/attempts (0 = mode default: agentic 40, single-shot 3)")
-		dryRun      = flag.Bool("dry-run", false, "single-shot only: preview the plan and diff; never apply")
+		maxIter     = flag.Int("max-iter", 0, "max steps (0 = mode default: agentic 40)")
 		allowDirty  = flag.Bool("allow-dirty", false, "skip the clean-git-worktree precondition")
 		verbose     = flag.Bool("verbose", false, "echo raw model output / model prose")
 		printPrompt = flag.Bool("print-prompt", false, "print the assembled prompt for the active mode and exit (no model call)")
 		showVersion = flag.Bool("version", false, "print version and exit")
-		noSchema    = flag.Bool("no-schema", false, "single-shot only: disable decode-time JSON-schema enforcement")
-		singleShot  = flag.Bool("single-shot", false, "use the single-shot constrained-plan path (required for providers without tool-calling support; supports -dry-run preview)")
-		interactive = flag.Bool("interactive", false, "agentic mode only: pause after each step for user feedback and guidance")
 		campaign    = flag.Bool("campaign", false, "sensor-driven autonomous mode: gorefactor findings -> agentic fixes -> commit-or-punt (no -spec needed)")
 		budget      = flag.Int("budget", 0, "token budget (prompt+completion) for the run; on exhaustion the agent stop-and-summarizes via a structured punt instead of wandering (0 = unlimited)")
 	)
@@ -48,21 +43,19 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(2)
 	}
-	spec = resolveEmptySpec(spec, campaign, interactive)
+	spec = resolveEmptySpec(spec, campaign)
 
 	cfg := Config{
 		Spec:       spec,
 		Dir:        *dir,
 		MaxIter:    *maxIter,
-		DryRun:     *dryRun,
 		AllowDirty: *allowDirty,
 		Verbose:    *verbose,
-		NoSchema:   *noSchema,
 		Budget:     *budget,
 		Out:        os.Stdout,
 	}
 
-	if printAssembledPrompt(printPrompt, singleShot, spec, dir) {
+	if printAssembledPrompt(printPrompt, spec, dir) {
 		return
 	}
 
@@ -81,13 +74,7 @@ func main() {
 
 	provider := providerFromFlags(*providerK, *apiBase, *model)
 
-	// Validate mode combinations
-	if *interactive && (*singleShot || *campaign) {
-		fmt.Fprintln(os.Stderr, "Error: -interactive is only for agentic mode (incompatible with -single-shot and -campaign)")
-		os.Exit(2)
-	}
-
-	if runErr := runSelectedMode(campaign, provider, cfg, singleShot, interactive); runErr != nil {
+	if runErr := runSelectedMode(campaign, provider, cfg); runErr != nil {
 		// A punt is not a crash: the junior cleanly handed work back.
 		// The structured report is already on stdout; exit 3 so a
 		// delegating (senior) agent can branch on "punted" vs "failed".
@@ -95,70 +82,33 @@ func main() {
 	}
 }
 
-func printAssembledPrompt(printPrompt *bool, singleShot *bool, spec string, dir *string) (done bool) {
-	if *printPrompt {
-		if *singleShot {
-			fmt.Println("===== SYSTEM (single-shot) =====")
-			fmt.Println(systemPrompt())
-			fmt.Println("\n===== USER =====")
-			fmt.Println(buildUserPrompt(spec, *dir, ""))
-		} else {
-			fmt.Println("===== SYSTEM (agentic, default) =====")
-			fmt.Println(agenticSystemPrompt(*dir))
-			fmt.Println("\n===== TOOLS =====")
-			for _, td := range toolCatalog() {
-				fmt.Printf("- %s: %s\n", td.Function.Name, td.Function.Description)
-			}
-			fmt.Println("\n===== TASK =====")
-			fmt.Println(strings.TrimSpace(spec))
-		}
-		return true
+func printAssembledPrompt(printPrompt *bool, spec string, dir *string) (done bool) {
+	if !*printPrompt {
+		return false
 	}
-	return
+	fmt.Println("===== SYSTEM (agentic, default) =====")
+	fmt.Println(agenticSystemPrompt(*dir))
+	fmt.Println("\n===== TOOLS =====")
+	for _, td := range toolCatalog() {
+		fmt.Printf("- %s: %s\n", td.Function.Name, td.Function.Description)
+	}
+	fmt.Println("\n===== TASK =====")
+	fmt.Println(strings.TrimSpace(spec))
+	return true
 }
 
-func runSelectedMode(campaign *bool, provider Provider, cfg Config, singleShot *bool, interactive *bool) error {
-	switch {
-	case *campaign:
-		tc, ok := provider.(toolChatter)
-		if !ok {
-			fmt.Fprintln(os.Stderr, "Error: -campaign needs a tool-calling provider (use -provider openai)")
-			os.Exit(2)
-		}
-		return RunCampaign(context.Background(), tc, cfg)
-	case *singleShot:
-		return RunDriver(context.Background(), provider, cfg)
-	default:
-		tc, ok := provider.(toolChatter)
-		if !ok {
-			fmt.Fprintln(os.Stderr,
-				"Error: the default agentic mode needs a tool-calling provider (use -provider openai); or pass -single-shot")
-			os.Exit(2)
-		}
-		if *interactive {
-			return RunInteractiveAgenticDriver(context.Background(), tc, cfg)
-		}
-		return RunAgenticDriver(context.Background(), tc, cfg)
+func runSelectedMode(campaign *bool, provider toolChatter, cfg Config) error {
+	if *campaign {
+		return RunCampaign(context.Background(), provider, cfg)
 	}
-
+	return RunAgenticDriver(context.Background(), provider, cfg)
 }
 
-func resolveEmptySpec(spec string, campaign *bool, interactive *bool) string {
+func resolveEmptySpec(spec string, campaign *bool) string {
 	if spec == "" && !*campaign {
-		if *interactive {
-			fmt.Print("What would you like to do? > ")
-			reader := bufio.NewReader(os.Stdin)
-			line, _ := reader.ReadString('\n')
-			spec = strings.TrimSpace(line)
-			if spec == "" {
-				fmt.Fprintln(os.Stderr, "Error: no spec provided")
-				os.Exit(2)
-			}
-		} else {
-			fmt.Fprintln(os.Stderr, "Error: -spec is required (text or @file), or use -campaign")
-			flag.Usage()
-			os.Exit(2)
-		}
+		fmt.Fprintln(os.Stderr, "Error: -spec is required (text or @file), or use -campaign")
+		flag.Usage()
+		os.Exit(2)
 	}
 	return spec
 }

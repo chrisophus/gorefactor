@@ -13,56 +13,6 @@ import (
 
 func (p *anthropicProvider) Tokens() (int, int) { return p.promptToks, p.completionToks }
 
-func (p *anthropicProvider) Complete(ctx context.Context, system, user string) (string, error) {
-	reqBody := map[string]any{
-		"model":      p.model,
-		"max_tokens": p.maxTokens,
-		"system":     system,
-		"messages": []map[string]any{
-			{"role": "user", "content": user},
-		},
-		"temperature": 0,
-	}
-	buf, err := json.Marshal(reqBody)
-	if err != nil {
-		return "", fmt.Errorf("marshal: %w", err)
-	}
-
-	status, body, err := p.doWithRetry(ctx, p.baseURL+"/v1/messages", buf)
-	if err != nil {
-		return "", fmt.Errorf("do with retry: %w", err)
-	}
-	if status != http.StatusOK {
-		return "", fmt.Errorf("anthropic HTTP %d: %s", status, strings.TrimSpace(string(body)))
-	}
-
-	var parsed struct {
-		Content []struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
-		} `json:"content"`
-		Usage struct {
-			InputTokens  int `json:"input_tokens"`
-			OutputTokens int `json:"output_tokens"`
-		} `json:"usage"`
-	}
-	if err := json.Unmarshal(body, &parsed); err != nil {
-		return "", fmt.Errorf("decode anthropic response: %w", err)
-	}
-	p.promptToks += parsed.Usage.InputTokens
-	p.completionToks += parsed.Usage.OutputTokens
-	var sb strings.Builder
-	for _, c := range parsed.Content {
-		if c.Type == "text" {
-			sb.WriteString(c.Text)
-		}
-	}
-	if sb.Len() == 0 {
-		return "", fmt.Errorf("anthropic returned no text content")
-	}
-	return sb.String(), nil
-}
-
 type anthMsg struct {
 	role   string
 	blocks []map[string]any

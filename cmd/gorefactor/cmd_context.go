@@ -18,6 +18,8 @@ const defaultContextBudget = 4000
 func init() {
 	registerCommand(Command{
 		Name:        "context",
+		ReadOnly:    true,
+		MCPTool:     true,
 		Description: "One-shot LLM context pack for a symbol: definition, callers, signature types, tests [--budget N] [--json]",
 		Usage:       "context <Symbol|Receiver:Method> [--budget N] [--in path] [--json]",
 		MinArgs:     1,

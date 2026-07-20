@@ -1,4 +1,4 @@
-package main
+package changesig
 
 import (
 	"fmt"
@@ -7,6 +7,8 @@ import (
 	"go/types"
 	"sort"
 	"strings"
+
+	"github.com/chrisophus/gorefactor/internal/cerr"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -30,10 +32,10 @@ func calleeIdent(call *ast.CallExpr) *ast.Ident {
 	return nil
 }
 
-// gatherFuncRefs finds every reference to the declaration at declPos across
-// all loaded packages (including _test.go variants). References that are not
-// direct calls (function used as a value, stored, passed, etc.) come back as
-// badRefs — those make a signature change unsafe.
+// gatherFuncRefs finds every reference to the declaration at declPos across all
+// loaded packages (including _test.go variants). References that are not direct
+// calls (function used as a value, stored, passed, etc.) come back as badRefs —
+// those make a signature change unsafe.
 func gatherFuncRefs(pkgs []*packages.Package, declPos token.Pos) (sites []sigCallSite, badRefs []string) {
 	seenSite := map[string]bool{}
 	seenBad := map[string]bool{}
@@ -82,8 +84,8 @@ func gatherFuncRefs(pkgs []*packages.Package, declPos token.Pos) (sites []sigCal
 	return sites, badRefs
 }
 
-// siteProblem reports why a call site cannot be rewritten mechanically
-// ("" = safe). arity counts flattened parameters; variadicIndex is -1 for
+// siteProblem reports why a call site cannot be rewritten mechanically ("" =
+// safe). arity counts flattened parameters; variadicIndex is -1 for
 // non-variadic targets.
 func siteProblem(s sigCallSite, arity, variadicIndex int) string {
 	info := s.pkg.TypesInfo
@@ -135,50 +137,50 @@ func checkRewriteSafety(locator string, badRefs []string, sites []sigCallSite, a
 		return nil
 	}
 	sort.Strings(problems)
-	return notFoundErrorf(
+	return cerr.NotFoundf(
 		"cannot safely rewrite all uses of %s; fix these sites first or update them manually:\n  %s",
 		locator, strings.Join(problems, "\n  "))
 }
 
 // insertArgEdit inserts value as argument idx of the call.
-func insertArgEdit(s sigCallSite, idx int, value string) textEdit {
+func insertArgEdit(s sigCallSite, idx int, value string) TextEdit {
 	fset := s.pkg.Fset
 	args := s.call.Args
 	if len(args) == 0 {
 		off := fset.Position(s.call.Lparen).Offset + 1
-		return textEdit{file: s.file, start: off, end: off, text: value}
+		return TextEdit{file: s.file, start: off, end: off, text: value}
 	}
 	if idx >= len(args) {
 		off := fset.Position(args[len(args)-1].End()).Offset
-		return textEdit{file: s.file, start: off, end: off, text: ", " + value}
+		return TextEdit{file: s.file, start: off, end: off, text: ", " + value}
 	}
 	off := fset.Position(args[idx].Pos()).Offset
-	return textEdit{file: s.file, start: off, end: off, text: value + ", "}
+	return TextEdit{file: s.file, start: off, end: off, text: value + ", "}
 }
 
 // removeArgEdit drops argument idx (including its separating comma).
-func removeArgEdit(s sigCallSite, idx int) textEdit {
+func removeArgEdit(s sigCallSite, idx int) TextEdit {
 	fset := s.pkg.Fset
 	args := s.call.Args
 	if len(args) == 1 {
-		return textEdit{file: s.file,
+		return TextEdit{file: s.file,
 			start: fset.Position(args[0].Pos()).Offset,
 			end:   fset.Position(args[0].End()).Offset}
 	}
 	if idx == len(args)-1 {
-		return textEdit{file: s.file,
+		return TextEdit{file: s.file,
 			start: fset.Position(args[idx-1].End()).Offset,
 			end:   fset.Position(args[idx].End()).Offset}
 	}
-	return textEdit{file: s.file,
+	return TextEdit{file: s.file,
 		start: fset.Position(args[idx].Pos()).Offset,
 		end:   fset.Position(args[idx+1].Pos()).Offset}
 }
 
 // interfaceConflicts lists module interfaces that the method's receiver
-// currently satisfies and that declare a method with this name — changing
-// the signature would silently break satisfaction at interface call sites,
-// which reference resolution cannot see.
+// currently satisfies and that declare a method with this name — changing the
+// signature would silently break satisfaction at interface call sites, which
+// reference resolution cannot see.
 func interfaceConflicts(pkgs []*packages.Package, recv *types.Named, methodName string) []string {
 	if recv == nil {
 		return nil
@@ -230,6 +232,7 @@ func countSiteFiles(sites []sigCallSite) int {
 	}
 	return len(files)
 }
+
 func (s sigCallSite) location() string {
 	p := s.pkg.Fset.Position(s.call.Pos())
 	return fmt.Sprintf("%s:%d", p.Filename, p.Line)

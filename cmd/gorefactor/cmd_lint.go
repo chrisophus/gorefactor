@@ -402,10 +402,13 @@ func defaultLintRules() []LintRule {
 		strandedCommentRule{},
 		orphanedConfigPathRule{},
 		trackedArtifactRule{},
+		advertisedButUnwiredRule{},
+		testOnlyLiveRule{},
 	}
 	rules = append(rules, logPropagationRules()...)
 	rules = append(rules, funcorderRules()...)
 	rules = append(rules, smellRules()...)
+	rules = append(rules, godPackageRule{})
 	rules = append(rules,
 		duplicateRule{},
 		deadCodeRule{},

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/chrisophus/gorefactor/analyzer"
+	"github.com/chrisophus/gorefactor/internal/astcache"
 )
 
 func findCallersCommand(args []string) error {
@@ -30,7 +31,7 @@ func findCallersCommand(args []string) error {
 		return err
 	}
 	ca := analyzer.NewCallAnalyzer(files)
-	ca.SeedASTs(globalParseCache.load(files))
+	ca.SeedASTs(astcache.GlobalParseCache.Load(files))
 	res, err := ca.FindCallers(name, recv)
 	if err != nil {
 		return err
@@ -87,7 +88,7 @@ func findUsesCommand(args []string) error {
 		return err
 	}
 	ua := analyzer.NewUseAnalyzer(files)
-	ua.SeedASTs(globalParseCache.load(files))
+	ua.SeedASTs(astcache.GlobalParseCache.Load(files))
 	uses, err := ua.FindAllUses(analyzer.SymbolQuery{Name: name, Receiver: recv})
 	if err != nil {
 		return err
@@ -126,7 +127,7 @@ func findImplementationsCommand(args []string) error {
 		return err
 	}
 	ia := analyzer.NewInterfaceAnalyzer(files)
-	ia.SeedASTs(globalParseCache.load(files))
+	ia.SeedASTs(astcache.GlobalParseCache.Load(files))
 	res, err := ia.FindImplementations(target)
 	if err != nil {
 		return err

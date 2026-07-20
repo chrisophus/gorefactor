@@ -73,9 +73,8 @@ func compactMessages(msgs []chatMessage, keep int) []chatMessage {
 // Frontier tokens are 0 by construction. The reliability battery
 // aggregates these blocks; Phase 3 correlates blast_radius against
 // tokens spent offline. A blastRadius of -1 means no target symbol was
-// resolvable from the spec. tc is `any` (not toolChatter) so both the
-// agentic drivers' toolChatter and the single-shot driver's Provider
-// can be passed straight through to the tokenStater type-assertion.
+// resolvable from the spec. tc is `any` so any tokenStater (toolChatter
+// implementations that track usage) can be passed through.
 func emitRunMetrics(out io.Writer, tc any, err error, steps, blastRadius int) {
 	outcome := "fixed"
 	switch {
@@ -102,8 +101,8 @@ func emitRunMetrics(out io.Writer, tc any, err error, steps, blastRadius int) {
 }
 
 // tokensUsed returns cumulative prompt+completion tokens from any
-// provider (agentic toolChatter or single-shot Provider), or 0 when it
-// does not expose usage. Used by the Phase 2 budget check in every mode.
+// provider that exposes usage, or 0 when it does not. Used by the
+// Phase 2 budget check in agentic and campaign modes.
 func tokensUsed(p any) int {
 	if ts, ok := p.(tokenStater); ok {
 		pt, ct := ts.Tokens()
@@ -255,25 +254,40 @@ func runLintAdvisory(dir string) string {
 	return b.String()
 }
 
-// gorefactorBin returns the path to the gorefactor binary, found as a sibling
-// of the running agent binary so it works regardless of PATH. The PATH
-// fallback resolves to an absolute path up front: the agent runs
-// autonomously, and execing whatever a mutable PATH happens to name on each
-// call would let a poisoned PATH swap the binary mid-run.
-func gorefactorBin() string {
+// findGorefactorBin locates an absolute path to the gorefactor binary: sibling of
+// the running agent first, then PATH via LookPath. Returns false when
+// neither resolves — never a bare "gorefactor" name.
+func findGorefactorBin() (string, bool) {
 	exe, err := os.Executable()
 	if err == nil {
 		sib := filepath.Join(filepath.Dir(exe), "gorefactor")
 		if _, err := os.Stat(sib); err == nil {
-			return sib
+			if abs, err := filepath.Abs(sib); err == nil {
+				return abs, true
+			}
+			return sib, true
 		}
 	}
-	if abs, err := exec.LookPath("gorefactor"); err == nil {
-		if abs, err := filepath.Abs(abs); err == nil {
-			return abs
-		}
+	abs, err := exec.LookPath("gorefactor")
+	if err != nil {
+		return "", false
 	}
-	return "gorefactor" // last resort; exec will fail loudly if absent
+	resolved, err := filepath.Abs(abs)
+	if err != nil {
+		return "", false
+	}
+	return resolved, true
+}
+
+// gorefactorBin returns an absolute path to the gorefactor binary: sibling of the running agent
+// first, then PATH via LookPath. Panics if neither resolves — never returns a bare "gorefactor"
+// name (a poisoned PATH would be RCE in an autonomous loop).
+func gorefactorBin() string {
+	if abs, ok := findGorefactorBin(); ok {
+		return abs
+	}
+	panic("gorefactor-agent: gorefactor binary not found as sibling of the agent executable or on PATH (refusing bare name)")
+
 }
 
 func logToolCall(out io.Writer, verbose bool, name, args, result string) {

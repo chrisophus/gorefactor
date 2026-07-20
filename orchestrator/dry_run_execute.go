@@ -102,12 +102,19 @@ func (o *Orchestrator) simulateOperationChange(operation *RefactoringOperation) 
 		pathMap[realPath] = tmpFile
 	}
 
+	// Type-aware operations (e.g. rename_declaration) load the package with
+	// go/packages, which needs a module context. The sandbox is a flat throw-away
+	// directory, so give it a minimal go.mod when the copied files lack one. This
+	// lets self-contained (stdlib-only) packages type-check in the sandbox.
+	if _, statErr := os.Stat(filepath.Join(tempDir, "go.mod")); os.IsNotExist(statErr) {
+		_ = os.WriteFile(filepath.Join(tempDir, "go.mod"), []byte("module gorefactordryrun\n\ngo 1.21\n"), 0600)
+	}
+
 	// Clone the operation, rewriting all file references to temp paths.
 	cloned := cloneOperationWithPaths(operation, pathMap)
 
-	// Execute the cloned operation using a fresh, snapshot-less orchestrator.
+	// Execute the cloned operation in the sandbox with a throw-away orchestrator.
 	inner := NewOrchestrator()
-	inner.SkipSnapshot = true
 	execResult, execErr := inner.ExecuteOperations([]*RefactoringOperation{cloned})
 	if execErr != nil {
 		return nil, fmt.Errorf("dry-run execution failed: %w", execErr)

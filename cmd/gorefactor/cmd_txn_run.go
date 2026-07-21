@@ -15,7 +15,7 @@ import (
 // before this is called, so no files are reported changed.
 func txnFail(jsonOut bool, ops []txnOpResult, err error) error {
 	if jsonOut {
-		emitJSON(txnResult{Success: false, Operation: "txn", Ops: ops, Error: err.Error()})
+		emitEnvelope(false, err.Error(), txnResult{Operation: "txn", Ops: ops})
 	}
 	return err
 }
@@ -118,8 +118,7 @@ func txnCommand(args []string) error {
 	}
 
 	if jsonOut {
-		emitJSON(txnResult{
-			Success:      true,
+		emitEnvelope(true, "", txnResult{
 			Operation:    "txn",
 			Ops:          ops,
 			FilesChanged: touched,

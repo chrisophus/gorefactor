@@ -70,7 +70,7 @@ func callgraphCommand(args []string) error {
 	tree := idx.BuildTree(def, direction, depth, map[string]bool{def.Key(): true})
 
 	if flags["--json"] != "" {
-		emitJSON(map[string]interface{}{
+		emitEnvelope(true, "", map[string]interface{}{
 			"target":    def.Key(),
 			"direction": direction,
 			"depth":     depth,

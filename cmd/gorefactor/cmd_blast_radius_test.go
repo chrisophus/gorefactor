@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -20,9 +19,7 @@ func TestBlastRadiusCommandJSON(t *testing.T) {
 	})
 
 	var br blastRadius
-	if err := json.Unmarshal([]byte(out), &br); err != nil {
-		t.Fatalf("invalid JSON: %v\n%s", err, out)
-	}
+	decodeEnvelope(t, out, &br)
 	if br.Target != "Leaf" {
 		t.Fatalf("target = %q, want Leaf", br.Target)
 	}

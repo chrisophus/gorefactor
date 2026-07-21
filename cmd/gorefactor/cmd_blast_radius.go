@@ -135,7 +135,8 @@ func blastRadiusCommand(args []string) error {
 	br := computeBlastRadius(idx, def)
 
 	if flags["--json"] != "" {
-		emitJSON(br)
+		emitEnvelope(true, "", br)
+
 		return nil
 	}
 

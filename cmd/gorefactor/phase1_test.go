@@ -325,12 +325,13 @@ func TestHistoryCommandListsJournal(t *testing.T) {
 			t.Errorf("history --json: %v", err)
 		}
 	})
-	var entries []orchestrator.JournalEntry
-	if err := json.Unmarshal([]byte(out), &entries); err != nil {
-		t.Fatalf("history --json output invalid: %v\n%s", err, out)
+	var hist struct {
+		Entries []orchestrator.JournalEntry `json:"entries"`
+		Total   int                         `json:"total"`
 	}
-	if len(entries) != 1 || entries[0].Command != "delete" {
-		t.Fatalf("unexpected journal entries: %+v", entries)
+	decodeEnvelope(t, out, &hist)
+	if hist.Total != 1 || len(hist.Entries) != 1 || hist.Entries[0].Command != "delete" {
+		t.Fatalf("unexpected journal entries: %+v", hist)
 	}
 }
 

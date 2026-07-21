@@ -33,6 +33,9 @@ build: test lint fmt vet ## Build binary (runs all checks first)
 	go build -o gorefactor ./cmd/gorefactor
 	@echo "$(GREEN)✓ Build successful$(NC)"
 
+build-fast: ## Build binary only, no checks (edit-build-retry loop; gate before committing)
+	go build -o gorefactor ./cmd/gorefactor
+
 install: ## Install binaries + helper scripts globally (on PATH), for use in ANY Go project
 	go install ./cmd/gorefactor ./cmd/gorefactor-agent
 	@install -m 0755 scripts/gorefactor-delegate.sh "$(shell go env GOPATH)/bin/gorefactor-delegate"

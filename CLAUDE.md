@@ -69,7 +69,8 @@ command does not load.
 ## Build, test, gate
 
 ```bash
-make build            # quality checks + build ./cmd/gorefactor
+make build-fast       # compile-only ./cmd/gorefactor (~seconds) — use while iterating
+make build            # quality checks + build ./cmd/gorefactor (~minutes)
 go build -o gorefactor-agent ./cmd/gorefactor-agent
 go test ./...         # full suite (~100s); scope to a package while iterating
 make gate             # doctor gate + baseline ratchet — run before committing

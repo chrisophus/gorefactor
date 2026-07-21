@@ -39,8 +39,8 @@ jobs:
 
       - name: Run gorefactor structural lint gate
         run: |
-          go build -o gorefactor ./cmd/gorefactor
-          ./gorefactor lint . --fail-on error
+          go build -o bin/gorefactor ./cmd/gorefactor
+          ./bin/gorefactor lint . --fail-on error
 
       # Ratchet: fail on new/worsened warning+ findings vs the committed
       # baseline snapshot (deterministic fingerprint match, line-number
@@ -48,7 +48,7 @@ jobs:
       # cleanup wave, re-lock with `gorefactor lint . --write-baseline`
       # and commit the shrunken .gorefactor-lint-baseline.json.
       - name: Structural lint ratchet (no new findings vs baseline)
-        run: ./gorefactor lint . --baseline --fail-on warning --fail-only
+        run: ./bin/gorefactor lint . --baseline --fail-on warning --fail-only
 
       # One-way enforcement: the committed baseline may only shrink vs the
       # PR base — re-baselining to absorb regressions fails here (set-based
@@ -68,7 +68,7 @@ jobs:
           if git log -1 --format=%B FETCH_HEAD | grep -qF '[baseline-growth]'; then
             echo "skipped: [baseline-growth] marker in head commit"
           else
-            ./gorefactor lint . --baseline-ratchet "origin/${{ github.base_ref }}"
+            ./bin/gorefactor lint . --baseline-ratchet "origin/${{ github.base_ref }}"
           fi
 
       - name: Run tests
@@ -96,10 +96,10 @@ jobs:
           go-version: 'stable'
 
       - name: Build
-        run: go build -o gorefactor ./cmd/gorefactor
+        run: go build -o bin/gorefactor ./cmd/gorefactor
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: gorefactor-linux
-          path: gorefactor
+          path: bin/gorefactor

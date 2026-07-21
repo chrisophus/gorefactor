@@ -164,22 +164,22 @@ go build -o gorefactor-agent ./cmd/gorefactor-agent
 
 ```bash
 # Structural issues in the module
-./gorefactor lint .
+./bin/gorefactor lint .
 
 # Autofix oversized files where safe
-./gorefactor lint . --fix
+./bin/gorefactor lint . --fix
 
 # Final gate: full structural lint + golangci + arch + go build + go test
-./gorefactor doctor
+./bin/gorefactor doctor
 
 # One-page summary of a file
-./gorefactor inspect path/to/file.go
+./bin/gorefactor inspect path/to/file.go
 
 # Agent: autonomous cleanup from lint findings (needs API key)
-./gorefactor-agent -campaign
+./bin/gorefactor-agent -campaign
 ```
 
-Run `./gorefactor` with no subcommand arguments to print the full command list.
+Run `./bin/gorefactor` with no subcommand arguments to print the full command list.
 
 ## `gorefactor` commands
 
@@ -555,8 +555,8 @@ See [CLAUDE.md → Token Efficiency](CLAUDE.md#token-efficiency--operation-selec
 ```bash
 make check              # fmt, vet, golangci-lint, test (full pre-commit)
 make test               # tests with race + coverage
-./gorefactor doctor     # lint + go build + go test (final gate before shipping)
-./gorefactor lint .     # Check for structural issues (file-size, duplicates, complexity, coupling, etc.)
+./bin/gorefactor doctor     # lint + go build + go test (final gate before shipping)
+./bin/gorefactor lint .     # Check for structural issues (file-size, duplicates, complexity, coupling, etc.)
 ```
 
 **Contributor workflow:**

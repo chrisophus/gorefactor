@@ -42,8 +42,8 @@ large-scale changes.
 
 ## Editing .go files: use gorefactor, not Write/Edit
 
-Default rule: modify `.go` files through `./gorefactor` commands — this repo dogfoods its own
-harness. Run `./gorefactor` (no args) for the full command list; `./gorefactor help <cmd>` for
+Default rule: modify `.go` files through `./bin/gorefactor` commands — this repo dogfoods its own
+harness. Run `./bin/gorefactor` (no args) for the full command list; `./bin/gorefactor help <cmd>` for
 usage. The ops you'll use most:
 
 | Want to… | Use |
@@ -79,7 +79,7 @@ make gate             # doctor gate + baseline ratchet — run before committing
 The lint baseline (`.gorefactor-lint-baseline.json`) is a one-way ratchet: new or worsened
 structural findings fail `make gate` and CI. Deliberate growth requires the visible opt-in
 (`BASELINE_GROWTH_OK=1` locally, `[baseline-growth]` commit marker in CI). After a cleanup wave,
-re-lock with `./gorefactor lint . --write-baseline` and commit the shrunken file.
+re-lock with `./bin/gorefactor lint . --write-baseline` and commit the shrunken file.
 
 ## Invariants tests will hold you to
 

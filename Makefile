@@ -30,11 +30,13 @@ install-tools: ## Install required build tools
 
 build: test lint fmt vet ## Build binary (runs all checks first)
 	@echo "$(BLUE)Building gorefactor...$(NC)"
-	go build -o gorefactor ./cmd/gorefactor
+	@mkdir -p bin
+	go build -o bin/gorefactor ./cmd/gorefactor
 	@echo "$(GREEN)✓ Build successful$(NC)"
 
 build-fast: ## Build binary only, no checks (edit-build-retry loop; gate before committing)
-	go build -o gorefactor ./cmd/gorefactor
+	@mkdir -p bin
+	go build -o bin/gorefactor ./cmd/gorefactor
 
 install: ## Install binaries + helper scripts globally (on PATH), for use in ANY Go project
 	go install ./cmd/gorefactor ./cmd/gorefactor-agent
@@ -44,18 +46,19 @@ install: ## Install binaries + helper scripts globally (on PATH), for use in ANY
 	@echo "  per project:  cd <proj> && gorefactor-init-project [--write]"
 
 gate: ## Doctor gate: build gorefactor, then lint + build + test (use as a commit/CI gate)
-	@go build -o gorefactor ./cmd/gorefactor
-	@./gorefactor doctor
+	@mkdir -p bin
+	@go build -o bin/gorefactor ./cmd/gorefactor
+	@./bin/gorefactor doctor
 	@# Ratchet: no new/worsened warning+ structural findings vs the committed
 	@# baseline (deterministic fingerprint match; info stays advisory). Skips
 	@# quietly when no baseline exists (fresh projects). Re-lock after cleanup
 	@# waves with: ./gorefactor lint . --write-baseline
-	@test ! -f .gorefactor-lint-baseline.json || ./gorefactor lint . --baseline --fail-on warning --fail-only
+	@test ! -f .gorefactor-lint-baseline.json || ./bin/gorefactor lint . --baseline --fail-on warning --fail-only
 	@# One-way enforcement: the baseline itself may only shrink vs HEAD —
 	@# re-baselining to absorb regressions fails here. Deliberate growth
 	@# (e.g. a new lint rule baselining its backlog):
 	@#   BASELINE_GROWTH_OK=1 git commit ...
-	@test -n "$(BASELINE_GROWTH_OK)" || ./gorefactor lint . --baseline-ratchet HEAD
+	@test -n "$(BASELINE_GROWTH_OK)" || ./bin/gorefactor lint . --baseline-ratchet HEAD
 
 
 # Sunset for non-empty baseline: 2026-10-19. Until then `make gate` allows a
@@ -69,12 +72,14 @@ gate-self-clean: gate ## Fail unless the lint baseline is empty (self-clean rele
 	else echo "$(RED)✗ baseline has $$n entr(y/ies); self-clean bar not met (sunset $(BASELINE_SUNSET))$(NC)"; exit 1; fi
 
 refactor: ## Delegate a spec to gorefactor-agent, Haiku->Sonnet escalation. Usage: make refactor SPEC="..."
-	@go build -o gorefactor-agent ./cmd/gorefactor-agent
+	@mkdir -p bin
+	@go build -o bin/gorefactor-agent ./cmd/gorefactor-agent
 	@scripts/gorefactor-delegate.sh "$(SPEC)" .
 
 refactor-campaign: ## Autonomous, sensor-driven lint cleanup via gorefactor-agent campaign mode
-	@go build -o gorefactor-agent ./cmd/gorefactor-agent
-	@./gorefactor-agent -campaign
+	@mkdir -p bin
+	@go build -o bin/gorefactor-agent ./cmd/gorefactor-agent
+	@./bin/gorefactor-agent -campaign
 
 test: ## Run all tests
 	@echo "$(BLUE)Running tests...$(NC)"
@@ -95,7 +100,7 @@ lint: ## Run golangci-lint
 fmt: ## Format code
 	@echo "$(BLUE)Formatting code...$(NC)"
 	go fmt ./...
-	@if [ -x ./gorefactor ]; then ./gorefactor format .; else go run ./cmd/gorefactor format .; fi
+	@if [ -x ./bin/gorefactor ]; then ./bin/gorefactor format .; else go run ./cmd/gorefactor format .; fi
 	@echo "$(GREEN)✓ Code formatted$(NC)"
 
 vet: ## Run go vet
@@ -129,17 +134,17 @@ quick-test: ## Run only failing tests (fast feedback)
 
 analyze-dir: ## Analyze directory structure (usage: make analyze-dir [DIR=path])
 	@echo "$(BLUE)Analyzing codebase...$(NC)"
-	./gorefactor lint $(or $(DIR),./analyzer)
+	./bin/gorefactor lint $(or $(DIR),./analyzer)
 
 find-symbol: ## Find uses of a symbol (usage: make find-symbol SYMBOL=name)
 	@if [ -z "$(SYMBOL)" ]; then echo "$(RED)Error: SYMBOL not specified. Usage: make find-symbol SYMBOL=MyFunction$(NC)"; exit 1; fi
 	@echo "$(BLUE)Finding uses of '$(SYMBOL)'...$(NC)"
-	./gorefactor find-uses $(SYMBOL)
+	./bin/gorefactor find-uses $(SYMBOL)
 
 find-callers: ## Find callers of a function (usage: make find-callers FUNC=name)
 	@if [ -z "$(FUNC)" ]; then echo "$(RED)Error: FUNC not specified. Usage: make find-callers FUNC=MyFunction$(NC)"; exit 1; fi
 	@echo "$(BLUE)Finding callers of '$(FUNC)'...$(NC)"
-	./gorefactor find-callers $(FUNC)
+	./bin/gorefactor find-callers $(FUNC)
 
 # Continuous Integration targets
 ci-lint: ## CI: Run linter with strict settings

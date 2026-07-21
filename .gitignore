@@ -2,6 +2,7 @@
 # does NOT also match the cmd/gorefactor/ source dir — an unanchored
 # "gorefactor" gitignores every untracked file under cmd/gorefactor/)
 /gorefactor
+/bin/
 /skill-refactor
 *.exe
 *.dll

@@ -155,18 +155,18 @@ func TestDetailedErrorErrorInterface(t *testing.T) {
 		t.Errorf("Expected error message 'test message', got %v", e.Error())
 	}
 
-	if !IsDetailedError(e) {
-		t.Error("IsDetailedError should return true")
+	if !isDetailedError(e) {
+		t.Error("isDetailedError should return true")
 	}
 
-	if AsDetailedError(e) == nil {
-		t.Error("AsDetailedError should return non-nil")
+	if asDetailedError(e) == nil {
+		t.Error("asDetailedError should return non-nil")
 	}
 
 	// Test with regular error
 	regularErr := NewDetailedError(ErrGeneric, "generic")
-	if !IsDetailedError(regularErr) {
-		t.Error("IsDetailedError should work with DetailedError instances")
+	if !isDetailedError(regularErr) {
+		t.Error("isDetailedError should work with DetailedError instances")
 	}
 }
 

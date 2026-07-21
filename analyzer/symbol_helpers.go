@@ -66,8 +66,8 @@ func (ua *UseAnalyzer) recordUse(use SymbolUse) {
 	ua.uses = append(ua.uses, use)
 }
 
-// FilterUsesByContext filters uses by their context
-func FilterUsesByContext(uses []SymbolUse, contexts ...UseContext) []SymbolUse {
+// filterUsesByContext filters uses by their context
+func filterUsesByContext(uses []SymbolUse, contexts ...UseContext) []SymbolUse {
 	if len(contexts) == 0 {
 		return uses
 	}

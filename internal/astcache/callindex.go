@@ -157,11 +157,18 @@ func CgReceiver(fn *ast.FuncDecl) string {
 	return analyzer.FuncReceiverName(fn)
 }
 
-// ResetIndexCaches clears both process-global caches. Tests and benchmarks call
-// it to force a cold rebuild; production code never needs it.
-func ResetIndexCaches() {
-	GlobalParseCache.Reset()
-	GlobalCallIndexCache.Reset()
+// BuildCallIndex parses every file once and records call edges between declared
+// functions. Selector calls (x.Foo()) are matched by method name; ident calls
+// (Foo()) are matched against plain functions.
+//
+// It is backed by the process-global parse and call-index caches, so in a
+// long-lived process — notably the `gorefactor mcp` server — unchanged files are
+// neither re-read nor re-parsed nor re-walked across calls; only changed files
+// (by mtime/size) are reprocessed and the cross-file edges are re-resolved. In
+// one-shot CLI use the cache is populated once and discarded at exit, so
+// behaviour and results are identical to a fresh build.
+func BuildCallIndex(files []string) (*CgIndex, error) {
+	return GlobalCallIndexCache.BuildWith(GlobalParseCache, files)
 }
 
 // CallIndexCache memoizes per-file cgFileData so unchanged files are never
@@ -228,24 +235,17 @@ func (c *CallIndexCache) Reset() {
 // GlobalCallIndexCache is the process-wide call-index cache used by the server.
 var GlobalCallIndexCache = NewCallIndexCache()
 
-// BuildCallIndex parses every file once and records call edges between declared
-// functions. Selector calls (x.Foo()) are matched by method name; ident calls
-// (Foo()) are matched against plain functions.
-//
-// It is backed by the process-global parse and call-index caches, so in a
-// long-lived process — notably the `gorefactor mcp` server — unchanged files are
-// neither re-read nor re-parsed nor re-walked across calls; only changed files
-// (by mtime/size) are reprocessed and the cross-file edges are re-resolved. In
-// one-shot CLI use the cache is populated once and discarded at exit, so
-// behaviour and results are identical to a fresh build.
-func BuildCallIndex(files []string) (*CgIndex, error) {
-	return GlobalCallIndexCache.BuildWith(GlobalParseCache, files)
+// resetIndexCaches clears both process-global caches. Tests and benchmarks call
+// it to force a cold rebuild; production code never needs it.
+func resetIndexCaches() {
+	GlobalParseCache.Reset()
+	GlobalCallIndexCache.Reset()
 }
 
-// BuildCallIndexUncached builds the index with fresh, throwaway caches, touching
+// buildCallIndexUncached builds the index with fresh, throwaway caches, touching
 // no global state. It always does a full cold parse+extract and exists for
 // benchmarking the cache and as an independent oracle in correctness tests.
-func BuildCallIndexUncached(files []string) (*CgIndex, error) {
+func buildCallIndexUncached(files []string) (*CgIndex, error) {
 	return NewCallIndexCache().BuildWith(NewParseCache(), files)
 }
 

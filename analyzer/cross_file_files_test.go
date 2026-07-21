@@ -162,9 +162,9 @@ func Helper() {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	analysis, err := AnalyzeCrossFile(tmpDir)
+	analysis, err := analyzeCrossFile(tmpDir, DefaultWalkOptions())
 	if err != nil {
-		t.Fatalf("AnalyzeCrossFile error: %v", err)
+		t.Fatalf("analyzeCrossFile error: %v", err)
 	}
 
 	if analysis == nil {

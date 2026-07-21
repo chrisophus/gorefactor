@@ -44,7 +44,7 @@ func main() {
 	}
 
 	// Should find 2 calls to ValidateEmail
-	callUses := FilterUsesByContext(uses, UsageCall)
+	callUses := filterUsesByContext(uses, UsageCall)
 	if len(callUses) != 2 {
 		t.Errorf("expected 2 calls, got %d", len(callUses))
 	}
@@ -105,7 +105,7 @@ func Test() {
 	}
 
 	// Should find both the definition and calls to Validate methods
-	callUses := FilterUsesByContext(uses, UsageCall)
+	callUses := filterUsesByContext(uses, UsageCall)
 	if len(callUses) < 2 {
 		t.Errorf("expected at least 2 calls to Validate, got %d", len(callUses))
 	}
@@ -266,7 +266,7 @@ func TestFilterUsesByContext(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := FilterUsesByContext(uses, test.contexts...)
+			result := filterUsesByContext(uses, test.contexts...)
 			if len(result) != test.expected {
 				t.Errorf("expected %d results, got %d", test.expected, len(result))
 			}

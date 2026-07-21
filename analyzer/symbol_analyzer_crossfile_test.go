@@ -60,7 +60,7 @@ func HandleRequest(req Request) {
 	}
 
 	// Should find definition in file1 and calls in file2 and file3
-	callUses := FilterUsesByContext(uses, UsageCall)
+	callUses := filterUsesByContext(uses, UsageCall)
 	if len(callUses) != 2 {
 		t.Errorf("expected 2 calls, got %d", len(callUses))
 	}
@@ -117,7 +117,7 @@ func UseB(b *TypeB) {
 	}
 
 	// Should find only TypeA.Process calls, not TypeB.Process
-	callUses := FilterUsesByContext(uses, UsageCall)
+	callUses := filterUsesByContext(uses, UsageCall)
 	for _, use := range callUses {
 		if use.Receiver != "" && !contains(use.Receiver, "TypeA") && !contains(use.Receiver, "*TypeA") {
 			t.Errorf("unexpected method receiver: %s", use.Receiver)

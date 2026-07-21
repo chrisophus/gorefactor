@@ -14,12 +14,6 @@
       "count": 1
     },
     {
-      "fingerprint": "analyzer/cross_file_analyzer.go:134\u0000test-only-live\u0000exported function cross_file_analyzer.go.AnalyzeCrossFile is referenced only from _test.go files — unexport it, move it into a test file, or delete it (or ignore if it is intentional external API)",
-      "file": "analyzer/cross_file_analyzer.go:134",
-      "rule": "test-only-live",
-      "count": 1
-    },
-    {
       "fingerprint": "analyzer/dead_code_detector.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): analyzer/dead_code_detector.go:#-#, analyzer/test_only_live.go:#-#",
       "file": "analyzer/dead_code_detector.go",
       "rule": "duplicate-block",
@@ -47,24 +41,6 @@
       "fingerprint": "analyzer/god_package.go\u0000duplicate-block\u0000#-stmt block duplicated in # places (impact #): analyzer/god_package.go:#-#, cmd/gorefactor/cmd_lint_passthrough.go:#-#",
       "file": "analyzer/god_package.go",
       "rule": "duplicate-block",
-      "count": 1
-    },
-    {
-      "fingerprint": "analyzer/import_resolver.go:19\u0000test-only-live\u0000exported function import_resolver.go.NewImportResolver is referenced only from _test.go files — unexport it, move it into a test file, or delete it (or ignore if it is intentional external API)",
-      "file": "analyzer/import_resolver.go:19",
-      "rule": "test-only-live",
-      "count": 1
-    },
-    {
-      "fingerprint": "analyzer/symbol_helpers.go:70\u0000test-only-live\u0000exported function symbol_helpers.go.FilterUsesByContext is referenced only from _test.go files — unexport it, move it into a test file, or delete it (or ignore if it is intentional external API)",
-      "file": "analyzer/symbol_helpers.go:70",
-      "rule": "test-only-live",
-      "count": 1
-    },
-    {
-      "fingerprint": "benchmark/agent_corpus.go\u0000low-gorefactor-adherence\u0000only #/# modified .go files went through gorefactor (#%); raw-edited: benchmark/agent_corpus.go, benchmark/main.go, benchmark/scenarios.go, benchmark/sweep.go, benchmark/sweep_test.go, cmd/gorefactor-agent/corpus.go, cmd/gorefactor-agent/doc_drift_test.go, cmd/gorefactor-agent/loop_test.go, cmd/gorefactor-agent/main.go, cmd/gorefactor-agent/phase_harness_test.go, cmd/gorefactor-agent/prompt_context.go, cmd/gorefactor-agent/provider.go, cmd/gorefactor-agent/provider_anthropic_methods.go, cmd/gorefactor/candidates.go, cmd/gorefactor/cli_errors.go, cmd/gorefactor/cmd_add_field.go, cmd/gorefactor/cmd_add_test_scaffold.go, cmd/gorefactor/cmd_adherence.go, cmd/gorefactor/cmd_api_diff.go, cmd/gorefactor/cmd_blast_radius.go, cmd/gorefactor/cmd_callgraph.go, cmd/gorefactor/cmd_callgraph_build.go, cmd/gorefactor/cmd_change_receiver.go, cmd/gorefactor/cmd_change_signature.go, cmd/gorefactor/cmd_context.go, cmd/gorefactor/cmd_direct.go, cmd/gorefactor/cmd_edit.go, cmd/gorefactor/cmd_extract.go, cmd/gorefactor/cmd_extract_interface.go, cmd/gorefactor/cmd_extract_var.go, cmd/gorefactor/cmd_find.go, cmd/gorefactor/cmd_format.go, cmd/gorefactor/cmd_history.go, cmd/gorefactor/cmd_hoist_regexp.go, cmd/gorefactor/cmd_implement_interface.go, cmd/gorefactor/cmd_inline.go, cmd/gorefactor/cmd_insert_map_entry.go, cmd/gorefactor/cmd_insert_switch_case.go, cmd/gorefactor/cmd_intent.go, cmd/gorefactor/cmd_lint.go, cmd/gorefactor/cmd_lint_blast_radius.go, cmd/gorefactor/cmd_lint_stranded_comment_test.go, cmd/gorefactor/cmd_lint_verify.go, cmd/gorefactor/cmd_mcp.go, cmd/gorefactor/cmd_mcp_phase#_test.go, cmd/gorefactor/cmd_mcp_test.go, cmd/gorefactor/cmd_mcp_write.go, cmd/gorefactor/cmd_move.go, cmd/gorefactor/cmd_orchestrate.go, cmd/gorefactor/cmd_registrations.go, cmd/gorefactor/cmd_remove_log_return.go, cmd/gorefactor/cmd_reorder_funcorder.go, cmd/gorefactor/cmd_replace_body.go, cmd/gorefactor/cmd_replace_in_literal.go, cmd/gorefactor/cmd_replace_text.go, cmd/gorefactor/cmd_review.go, cmd/gorefactor/cmd_search_ast.go, cmd/gorefactor/cmd_search_ast_test.go, cmd/gorefactor/cmd_set_doc.go, cmd/gorefactor/cmd_skeleton.go, cmd/gorefactor/cmd_split.go, cmd/gorefactor/cmd_split_run.go, cmd/gorefactor/cmd_test_affected.go, cmd/gorefactor/cmd_txn.go, cmd/gorefactor/cmd_txn_parse_test.go, cmd/gorefactor/cmd_txn_run.go, cmd/gorefactor/cmd_undo.go, cmd/gorefactor/cmd_wrap_errors.go, cmd/gorefactor/cmd_wrap_sentinels.go, cmd/gorefactor/lint_registry_test.go, cmd/gorefactor/main.go, cmd/gorefactor/main_test_test.go, cmd/gorefactor/mutation.go, cmd/gorefactor/phase#_test.go, cmd/gorefactor/registry.go, doctor/score.go, orchestrator/dispatch_dryrun_test.go, orchestrator/dry_run_execute.go, orchestrator/execute.go, orchestrator/journal_undo_test.go, orchestrator/op_delete_rename.go, orchestrator/op_helpers.go, orchestrator/types.go — prefer a gorefactor command (see CLAUDE.md) so edits are parse-checked and cheaper",
-      "file": "benchmark/agent_corpus.go",
-      "rule": "low-gorefactor-adherence",
       "count": 1
     },
     {
@@ -350,18 +326,6 @@
       "count": 1
     },
     {
-      "fingerprint": "cmd/gorefactor/error_context.go:181\u0000test-only-live\u0000exported function error_context.go.IsDetailedError is referenced only from _test.go files — unexport it, move it into a test file, or delete it (or ignore if it is intentional external API)",
-      "file": "cmd/gorefactor/error_context.go:181",
-      "rule": "test-only-live",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/error_context.go:187\u0000test-only-live\u0000exported function error_context.go.AsDetailedError is referenced only from _test.go files — unexport it, move it into a test file, or delete it (or ignore if it is intentional external API)",
-      "file": "cmd/gorefactor/error_context.go:187",
-      "rule": "test-only-live",
-      "count": 1
-    },
-    {
       "fingerprint": "doctor/baseline.go\u0000data-clumps\u0000Parameter group [root string, baseSHA string, substrates []Substrate] appears in # functions; consider creating a struct",
       "file": "doctor/baseline.go",
       "rule": "data-clumps",
@@ -383,18 +347,6 @@
       "fingerprint": "doctor/shape.go\u0000linear-search-in-loop\u0000linear search inside a loop (line #) — repeated O(n) scans; build a map keyed by the compared value before the outer loop",
       "file": "doctor/shape.go",
       "rule": "linear-search-in-loop",
-      "count": 1
-    },
-    {
-      "fingerprint": "internal/astcache/callindex.go:162\u0000test-only-live\u0000exported function callindex.go.ResetIndexCaches is referenced only from _test.go files — unexport it, move it into a test file, or delete it (or ignore if it is intentional external API)",
-      "file": "internal/astcache/callindex.go:162",
-      "rule": "test-only-live",
-      "count": 1
-    },
-    {
-      "fingerprint": "internal/astcache/callindex.go:248\u0000test-only-live\u0000exported function callindex.go.BuildCallIndexUncached is referenced only from _test.go files — unexport it, move it into a test file, or delete it (or ignore if it is intentional external API)",
-      "file": "internal/astcache/callindex.go:248",
-      "rule": "test-only-live",
       "count": 1
     },
     {

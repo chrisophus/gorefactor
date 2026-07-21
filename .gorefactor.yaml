@@ -1,3 +1,22 @@
+# What the gate actually enforces (one written answer, so `lint .` output and
+# `make gate` behavior can't be confused):
+#
+#   - `make gate` fails only on WARNING-or-worse findings that are new or
+#     worsened vs .gorefactor-lint-baseline.json (`--fail-on warning
+#     --fail-only`), plus the one-way ratchet that the baseline itself may only
+#     shrink. INFO-severity findings are always advisory: they appear in
+#     `lint .` output and in `doctor` counts but never fail the gate.
+#   - Consequence: `lint .` totals exceed the baseline entry count by design —
+#     the difference is the advisory info tier, not hidden suppression.
+#   - `untested-function` is doubly conditional: it runs only when a
+#     coverage.out profile exists in the root (produced by `make test` /
+#     `make coverage`), so its findings come and go with that artifact. A
+#     stale profile (referencing deleted files) is reported as its own
+#     finding rather than silently disabling the rule.
+#
+# Severity per rule is fixed in the rule implementations (cmd/gorefactor/
+# cmd_lint_*.go); thresholds that are configurable live under lint.thresholds.
+
 # Scope the analysis/health surface. examples/ holds intentional demonstration
 # programs (illustrative "before" code for `gorefactor recommend` etc.), not
 # shipping code, so its deliberately-dead helpers must not count against tree

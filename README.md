@@ -183,6 +183,11 @@ Run `./gorefactor` with no subcommand arguments to print the full command list.
 
 ## `gorefactor` commands
 
+Every command that accepts `--json` emits one shared envelope — `{"ok": bool,
+"error": "...", "data": {...}}` — with the command-specific payload under
+`data`. Machine consumers can branch on `ok` without knowing per-command
+shapes (pinned by `TestEnvelopeContractIsUniversal`).
+
 ### Analysis (read-only)
 
 | Command | Purpose |

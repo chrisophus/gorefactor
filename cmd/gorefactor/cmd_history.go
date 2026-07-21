@@ -29,7 +29,8 @@ func historyCommand(args []string) error {
 		return err
 	}
 	if flags["--json"] != "" {
-		emitJSON(entries)
+		emitEnvelope(true, "", map[string]interface{}{"entries": entries, "total": len(entries)})
+
 		return nil
 	}
 	if len(entries) == 0 {

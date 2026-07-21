@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -16,7 +17,21 @@ func goGate(dir, verb, target string) (string, error) {
 	if dir == "" {
 		dir = "."
 	}
-	cmd := exec.Command("go", verb, target)
+	args := []string{verb, target}
+	if verb == "build" {
+		// Send executables to a throwaway dir: `go build ./...` run inside a
+		// directory containing exactly one main package writes the binary
+		// into the working directory, littering package dirs (the exact
+		// defect the tracked-artifact sensor exists to catch). -o with a
+		// trailing-slash directory works for any number of main packages.
+		tmp, terr := os.MkdirTemp("", "gorefactor-gate-*")
+		if terr == nil {
+			defer func() { _ = os.RemoveAll(tmp) }()
+
+			args = []string{verb, "-o", tmp + string(os.PathSeparator), target}
+		}
+	}
+	cmd := exec.Command("go", args...)
 	cmd.Dir = dir
 	cmd.Env = analyzer.SanitizedGitEnv()
 	out, err := cmd.CombinedOutput()

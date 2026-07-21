@@ -21,7 +21,7 @@ func TestCallIndexCacheMatchesUncached(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cached build: %v", err)
 	}
-	cold, err := BuildCallIndexUncached(files)
+	cold, err := buildCallIndexUncached(files)
 	if err != nil {
 		t.Fatalf("uncached build: %v", err)
 	}
@@ -105,7 +105,7 @@ func TestCallIndexCacheInvalidatesOnChange(t *testing.T) {
 	}
 
 	// Cached result must equal a fully cold rebuild of the new state.
-	cold, err := BuildCallIndexUncached(files)
+	cold, err := buildCallIndexUncached(files)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func BenchmarkBuildCallIndexCold(b *testing.B) {
 	files := collectFiles(b, "../../analyzer")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := BuildCallIndexUncached(files); err != nil {
+		if _, err := buildCallIndexUncached(files); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -150,7 +150,7 @@ func BenchmarkBuildCallIndexCold(b *testing.B) {
 // as the MCP server does — files are stat'd but never re-parsed or re-walked.
 func BenchmarkBuildCallIndexWarm(b *testing.B) {
 	files := collectFiles(b, "../../analyzer")
-	ResetIndexCaches()
+	resetIndexCaches()
 	if _, err := BuildCallIndex(files); err != nil { // prime
 		b.Fatal(err)
 	}
@@ -181,7 +181,7 @@ func BenchmarkFindCallersCold(b *testing.B) {
 // is only definition/use collection over already-parsed ASTs.
 func BenchmarkFindCallersWarm(b *testing.B) {
 	files := collectFiles(b, "../../analyzer")
-	ResetIndexCaches()
+	resetIndexCaches()
 	{
 		ca := analyzer.NewCallAnalyzer(files)
 		ca.SeedASTs(GlobalParseCache.Load(files)) // prime

@@ -177,20 +177,6 @@ func (de *DetailedError) sortSuggestions() {
 	}
 }
 
-// IsDetailedError checks if an error is a DetailedError
-func IsDetailedError(err error) bool {
-	_, ok := err.(*DetailedError)
-	return ok
-}
-
-// AsDetailedError casts an error to DetailedError if possible
-func AsDetailedError(err error) *DetailedError {
-	if de, ok := err.(*DetailedError); ok {
-		return de
-	}
-	return nil
-}
-
 // ExampleVariableOutOfScopeError creates a detailed error for undefined variables
 func ExampleVariableOutOfScopeError(file string, startLine, endLine int, undefinedVars []string, definitions map[string]int) *DetailedError {
 	err := NewDetailedError(ErrVariableOutOfScope,
@@ -296,4 +282,18 @@ func ExampleImportCycleError(sourceFile, destFile, targetName string, cycle []st
 		WithDetail("importCycle", cycle)
 
 	return err
+}
+
+// isDetailedError checks if an error is a DetailedError
+func isDetailedError(err error) bool {
+	_, ok := err.(*DetailedError)
+	return ok
+}
+
+// asDetailedError casts an error to DetailedError if possible
+func asDetailedError(err error) *DetailedError {
+	if de, ok := err.(*DetailedError); ok {
+		return de
+	}
+	return nil
 }

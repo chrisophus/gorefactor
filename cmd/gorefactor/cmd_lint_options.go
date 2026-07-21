@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/chrisophus/gorefactor/analyzer"
@@ -296,8 +298,17 @@ func lintShouldFail(issues []lintIssue, failOn string) bool {
 	return false
 }
 func (opts lintOptions) lintContext(files []string) LintContext {
+	root := opts.root
+	if fi, err := os.Stat(root); err == nil && !fi.IsDir() {
+		// A single-file target must behave like its containing package dir:
+		// Root seeds the verify gate's working directory, the outcome journal,
+		// and the coverage-profile lookup, none of which work on a file path
+		// (exec.Command with a file as Dir fails, so --fix --verify would
+		// revert every fix it applied).
+		root = filepath.Dir(root)
+	}
 	ctx := LintContext{
-		Root:     opts.root,
+		Root:     root,
 		FixLevel: opts.fixLevel,
 		Files:    files,
 		MaxSize:  opts.maxSize,

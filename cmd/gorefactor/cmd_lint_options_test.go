@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -92,6 +94,22 @@ func TestFailingIssues(t *testing.T) {
 	// warning gate keeps warning+error, drops the advisory info finding.
 	if got := failingIssues(issues, "warning"); len(got) != 3 {
 		t.Fatalf("len(failingIssues(warning)) = %d, want 3 (info excluded)", len(got))
+	}
+}
+
+func TestLintContext_FileTargetRootIsDir(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "x.go")
+	if err := os.WriteFile(file, []byte("package x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	opts := lintOptions{root: file}
+	if got := opts.lintContext(nil).Root; got != dir {
+		t.Fatalf("file target: Root = %q, want containing dir %q", got, dir)
+	}
+	opts = lintOptions{root: dir}
+	if got := opts.lintContext(nil).Root; got != dir {
+		t.Fatalf("dir target: Root = %q, want %q", got, dir)
 	}
 }
 

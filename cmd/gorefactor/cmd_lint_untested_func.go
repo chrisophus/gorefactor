@@ -21,7 +21,15 @@ func (r untestedFunctionRule) Run(ctx LintContext) []lintIssue {
 	cmd.Dir = ctx.Root
 	out, err := cmd.Output()
 	if err != nil {
-		return nil
+		// A profile referencing deleted or renamed files makes `go tool cover`
+		// exit non-zero; swallowing that would silently disable the whole rule
+		// while the tree looks healthy. Surface the stale profile instead.
+		return []lintIssue{{
+			File:     "coverage.out",
+			Rule:     "untested-function",
+			Severity: "info",
+			Message:  "coverage profile is stale or unreadable (go tool cover -func failed); regenerate it with `make coverage` or delete coverage.out",
+		}}
 	}
 	var findings []lintIssue
 	for _, line := range strings.Split(string(out), "\n") {

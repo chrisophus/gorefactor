@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,9 +22,7 @@ func TestAffectedExpandsReverseImports(t *testing.T) {
 		}
 	})
 	var res testAffectedResult
-	if err := json.Unmarshal([]byte(out), &res); err != nil {
-		t.Fatalf("invalid JSON: %v\n%s", err, out)
-	}
+	decodeEnvelope(t, out, &res)
 	if res.Base != "HEAD" || len(res.ChangedFiles) != 1 || res.ChangedFiles[0] != "lib/lib.go" {
 		t.Fatalf("unexpected change set: %+v", res)
 	}
@@ -95,9 +92,7 @@ func TestAffectedRunPassing(t *testing.T) {
 		t.Fatalf("test-affected --run: %v", cmdErr)
 	}
 	var res testAffectedResult
-	if err := json.Unmarshal([]byte(out), &res); err != nil {
-		t.Fatalf("invalid JSON: %v\n%s", err, out)
-	}
+	decodeEnvelope(t, out, &res)
 	if !res.Ran || !res.Passed {
 		t.Fatalf("expected passing run: %+v", res)
 	}

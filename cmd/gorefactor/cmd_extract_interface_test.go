@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -116,12 +115,7 @@ func TestExtractInterfaceJSONOutput(t *testing.T) {
 		}
 	})
 	var res mutationResult
-	if err := json.Unmarshal([]byte(out), &res); err != nil {
-		t.Fatalf("output not valid JSON: %v\n%s", err, out)
-	}
-	if !res.Success {
-		t.Fatalf("expected success=true, got: %+v", res)
-	}
+	decodeEnvelope(t, out, &res)
 	if res.UndoToken == "" {
 		t.Fatal("undo token must be set on success")
 	}

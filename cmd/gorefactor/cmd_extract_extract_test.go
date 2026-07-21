@@ -15,10 +15,8 @@ func TestExtractErrorDetailsInJSON(t *testing.T) {
 
 	// Verify it serializes to JSON properly
 	result := mutationResult{
-		Success:      false,
 		Operation:    "extract",
 		File:         "test.go",
-		Error:        testErr.Error(),
 		ErrorDetails: testErr,
 	}
 
@@ -39,10 +37,6 @@ func TestExtractErrorDetailsInJSON(t *testing.T) {
 	}
 
 	// Verify it matches expected structure
-	if success, ok := unmarshaled["success"].(bool); !ok || success {
-		t.Error("success should be false")
-	}
-
 	if operation, ok := unmarshaled["operation"].(string); !ok || operation != "extract" {
 		t.Error("operation should be extract")
 	}

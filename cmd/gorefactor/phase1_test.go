@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -186,10 +185,8 @@ func TestMutationJSONOutputShape(t *testing.T) {
 		}
 	})
 	var res mutationResult
-	if err := json.Unmarshal([]byte(out), &res); err != nil {
-		t.Fatalf("output is not valid JSON: %v\n%s", err, out)
-	}
-	if !res.Success || res.Operation != "delete" || res.File != path {
+	decodeEnvelope(t, out, &res)
+	if res.Operation != "delete" || res.File != path {
 		t.Fatalf("unexpected result: %+v", res)
 	}
 	if res.UndoToken == "" {
@@ -206,12 +203,7 @@ func TestMutationJSONOutputShape(t *testing.T) {
 	})
 	assertExitCode(t, jerr, exitNotFound)
 	var eres mutationResult
-	if err := json.Unmarshal([]byte(out), &eres); err != nil {
-		t.Fatalf("error output is not valid JSON: %v\n%s", err, out)
-	}
-	if eres.Success || eres.Error == "" {
-		t.Fatalf("unexpected error result: %+v", eres)
-	}
+	decodeErrorEnvelope(t, out, &eres)
 	if len(eres.Candidates) == 0 || eres.Candidates[0] != "Keep" {
 		t.Fatalf("error result should list candidates, got %+v", eres.Candidates)
 	}
@@ -244,9 +236,7 @@ func TestDryRunDoesNotWriteOrJournal(t *testing.T) {
 		}
 	})
 	var res mutationResult
-	if err := json.Unmarshal([]byte(out), &res); err != nil {
-		t.Fatalf("invalid JSON: %v\n%s", err, out)
-	}
+	decodeEnvelope(t, out, &res)
 	if !res.DryRun || res.Diff == "" || res.UndoToken != "" {
 		t.Fatalf("unexpected dry-run result: %+v", res)
 	}

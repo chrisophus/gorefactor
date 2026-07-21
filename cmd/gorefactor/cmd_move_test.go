@@ -14,10 +14,8 @@ func TestMoveErrorDetails(t *testing.T) {
 		WithSuggestion("verify_name", "Check spelling", 0.95)
 
 	result := mutationResult{
-		Success:      false,
 		Operation:    "move",
 		File:         "test.go",
-		Error:        testErr.Error(),
 		ErrorDetails: testErr,
 	}
 

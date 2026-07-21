@@ -1,16 +1,11 @@
 package main
 
 import (
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 )
-
-// The tests in this file are the doc-drift / registry guards for the P2 "one
-// I/O contract" metadata (registry.go Command.ReadOnly/Mutates/Idempotent/
-// MCPTool/TxnSafe). The MCP and txn allowlists are derived from that metadata
-// (mcpReadOnlyTools, mcpWriteTools, txnSafeCommands), so these tests make it
-// impossible for a new command to silently skip classification or slip into a
-// safety-sensitive surface without a deliberate, reviewed change here.
 
 // TestCommandMetadata_ReadOnlyXorMutates forces every registered command to
 // declare exactly one of ReadOnly / Mutates. This is the core "cannot skip
@@ -100,6 +95,30 @@ func TestCommandMetadata_AllowlistsMatchGolden(t *testing.T) {
 	assertNameSet(t, "txn-safe commands", txnSafeCommands(), wantTxn)
 	assertNameSet(t, "idempotent commands",
 		commandsWhere(func(c Command) bool { return c.Idempotent }), wantIdempotent)
+}
+
+func TestEnvelopeContractIsUniversal(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+
+		if name == "mutation.go" {
+			continue
+		}
+		src, rerr := os.ReadFile(name)
+		if rerr != nil {
+			t.Fatal(rerr)
+		}
+		if strings.Contains(string(src), "emitJSON(") {
+			t.Errorf("%s calls emitJSON directly; emit structured output through emitEnvelope instead", name)
+		}
+	}
 }
 
 func assertNameSet(t *testing.T, label string, got, want []string) {

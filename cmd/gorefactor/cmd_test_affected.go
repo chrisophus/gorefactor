@@ -77,7 +77,11 @@ func testAffectedCommand(args []string) error {
 	}
 
 	if flags["--json"] != "" {
-		emitJSON(res)
+		errMsg := ""
+		if runErr != nil {
+			errMsg = runErr.Error()
+		}
+		emitEnvelope(runErr == nil, errMsg, res)
 		return runErr
 	}
 	fmt.Printf("changed vs %s: %d file(s) -> %d affected package(s)\n", res.Base, len(res.ChangedFiles), len(res.Packages))

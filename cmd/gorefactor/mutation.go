@@ -16,7 +16,6 @@ import (
 
 // mutationResult is the shared --json result shape for mutation commands.
 type mutationResult struct {
-	Success      bool           `json:"success"`
 	Operation    string         `json:"operation"`
 	File         string         `json:"file,omitempty"`
 	Detail       string         `json:"detail,omitempty"`
@@ -25,7 +24,6 @@ type mutationResult struct {
 	UndoToken    string         `json:"undoToken,omitempty"`
 	DryRun       bool           `json:"dryRun,omitempty"`
 	Diff         string         `json:"diff,omitempty"`
-	Error        string         `json:"error,omitempty"`
 	ErrorDetails *DetailedError `json:"errorDetails,omitempty"`
 	Candidates   []string       `json:"candidates,omitempty"`
 }
@@ -47,10 +45,10 @@ func emitJSON(v interface{}) {
 
 // jsonEnvelope is the shared top-level frame for structured command output
 // (P2 "one I/O contract"): a boolean ok, an optional error message, and the
-// command-specific payload under data. New commands should emit structured
-// results through emitEnvelope so consumers get one predictable shape; the
-// pre-existing bespoke shapes (mutationResult, txnResult, and the analysis
-// commands) are retained for backward compatibility.
+// command-specific payload under data. Every --json command emits through
+// emitEnvelope so consumers get one predictable shape; emitJSON is its
+// private plumbing and must not be called directly by commands (pinned by
+// TestEnvelopeContractIsUniversal).
 type jsonEnvelope struct {
 	OK    bool   `json:"ok"`
 	Error string `json:"error,omitempty"`
@@ -101,10 +99,8 @@ func (m *mutation) validateAndWrite(file string, out []byte, what, successMsg st
 func (m *mutation) fail(err error) error {
 	if m.jsonOut {
 		result := mutationResult{
-			Success:    false,
 			Operation:  m.op,
 			File:       m.file,
-			Error:      err.Error(),
 			Candidates: errCandidates(err),
 		}
 
@@ -113,7 +109,7 @@ func (m *mutation) fail(err error) error {
 			result.ErrorDetails = de
 		}
 
-		emitJSON(result)
+		emitEnvelope(false, err.Error(), result)
 	}
 	return err
 }
@@ -147,8 +143,7 @@ func (m *mutation) run(apply func() (string, error)) error {
 	if m.dryRun {
 		m.restore(before, files)
 		if m.jsonOut {
-			emitJSON(mutationResult{
-				Success:      true,
+			emitEnvelope(true, "", mutationResult{
 				Operation:    m.op,
 				File:         m.file,
 				Detail:       detail,
@@ -178,8 +173,7 @@ func (m *mutation) run(apply func() (string, error)) error {
 	}
 
 	if m.jsonOut {
-		emitJSON(mutationResult{
-			Success:      true,
+		emitEnvelope(true, "", mutationResult{
 			Operation:    m.op,
 			File:         m.file,
 			Detail:       detail,

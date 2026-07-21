@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -106,12 +105,7 @@ func TestImplementInterfaceJSONOutput(t *testing.T) {
 		}
 	})
 	var res mutationResult
-	if err := json.Unmarshal([]byte(out), &res); err != nil {
-		t.Fatalf("output is not valid JSON: %v\n%s", err, out)
-	}
-	if !res.Success {
-		t.Fatalf("expected success=true, got: %+v", res)
-	}
+	decodeEnvelope(t, out, &res)
 	if res.UndoToken == "" {
 		t.Fatal("success result must carry an undoToken")
 	}
@@ -128,10 +122,5 @@ type X struct{}
 	})
 	assertExitCode(t, jerr, exitNotFound)
 	var res mutationResult
-	if err := json.Unmarshal([]byte(out), &res); err != nil {
-		t.Fatalf("error output not valid JSON: %v\n%s", err, out)
-	}
-	if res.Success || res.Error == "" {
-		t.Fatalf("expected success=false with error message, got: %+v", res)
-	}
+	decodeErrorEnvelope(t, out, &res)
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -65,9 +64,7 @@ func TestSkeletonJSONOutline(t *testing.T) {
 		}
 	})
 	var outline skeletonOutline
-	if err := json.Unmarshal([]byte(out), &outline); err != nil {
-		t.Fatalf("invalid JSON: %v\n%s", err, out)
-	}
+	decodeEnvelope(t, out, &outline)
 	if outline.Package != "x" {
 		t.Fatalf("package = %q", outline.Package)
 	}

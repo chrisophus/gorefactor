@@ -58,7 +58,8 @@ func skeletonCommand(args []string) error {
 	}
 
 	if flags["--json"] != "" {
-		emitJSON(buildSkeletonOutline(file, fset, astFile, src))
+		emitEnvelope(true, "", buildSkeletonOutline(file, fset, astFile, src))
+
 		return nil
 	}
 	fmt.Print(renderSkeleton(fset, astFile, src))

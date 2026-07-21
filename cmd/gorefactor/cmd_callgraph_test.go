@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -89,11 +88,9 @@ func TestCallgraphJSONAndDepthLimit(t *testing.T) {
 		Depth     int     `json:"depth"`
 		Tree      *cgNode `json:"tree"`
 	}
-	if err := json.Unmarshal([]byte(out), &res); err != nil {
-		t.Fatalf("invalid JSON: %v\n%s", err, out)
-	}
+	decodeEnvelope(t, out, &res)
 	if res.Target != "Top" || res.Direction != "callees" || res.Depth != 1 {
-		t.Fatalf("unexpected envelope: %+v", res)
+		t.Fatalf("unexpected payload: %+v", res)
 	}
 	if len(res.Tree.Children) != 1 || res.Tree.Children[0].Name != "Middle" {
 		t.Fatalf("unexpected tree: %+v", res.Tree)

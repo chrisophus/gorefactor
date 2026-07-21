@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 	"os/exec"
 	"strings"
@@ -22,9 +21,7 @@ func TestAPIDiffDetectsChanges(t *testing.T) {
 		}
 	})
 	var res analyzer.APIDiffResult
-	if err := json.Unmarshal([]byte(out), &res); err != nil {
-		t.Fatalf("invalid JSON: %v\n%s", err, out)
-	}
+	decodeEnvelope(t, out, &res)
 	if res.Ref != "HEAD" || !res.Breaking {
 		t.Fatalf("expected breaking diff vs HEAD: %+v", res)
 	}
@@ -114,9 +111,7 @@ func TestAPIDiffAdditionsOnlyNotBreaking(t *testing.T) {
 		}
 	})
 	var res analyzer.APIDiffResult
-	if err := json.Unmarshal([]byte(out), &res); err != nil {
-		t.Fatalf("invalid JSON: %v\n%s", err, out)
-	}
+	decodeEnvelope(t, out, &res)
 	if res.Breaking {
 		t.Fatalf("pure additions must not be breaking: %+v", res)
 	}

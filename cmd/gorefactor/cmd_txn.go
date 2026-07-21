@@ -55,12 +55,10 @@ type txnOpResult struct {
 
 // txnResult is the overall --json result of a transaction.
 type txnResult struct {
-	Success      bool          `json:"success"`
 	Operation    string        `json:"operation"`
 	Ops          []txnOpResult `json:"ops"`
 	FilesChanged []string      `json:"filesChanged,omitempty"`
 	UndoToken    string        `json:"undoToken,omitempty"`
-	Error        string        `json:"error,omitempty"`
 }
 
 // Parse gate over every touched .go file.

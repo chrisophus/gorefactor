@@ -36,7 +36,8 @@ func apiDiffCommand(args []string) error {
 		return err
 	}
 	if flags["--json"] != "" {
-		emitJSON(res)
+		emitEnvelope(true, "", res)
+
 		return nil
 	}
 	printAPIDiff(res)

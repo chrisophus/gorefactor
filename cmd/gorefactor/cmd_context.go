@@ -81,7 +81,8 @@ func contextCommand(args []string) error {
 		return err
 	}
 	if flags["--json"] != "" {
-		emitJSON(pack)
+		emitEnvelope(true, "", pack)
+
 		return nil
 	}
 	fmt.Print(renderContextPack(pack))

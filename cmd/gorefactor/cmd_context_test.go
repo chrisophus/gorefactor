@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -73,9 +72,7 @@ func TestContextJSONShape(t *testing.T) {
 		}
 	})
 	var pack contextPack
-	if err := json.Unmarshal([]byte(out), &pack); err != nil {
-		t.Fatalf("invalid JSON: %v\n%s", err, out)
-	}
+	decodeEnvelope(t, out, &pack)
 	if pack.Symbol != "Validate" || pack.File != "order.go" || pack.Line != 10 {
 		t.Fatalf("unexpected header: %+v", pack)
 	}
@@ -103,9 +100,7 @@ func TestContextBudgetTruncates(t *testing.T) {
 		}
 	})
 	var pack contextPack
-	if err := json.Unmarshal([]byte(out), &pack); err != nil {
-		t.Fatalf("invalid JSON: %v\n%s", err, out)
-	}
+	decodeEnvelope(t, out, &pack)
 	if !pack.Truncated {
 		t.Fatalf("budget 200 should force truncation: %+v", pack)
 	}

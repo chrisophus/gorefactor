@@ -64,13 +64,7 @@ func (o *Orchestrator) simulateOperationChange(operation *RefactoringOperation) 
 	affected := dryRunAffectedFiles(operation)
 
 	// Snapshot the pre-operation content for every file that exists.
-	before := make(map[string]string, len(affected))
-	for _, f := range affected {
-		b, err := os.ReadFile(f)
-		if err == nil {
-			before[f] = string(b)
-		}
-	}
+	before := snapshotDryRunFiles(affected)
 	if len(before) == 0 && operation.File != "" {
 		// Source file does not exist — cannot simulate.
 		return nil, fmt.Errorf("source file %s not found", operation.File)
@@ -84,31 +78,11 @@ func (o *Orchestrator) simulateOperationChange(operation *RefactoringOperation) 
 	}
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
-	// Map real path → temp path.
-	pathMap := make(map[string]string, len(before))
-	for realPath, content := range before {
-		// Preserve the base name so package-clause detection works.
-		tmpFile := filepath.Join(tempDir, filepath.Base(realPath))
-		// Disambiguate when two files share a basename.
-		for i := 1; ; i++ {
-			if _, exists := pathMap[tmpFile]; !exists {
-				break
-			}
-			tmpFile = filepath.Join(tempDir, fmt.Sprintf("%d_%s", i, filepath.Base(realPath)))
-		}
-		if err := os.WriteFile(tmpFile, []byte(content), 0600); err != nil {
-			return nil, fmt.Errorf("dry-run: write temp file: %w", err)
-		}
-		pathMap[realPath] = tmpFile
+	pathMap, err := writeDryRunSandboxFiles(tempDir, before)
+	if err != nil {
+		return nil, err
 	}
-
-	// Type-aware operations (e.g. rename_declaration) load the package with
-	// go/packages, which needs a module context. The sandbox is a flat throw-away
-	// directory, so give it a minimal go.mod when the copied files lack one. This
-	// lets self-contained (stdlib-only) packages type-check in the sandbox.
-	if _, statErr := os.Stat(filepath.Join(tempDir, "go.mod")); os.IsNotExist(statErr) {
-		_ = os.WriteFile(filepath.Join(tempDir, "go.mod"), []byte("module gorefactordryrun\n\ngo 1.21\n"), 0600)
-	}
+	ensureDryRunGoMod(tempDir)
 
 	// Clone the operation, rewriting all file references to temp paths.
 	cloned := cloneOperationWithPaths(operation, pathMap)
@@ -123,7 +97,36 @@ func (o *Orchestrator) simulateOperationChange(operation *RefactoringOperation) 
 		return nil, fmt.Errorf("dry-run execution failed: %s", strings.Join(execResult.Errors, "; "))
 	}
 
-	// Compare temp files to the original snapshots to produce per-file diffs.
+	return collectDryRunDiffs(operation, before, pathMap, tempDir), nil
+}
+func writeDryRunSandboxFiles(tempDir string, before map[string]string) (map[string]string, error) {
+	pathMap := make(map[string]string, len(before))
+	for realPath, content := range before {
+
+		tmpFile := filepath.Join(tempDir, filepath.Base(realPath))
+
+		for i := 1; ; i++ {
+			if _, exists := pathMap[tmpFile]; !exists {
+				break
+			}
+			tmpFile = filepath.Join(tempDir, fmt.Sprintf("%d_%s", i, filepath.Base(realPath)))
+		}
+		if err := os.WriteFile(tmpFile, []byte(content), 0600); err != nil {
+			return nil, fmt.Errorf("dry-run: write temp file: %w", err)
+		}
+		pathMap[realPath] = tmpFile
+	}
+	return pathMap, nil
+}
+
+func ensureDryRunGoMod(tempDir string) {
+
+	if _, statErr := os.Stat(filepath.Join(tempDir, "go.mod")); os.IsNotExist(statErr) {
+		_ = os.WriteFile(filepath.Join(tempDir, "go.mod"), []byte("module gorefactordryrun\n\ngo 1.21\n"), 0600)
+	}
+}
+
+func collectDryRunDiffs(operation *RefactoringOperation, before map[string]string, pathMap map[string]string, tempDir string) []*FileDiff {
 	var diffs []*FileDiff
 	for realPath, tmpPath := range pathMap {
 		newContent, err := os.ReadFile(tmpPath)
@@ -143,11 +146,9 @@ func (o *Orchestrator) simulateOperationChange(operation *RefactoringOperation) 
 		})
 	}
 
-	// Also capture files created by the operation (e.g. move destination).
-	// A destination already in pathMap was captured by the loop above.
 	if newFile, ok := operation.Parameters["newFile"].(string); ok && newFile != "" {
 		if _, snapshotted := pathMap[newFile]; !snapshotted {
-			// Destination was not in our snapshot (new file); look in temp dir.
+
 			tmpCreated := filepath.Join(tempDir, filepath.Base(newFile))
 			if content, err := os.ReadFile(tmpCreated); err == nil {
 				diffs = append(diffs, &FileDiff{
@@ -159,8 +160,18 @@ func (o *Orchestrator) simulateOperationChange(operation *RefactoringOperation) 
 			}
 		}
 	}
+	return diffs
+}
 
-	return diffs, nil
+func snapshotDryRunFiles(affected []string) map[string]string {
+	before := make(map[string]string, len(affected))
+	for _, f := range affected {
+		b, err := os.ReadFile(f)
+		if err == nil {
+			before[f] = string(b)
+		}
+	}
+	return before
 }
 
 // generateDryRunSummary creates a human-readable summary of what would change

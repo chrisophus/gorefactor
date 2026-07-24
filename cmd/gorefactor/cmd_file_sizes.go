@@ -66,16 +66,7 @@ func analyzeFileSizes(args []string) error {
 		return nil
 	}
 
-	var issues []*analyzer.FileSizeIssue
-	for _, file := range files {
-		issue, err := analyzer.AnalyzeFileSize(file, maxSize)
-		if err != nil {
-
-			fmt.Fprintf(os.Stderr, "Warning: failed to analyze %s: %v\n", file, err)
-			continue
-		}
-		issues = append(issues, issue)
-	}
+	issues := analyzeFileSizeIssues(files, maxSize)
 
 	if format == "json" {
 		encoder := json.NewEncoder(os.Stdout)
@@ -107,4 +98,18 @@ func analyzeFileSizes(args []string) error {
 	}
 
 	return nil
+}
+
+func analyzeFileSizeIssues(files []string, maxSize int) []*analyzer.FileSizeIssue {
+	var issues []*analyzer.FileSizeIssue
+	for _, file := range files {
+		issue, err := analyzer.AnalyzeFileSize(file, maxSize)
+		if err != nil {
+
+			fmt.Fprintf(os.Stderr, "Warning: failed to analyze %s: %v\n", file, err)
+			continue
+		}
+		issues = append(issues, issue)
+	}
+	return issues
 }

@@ -92,9 +92,24 @@ func suggestPlanCommand(args []string) error {
 		return nil
 	}
 
+	printPlanSuggestions(filePath, suggestions)
+
+	printDetectedPatterns(patterns, suggester)
+
+	if outputFile != "" {
+
+		if err := suggestionsToOrchestrationPlan(suggestions, filePath, outputFile); err != nil {
+			return fmt.Errorf("failed to create plan file: %w", err)
+		}
+		fmt.Printf("\nPlan template saved to: %s\n", outputFile)
+	}
+
+	return nil
+}
+
+func printPlanSuggestions(filePath string, suggestions []analyzer.SuggestedPlan) {
 	fmt.Printf("=== Refactoring Suggestions for %s ===\n\n", filePath)
 	fmt.Printf("Found %d suggestion(s):\n\n", len(suggestions))
-
 	for i, suggestion := range suggestions {
 		fmt.Printf("%d. %s\n", i+1, suggestion.Name)
 		fmt.Printf("   Description: %s\n", suggestion.Description)
@@ -107,7 +122,9 @@ func suggestPlanCommand(args []string) error {
 		}
 		fmt.Println()
 	}
+}
 
+func printDetectedPatterns(patterns bool, suggester *analyzer.PlanSuggester) {
 	if patterns {
 		fmt.Println("\n=== Architectural Pattern Analysis ===")
 		pd := analyzer.NewPatternDetector(suggester.File)
@@ -123,14 +140,4 @@ func suggestPlanCommand(args []string) error {
 			}
 		}
 	}
-
-	if outputFile != "" {
-
-		if err := suggestionsToOrchestrationPlan(suggestions, filePath, outputFile); err != nil {
-			return fmt.Errorf("failed to create plan file: %w", err)
-		}
-		fmt.Printf("\nPlan template saved to: %s\n", outputFile)
-	}
-
-	return nil
 }

@@ -85,6 +85,11 @@ func inspectCommand(args []string) error {
 		fmt.Printf("  [%s] %s: %s\n", iss.Severity, iss.Rule, iss.Message)
 	}
 
+	printInspectRows(file, maxSize)
+	return nil
+}
+
+func printInspectRows(file string, maxSize int) {
 	if issue, err := analyzer.AnalyzeFileSize(file, maxSize); err == nil && len(issue.ExtractionHints) > 0 {
 		shown := 0
 		fmt.Println("\nTop extraction candidates:")
@@ -97,5 +102,4 @@ func inspectCommand(args []string) error {
 			shown++
 		}
 	}
-	return nil
 }

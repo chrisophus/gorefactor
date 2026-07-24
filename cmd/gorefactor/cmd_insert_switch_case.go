@@ -81,19 +81,7 @@ func insertSwitchCaseCommand(args []string) error {
 		return m.fail(fmt.Errorf("could not determine switch insertion offset"))
 	}
 
-	var b strings.Builder
-	b.WriteString("case ")
-	b.WriteString(strings.TrimSpace(caseExpr))
-	b.WriteString(":\n")
-	if s := strings.TrimRight(body, "\n"); strings.TrimSpace(s) != "" {
-		b.WriteString(s)
-		b.WriteString("\n")
-	}
-	newCase := b.String()
-
-	out := append([]byte{}, src[:insertOff]...)
-	out = append(out, []byte(newCase)...)
-	out = append(out, src[insertOff:]...)
+	out := buildSwitchCaseText(caseExpr, body, src, insertOff)
 
 	if _, perr := goparser.ParseFile(token.NewFileSet(), file, out, 0); perr != nil {
 		return m.fail(parseErrorf("inserting the case would produce a malformed file: %v", perr))
@@ -108,6 +96,22 @@ func insertSwitchCaseCommand(args []string) error {
 		}
 		return fmt.Sprintf("Added case %s to the switch in %s (%s)", strings.TrimSpace(caseExpr), locator, file), nil
 	})
+}
+
+func buildSwitchCaseText(caseExpr string, body string, src []byte, insertOff int) []byte {
+	var b strings.Builder
+	b.WriteString("case ")
+	b.WriteString(strings.TrimSpace(caseExpr))
+	b.WriteString(":\n")
+	if s := strings.TrimRight(body, "\n"); strings.TrimSpace(s) != "" {
+		b.WriteString(s)
+		b.WriteString("\n")
+	}
+	newCase := b.String()
+	out := append([]byte{}, src[:insertOff]...)
+	out = append(out, []byte(newCase)...)
+	out = append(out, src[insertOff:]...)
+	return out
 }
 
 func firstNodeOf[T ast.Node](root ast.Node) T {

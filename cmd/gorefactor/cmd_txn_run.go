@@ -49,6 +49,20 @@ func txnCommand(args []string) error {
 	}
 	defer orchestrator.EndBatch()
 
+	ops, err := runTxnScriptLines(lines, batch, jsonOut)
+	if err != nil {
+		return err
+	}
+
+	touched := batch.Touched()
+	if err := txnParseAndBuildGate(touched, batch, ops, jsonOut, gate); err != nil {
+		return err
+	}
+
+	// Commit: one journal entry for the whole batch.
+	return commitAndReportTxn(batch, ops, touched, jsonOut)
+}
+func runTxnScriptLines(lines []txnLine, batch *orchestrator.Batch, jsonOut bool) ([]txnOpResult, error) {
 	var ops []txnOpResult
 	for _, ln := range lines {
 		op := txnOpResult{Line: ln.line, Command: ln.argv[0]}
@@ -76,14 +90,16 @@ func txnCommand(args []string) error {
 			op.Error = runErr.Error()
 			ops = append(ops, op)
 			batch.Rollback()
-			return txnFail(jsonOut, ops,
+			return ops, txnFail(jsonOut, ops,
 				&cliError{Code: exitCodeFor(runErr), Msg: fmt.Sprintf("txn: line %d (%s) failed: %v — all changes rolled back", ln.line, ln.argv[0], runErr)})
 		}
 		op.Success = true
 		ops = append(ops, op)
 	}
+	return ops, nil
+}
 
-	touched := batch.Touched()
+func txnParseAndBuildGate(touched []string, batch *orchestrator.Batch, ops []txnOpResult, jsonOut, gate bool) error {
 	for _, f := range touched {
 		if !strings.HasSuffix(f, ".go") {
 			continue
@@ -104,8 +120,10 @@ func txnCommand(args []string) error {
 				gateErrorf("txn: build gate failed — all changes rolled back\n%v", err))
 		}
 	}
+	return nil
+}
 
-	// Commit: one journal entry for the whole batch.
+func commitAndReportTxn(batch *orchestrator.Batch, ops []txnOpResult, touched []string, jsonOut bool) error {
 	undoToken := ""
 	if !batch.Empty() {
 		detail := fmt.Sprintf("txn: %d operation(s), %d file(s)", len(ops), len(touched))

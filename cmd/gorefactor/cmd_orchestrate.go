@@ -33,18 +33,7 @@ func orchestrateRefactoring(args []string) error {
 	runTests := false
 
 	// Parse arguments
-	for i := 1; i < len(args); i++ {
-		switch args[i] {
-		case "--dry-run":
-			dryRun = true
-		case "--test":
-			runTests = true
-		default:
-			if outputFile == "" {
-				outputFile = args[i]
-			}
-		}
-	}
+	outputFile, dryRun, runTests = parseOrchestrateArguments(args, dryRun, runTests, outputFile)
 
 	// Create orchestrator
 	orch := orchestrator.NewOrchestrator()
@@ -114,6 +103,22 @@ func orchestrateRefactoring(args []string) error {
 	}
 
 	return nil
+}
+
+func parseOrchestrateArguments(args []string, dryRun bool, runTests bool, outputFile string) (string, bool, bool) {
+	for i := 1; i < len(args); i++ {
+		switch args[i] {
+		case "--dry-run":
+			dryRun = true
+		case "--test":
+			runTests = true
+		default:
+			if outputFile == "" {
+				outputFile = args[i]
+			}
+		}
+	}
+	return outputFile, dryRun, runTests
 }
 
 // runPlanDryRun executes a plan in dry-run mode: nothing is written, the

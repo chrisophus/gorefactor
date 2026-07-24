@@ -14,6 +14,8 @@ func TestDefaultLintRules_ExpectedSet(t *testing.T) {
 		"complexity",
 		"long-function",
 		"deep-nesting",
+		"hard-to-maintain",
+		"redundant-nil-guard",
 		"error-not-wrapped",
 		"high-coupling",
 		"high-blast-radius",

@@ -32,7 +32,7 @@ func (r deepNestingRule) Run(ctx LintContext) []lintIssue {
 			out = append(out, lintIssue{
 				File:      f,
 				Rule:      "deep-nesting",
-				Severity:  "warning",
+				Severity:  "info", // single-axis proxy; hard-to-maintain is the gate
 				Message:   fmt.Sprintf("%s has nesting depth %d (threshold %d, line %d) — consider extracting inner blocks", m.Key(), m.MaxNesting, threshold, m.Line),
 				Value:     m.MaxNesting,
 				Threshold: threshold,

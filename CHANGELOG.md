@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`hard-to-maintain` lint rule** — fails only when a function is long *and*
+  also complex, deeply nested, or dense with early returns, so long-but-simple
+  orchestrators stay quiet. Single-axis `long-function` / `complexity` /
+  `deep-nesting` findings are now info-tier sensors (advisory; they no longer
+  fail the gate alone).
+- **`redundant-nil-guard` lint rule** — flags unexported functions whose
+  pointer/interface entry nil-checks are redundant because every in-package
+  caller already establishes the argument as non-nil (`&x`, `new(T)`, a local
+  assigned from those, or an explicit nil reject / `!= nil` guard). Methods are
+  out of scope in v1.
+
+### Changed
+- **Lint baseline** re-locked for the new `hard-to-maintain` backlog (commit with
+  `BASELINE_GROWTH_OK=1`).
+
 ## [0.13.0] - 2026-07-20
 
 ### Added

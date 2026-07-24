@@ -20,8 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   out of scope in v1.
 
 ### Changed
-- **Lint baseline** re-locked for the new `hard-to-maintain` backlog (commit with
-  `BASELINE_GROWTH_OK=1`).
+- **Clear `hard-to-maintain` backlog** — extract helpers from the 11 previously
+  baselined command/orchestrator functions; baseline shrinks (96 → 69) with zero
+  `hard-to-maintain` entries.
 
 ## [0.13.0] - 2026-07-20
 

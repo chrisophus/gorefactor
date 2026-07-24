@@ -69,16 +69,7 @@ func changeReceiverCommand(args []string) error {
 	}
 
 	var method *ast.FuncDecl
-	for _, d := range node.Decls {
-		fd, ok := d.(*ast.FuncDecl)
-		if !ok || fd.Recv == nil || len(fd.Recv.List) == 0 || fd.Name.Name != methodName {
-			continue
-		}
-		if receiverTypeName(fd.Recv.List[0].Type) == typeName {
-			method = fd
-			break
-		}
-	}
+	method = findReceiverMethod(node, methodName, typeName, method)
 	if method == nil {
 		funcs, _ := declNames(node)
 		return m.fail(notFoundError(
@@ -99,17 +90,7 @@ func changeReceiverCommand(args []string) error {
 		})
 	}
 
-	typeStart := fset.Position(recvField.Type.Pos()).Offset
-	typeEnd := fset.Position(recvField.Type.End()).Offset
-	var newType string
-	if toPointer {
-		newType = "*" + string(src[typeStart:typeEnd])
-	} else {
-		star := recvField.Type.(*ast.StarExpr)
-		xs := fset.Position(star.X.Pos()).Offset
-		xe := fset.Position(star.X.End()).Offset
-		newType = string(src[xs:xe])
-	}
+	typeStart, typeEnd, newType := buildReceiverType(fset, recvField, toPointer, src)
 
 	var out []byte
 	out = append(out, src[:typeStart]...)
@@ -121,25 +102,61 @@ func changeReceiverCommand(args []string) error {
 
 	// Semantics warnings (best-effort, never fatal).
 	emitReceiverWarnings(method, typeName, methodName, toPointer)
+	warnSamePackageInterfaces(file, typeName, methodName)
+
+	return m.run(func() (string, error) {
+		return writeChangedReceiver(file, locator, out, toPointer)
+	})
+}
+func writeChangedReceiver(file, locator string, out []byte, toPointer bool) (string, error) {
+	if err := os.WriteFile(file, out, 0644); err != nil {
+		return "", err
+	}
+	if err := orchestrator.FormatImports(file); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", file, err)
+	}
+	form := "value"
+	if toPointer {
+		form = "pointer"
+	}
+	return fmt.Sprintf("Changed %s to a %s receiver in %s", locator, form, file), nil
+}
+
+func warnSamePackageInterfaces(file, typeName, methodName string) {
 	if ifaces := samePackageInterfacesDeclaring(file, methodName); len(ifaces) > 0 {
 		fmt.Fprintf(os.Stderr,
 			"warning: interface(s) in this package declare a method %q: %s — the method set of %s changes; verify assignments still compile (cross-package interfaces are not checked; use --gate or `gorefactor doctor`)\n",
 			methodName, strings.Join(ifaces, ", "), typeName)
 	}
+}
 
-	return m.run(func() (string, error) {
-		if err := os.WriteFile(file, out, 0644); err != nil {
-			return "", err
+func buildReceiverType(fset *token.FileSet, recvField *ast.Field, toPointer bool, src []byte) (int, int, string) {
+	typeStart := fset.Position(recvField.Type.Pos()).Offset
+	typeEnd := fset.Position(recvField.Type.End()).Offset
+	var newType string
+	if toPointer {
+		newType = "*" + string(src[typeStart:typeEnd])
+	} else {
+		star := recvField.Type.(*ast.StarExpr)
+		xs := fset.Position(star.X.Pos()).Offset
+		xe := fset.Position(star.X.End()).Offset
+		newType = string(src[xs:xe])
+	}
+	return typeStart, typeEnd, newType
+}
+
+func findReceiverMethod(node *ast.File, methodName string, typeName string, method *ast.FuncDecl) *ast.FuncDecl {
+	for _, d := range node.Decls {
+		fd, ok := d.(*ast.FuncDecl)
+		if !ok || fd.Recv == nil || len(fd.Recv.List) == 0 || fd.Name.Name != methodName {
+			continue
 		}
-		if err := orchestrator.FormatImports(file); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", file, err)
+		if receiverTypeName(fd.Recv.List[0].Type) == typeName {
+			method = fd
+			break
 		}
-		form := "value"
-		if toPointer {
-			form = "pointer"
-		}
-		return fmt.Sprintf("Changed %s to a %s receiver in %s", locator, form, file), nil
-	})
+	}
+	return method
 }
 
 // emitReceiverWarnings prints copy-semantics warnings for the direction of

@@ -42,24 +42,14 @@ func replaceTextCommand(args []string) error {
 	if len(pos) < 4 {
 		return usageErrorf("usage: replace-text <file> <funcname-or-Receiver:Method> <old-text> <new-text> [--first] [--occurrence N]")
 	}
-	file := pos[0]
-	locator := pos[1]
-	oldText := pos[2]
-	newText := pos[3]
+	file, locator, oldText, newText := pos[0], pos[1], pos[2], pos[3]
 
 	m := &mutation{op: "replace-text", file: file}
 	m.setCommonFlags(flags)
 
-	occurrence := 0 // 0 = replace all
-	if flags["--first"] != "" {
-		occurrence = 1
-	}
-	if v, ok := flags["--occurrence"]; ok {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 1 {
-			return m.fail(usageErrorf("--occurrence requires a positive integer, got %q", v))
-		}
-		occurrence = n
+	occurrence, err := parseReplaceTextOccurrence(flags)
+	if err != nil {
+		return m.fail(err)
 	}
 
 	src, err := os.ReadFile(file)
@@ -96,6 +86,45 @@ func replaceTextCommand(args []string) error {
 		return m.fail(notFoundErrorf("pattern occurs %d time(s) inside %s; occurrence %d requested", count, locator, occurrence))
 	}
 
+	newBody, detail := buildReplacementContent(occurrence, bodySrc, oldText, newText, count, locator)
+
+	return m.run(func() (string, error) {
+		return writeReplaceTextResult(file, src, startOffset, endOffset, newBody, detail)
+	})
+}
+func parseReplaceTextOccurrence(flags map[string]string) (int, error) {
+	occurrence := 0
+	if flags["--first"] != "" {
+		occurrence = 1
+	}
+	if v, ok := flags["--occurrence"]; ok {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			return 0, usageErrorf("--occurrence requires a positive integer, got %q", v)
+		}
+		occurrence = n
+	}
+	return occurrence, nil
+}
+
+func writeReplaceTextResult(file string, src []byte, startOffset, endOffset int, newBody, detail string) (string, error) {
+	out := append([]byte{}, src[:startOffset]...)
+	out = append(out, []byte(newBody)...)
+	out = append(out, src[endOffset:]...)
+	if err := os.WriteFile(file, out, 0644); err != nil {
+		return "", err
+	}
+
+	if _, perr := parser.ParseFile(token.NewFileSet(), file, out, parser.SkipObjectResolution); perr != nil {
+		return "", parseErrorf("replacement would make %s unparseable: %v", file, perr)
+	}
+	if err := orchestrator.FormatImports(file); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", file, err)
+	}
+	return detail, nil
+}
+
+func buildReplacementContent(occurrence int, bodySrc string, oldText string, newText string, count int, locator string) (string, string) {
 	var newBody string
 	var detail string
 	if occurrence == 0 {
@@ -105,27 +134,7 @@ func replaceTextCommand(args []string) error {
 		newBody = replaceNthOccurrence(bodySrc, oldText, newText, occurrence)
 		detail = fmt.Sprintf("Replaced occurrence %d of %d in %s", occurrence, count, locator)
 	}
-
-	return m.run(func() (string, error) {
-		out := append([]byte{}, src[:startOffset]...)
-		out = append(out, []byte(newBody)...)
-		out = append(out, src[endOffset:]...)
-		if err := os.WriteFile(file, out, 0644); err != nil {
-			return "", err
-		}
-		// Text substitution is not statement-aware, so a caller-supplied
-		// replacement can leave the body syntactically broken. Refuse that:
-		// returning an error here makes m.run restore the pre-edit snapshot,
-		// upholding the harness guarantee that a mutation never writes
-		// malformed Go (this also backstops `edit`'s fallback path).
-		if _, perr := parser.ParseFile(token.NewFileSet(), file, out, parser.SkipObjectResolution); perr != nil {
-			return "", parseErrorf("replacement would make %s unparseable: %v", file, perr)
-		}
-		if err := orchestrator.FormatImports(file); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", file, err)
-		}
-		return detail, nil
-	})
+	return newBody, detail
 }
 
 // replaceNthOccurrence replaces only the n-th (1-based) occurrence of old.

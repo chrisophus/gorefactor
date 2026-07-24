@@ -70,6 +70,59 @@ func inlineCommand(args []string) error {
 
 	// Build per-file edit lists.
 	edits := map[string][]inlineTextEdit{}
+	buildInlineSiteEdits(sites, tmpl, edits)
+
+	// Delete the declaration (including its doc comment).
+	addInlineDeclarationDeletion(edits, file, fset, target, declSrc)
+
+	// Apply edits in memory, parse-verify every file, then write.
+	results, err := buildInlineFileResults(edits, funcName)
+	if err != nil {
+		return m.fail(err)
+	}
+
+	return m.run(func() (string, error) {
+		return writeInlineResults(results, funcName, file, len(sites))
+	})
+
+}
+func buildInlineFileResults(edits map[string][]inlineTextEdit, funcName string) (map[string][]byte, error) {
+	results := map[string][]byte{}
+	for f, list := range edits {
+		src, err := os.ReadFile(f)
+		if err != nil {
+			return nil, err
+		}
+		out, err := applyInlineEdits(src, list)
+		if err != nil {
+			return nil, err
+		}
+		if _, perr := goparser.ParseFile(token.NewFileSet(), f, out, 0); perr != nil {
+			return nil, parseErrorf("inlining %s would produce a malformed file %s: %v", funcName, f, perr)
+		}
+		results[f] = out
+	}
+	return results, nil
+}
+
+func writeInlineResults(results map[string][]byte, funcName, file string, siteCount int) (string, error) {
+	for f, out := range results {
+		if err := os.WriteFile(f, out, 0644); err != nil {
+			return "", err
+		}
+		if err := orchestrator.FormatImports(f); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", f, err)
+		}
+	}
+	return fmt.Sprintf("Inlined %s into %d call site(s) and deleted it from %s", funcName, siteCount, file), nil
+}
+
+func addInlineDeclarationDeletion(edits map[string][]inlineTextEdit, file string, fset *token.FileSet, target *ast.FuncDecl, declSrc []byte) {
+	edits[file] = append(edits[file], inlineDeclDeletionEdit(fset, target, declSrc))
+}
+
+// Fallback rename: extract created a duplicate declaration; the AST command cannot disambiguate duplicate targets.
+func buildInlineSiteEdits(sites []inlineCallSite, tmpl *inlineTemplate, edits map[string][]inlineTextEdit) {
 	for _, s := range sites {
 		argTexts := make([]string, len(s.call.Args))
 		for i := range s.call.Args {
@@ -89,39 +142,6 @@ func inlineCommand(args []string) error {
 		}
 		edits[s.file] = append(edits[s.file], inlineTextEdit{start: start, end: end, text: text})
 	}
-
-	// Delete the declaration (including its doc comment).
-	edits[file] = append(edits[file], inlineDeclDeletionEdit(fset, target, declSrc))
-
-	// Apply edits in memory, parse-verify every file, then write.
-	results := map[string][]byte{}
-	for f, list := range edits {
-		src, err := os.ReadFile(f)
-		if err != nil {
-			return m.fail(err)
-		}
-		out, err := applyInlineEdits(src, list)
-		if err != nil {
-			return m.fail(err)
-		}
-		if _, perr := goparser.ParseFile(token.NewFileSet(), f, out, 0); perr != nil {
-			return m.fail(parseErrorf("inlining %s would produce a malformed file %s: %v", funcName, f, perr))
-		}
-		results[f] = out
-	}
-
-	return m.run(func() (string, error) {
-		for f, out := range results {
-			if err := os.WriteFile(f, out, 0644); err != nil {
-				return "", err
-			}
-			if err := orchestrator.FormatImports(f); err != nil {
-				fmt.Fprintf(os.Stderr, "warning: format imports on %s: %v\n", f, err)
-			}
-		}
-		return fmt.Sprintf("Inlined %s into %d call site(s) and deleted it from %s", funcName, len(sites), file), nil
-	})
-
 }
 
 func inlineFindTargetDecl(node *ast.File, file, funcName string) (*ast.FuncDecl, error) {

@@ -260,12 +260,6 @@
       "count": 1
     },
     {
-      "fingerprint": "coverage.out\u0000untested-function\u0000coverage profile is stale or unreadable (go tool cover -func failed); regenerate it with `make coverage` or delete coverage.out",
-      "file": "coverage.out",
-      "rule": "untested-function",
-      "count": 1
-    },
-    {
       "fingerprint": "doctor/baseline.go\u0000data-clumps\u0000Parameter group [root string, baseSHA string, substrates []Substrate] appears in # functions; consider creating a struct",
       "file": "doctor/baseline.go",
       "rule": "data-clumps",

@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Clear `hard-to-maintain` backlog** — extract helpers from the 11 previously
-  baselined command/orchestrator functions; baseline shrinks (96 → 69) with zero
+  baselined command/orchestrator functions; baseline shrinks (96 → 68) with zero
   `hard-to-maintain` entries.
 
 ## [0.13.0] - 2026-07-20

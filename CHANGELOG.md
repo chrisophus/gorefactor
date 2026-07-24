@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-07-24
+
 ### Added
 - **`hard-to-maintain` lint rule** — fails only when a function is long *and*
   also complex, deeply nested, or dense with early returns, so long-but-simple
@@ -23,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Clear `hard-to-maintain` backlog** — extract helpers from the 11 previously
   baselined command/orchestrator functions; baseline shrinks (96 → 64) with zero
   `hard-to-maintain` entries.
+- **Build output** — compile artifacts go under gitignored `bin/` so local and
+  CI builds no longer litter package directories with binaries.
 
 ## [0.13.0] - 2026-07-20
 

@@ -193,7 +193,7 @@ func hasEntryNilGuard(fd *ast.FuncDecl, param string) bool {
 		case *ast.AssignStmt, *ast.DeclStmt, *ast.ExprStmt:
 			continue
 		case *ast.IfStmt:
-			return isNilCheckCond(s.Cond, param) && bodyStartsWithReturn(s.Body)
+			return isNilCompareOp(s.Cond, param, token.EQL) && bodyStartsWithReturn(s.Body)
 		default:
 			return false
 		}
@@ -201,9 +201,6 @@ func hasEntryNilGuard(fd *ast.FuncDecl, param string) bool {
 	return false
 }
 
-func isNilCheckCond(cond ast.Expr, param string) bool {
-	return isNilCompareOp(cond, param, token.EQL)
-}
 func isNilCompareOp(cond ast.Expr, param string, op token.Token) bool {
 	bin, ok := cond.(*ast.BinaryExpr)
 	if !ok || bin.Op != op {
@@ -351,17 +348,13 @@ func enclosingNonNilGuard(body *ast.BlockStmt, call *ast.CallExpr, name string) 
 		if !ok {
 			return true
 		}
-		if isNonNilCheckCond(ifs.Cond, name) && nodeContains(ifs.Body, call) {
+		if isNilCompareOp(ifs.Cond, name, token.NEQ) && nodeContains(ifs.Body, call) {
 			found = true
 			return false
 		}
 		return true
 	})
 	return found
-}
-
-func isNonNilCheckCond(cond ast.Expr, param string) bool {
-	return isNilCompareOp(cond, param, token.NEQ)
 }
 
 func precedingNilReject(body *ast.BlockStmt, call *ast.CallExpr, name string) bool {
@@ -375,7 +368,7 @@ func precedingNilReject(body *ast.BlockStmt, call *ast.CallExpr, name string) bo
 			if nodeContains(stmt, call) {
 				for j := 0; j < i; j++ {
 					ifs, ok := list[j].(*ast.IfStmt)
-					if ok && isNilCheckCond(ifs.Cond, name) && bodyStartsWithReturn(ifs.Body) {
+					if ok && isNilCompareOp(ifs.Cond, name, token.EQL) && bodyStartsWithReturn(ifs.Body) {
 						okProven = true
 						return
 					}

@@ -206,24 +206,6 @@
       "count": 1
     },
     {
-      "fingerprint": "cmd/gorefactor/cmd_lint_redundant_nil_guard.go\u0000pass-through-param\u0000parameter \"name\" of enclosingNonNilGuard (line #) is forwarded through # call layers without being used — prop drilling; consider a params struct or restructuring the call chain",
-      "file": "cmd/gorefactor/cmd_lint_redundant_nil_guard.go",
-      "rule": "pass-through-param",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_lint_redundant_nil_guard.go\u0000pass-through-param\u0000parameter \"name\" of precedingNilReject (line #) is forwarded through # call layers without being used — prop drilling; consider a params struct or restructuring the call chain",
-      "file": "cmd/gorefactor/cmd_lint_redundant_nil_guard.go",
-      "rule": "pass-through-param",
-      "count": 1
-    },
-    {
-      "fingerprint": "cmd/gorefactor/cmd_lint_redundant_nil_guard.go\u0000pass-through-param\u0000parameter \"param\" of hasEntryNilGuard (line #) is forwarded through # call layers without being used — prop drilling; consider a params struct or restructuring the call chain",
-      "file": "cmd/gorefactor/cmd_lint_redundant_nil_guard.go",
-      "rule": "pass-through-param",
-      "count": 1
-    },
-    {
       "fingerprint": "cmd/gorefactor/cmd_orchestrate.go\u0000long-function\u0000orchestrateRefactoring is # lines (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor/cmd_orchestrate.go",
       "rule": "long-function",
@@ -269,12 +251,6 @@
       "fingerprint": "doctor/filter.go\u0000data-clumps\u0000Parameter group [findings []Finding, root string, walk analyzer.WalkOptions] appears in # functions; consider creating a struct",
       "file": "doctor/filter.go",
       "rule": "data-clumps",
-      "count": 1
-    },
-    {
-      "fingerprint": "doctor/score.go:101\u0000test-only-live\u0000exported function score.go.ScoreClassifiedRules is referenced only from _test.go files — unexport it, move it into a test file, or delete it (or ignore if it is intentional external API)",
-      "file": "doctor/score.go:101",
-      "rule": "test-only-live",
       "count": 1
     },
     {

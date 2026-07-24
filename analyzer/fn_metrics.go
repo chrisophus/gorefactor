@@ -10,7 +10,7 @@ import (
 )
 
 // FunctionMetrics holds per-function structural metrics used by the review
-// command and the long-function / deep-nesting lint rules.
+// command and the long-function / deep-nesting / hard-to-maintain lint rules.
 type FunctionMetrics struct {
 	Name       string `json:"name"`
 	Receiver   string `json:"receiver,omitempty"`
@@ -19,6 +19,10 @@ type FunctionMetrics struct {
 	Lines      int    `json:"lines"`
 	Complexity int    `json:"complexity"`
 	MaxNesting int    `json:"maxNesting"`
+	// ErrorPaths counts if-bodies whose first statement is a return (early-exit
+	// density). Paired with length in hard-to-maintain so long straight-line
+	// orchestrators stay quiet while long+branchy error ladders do not.
+	ErrorPaths int `json:"errorPaths"`
 	// LiteralLines is the count of source lines occupied by literal data in
 	// the body: composite literals (slice/map/struct catalogs) and multi-line
 	// string literals (templates, prompts, embedded text). A declarative
@@ -89,6 +93,7 @@ func FunctionMetricsForSource(filename string, src []byte) ([]FunctionMetrics, e
 			Lines:        end - start + 1,
 			Complexity:   calculateFunctionComplexity(fn),
 			MaxNesting:   functionMaxNesting(fn),
+			ErrorPaths:   functionErrorPaths(fn),
 			LiteralLines: compositeLiteralLines(fset, fn.Body),
 			Dispatch:     AnalyzeDispatch(fset, fn),
 		})
@@ -144,6 +149,24 @@ func functionMaxNesting(fn *ast.FuncDecl) int {
 		return true
 	})
 	return max
+}
+
+func functionErrorPaths(fn *ast.FuncDecl) int {
+	if fn.Body == nil {
+		return 0
+	}
+	n := 0
+	ast.Inspect(fn.Body, func(node ast.Node) bool {
+		ifs, ok := node.(*ast.IfStmt)
+		if !ok || ifs.Body == nil || len(ifs.Body.List) == 0 {
+			return true
+		}
+		if _, ok := ifs.Body.List[0].(*ast.ReturnStmt); ok {
+			n++
+		}
+		return true
+	})
+	return n
 }
 
 // compositeLiteralLines counts the distinct source lines occupied by literal data within body:

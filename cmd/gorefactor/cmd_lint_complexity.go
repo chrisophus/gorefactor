@@ -39,10 +39,7 @@ func (r complexityRule) Run(ctx LintContext) []lintIssue {
 				continue
 			}
 
-			sev := "warning"
-			if c.Complexity > threshold*2 {
-				sev = "error"
-			}
+			sev := "info" // single-axis proxy; hard-to-maintain is the gate
 			iss := lintIssue{
 				File:      f,
 				Rule:      "complexity",

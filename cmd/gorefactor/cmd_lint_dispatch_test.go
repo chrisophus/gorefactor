@@ -28,8 +28,8 @@ func TestSizeRulesDemoteDispatchTables(t *testing.T) {
 	if got := sev["complexity"]["dispatch"]; got != "info" {
 		t.Errorf("complexity(dispatch) severity = %q, want info (dispatch table)", got)
 	}
-	if got := sev["complexity"]["tangle"]; got == "" || got == "info" {
-		t.Errorf("complexity(tangle) severity = %q, want warning or error", got)
+	if got := sev["complexity"]["tangle"]; got != "info" {
+		t.Errorf("complexity(tangle) severity = %q, want info (single-axis proxies are advisory)", got)
 	}
 	if got := sev["long-function"]["dispatch"]; got != "info" {
 		t.Errorf("long-function(dispatch) severity = %q, want info (dispatch table)", got)

@@ -111,12 +111,12 @@ baseline:
 
 CLI baseline flags override YAML (`--baseline`, `--no-baseline`, `--baseline-file`). A future generalized per-rule policy DSL is deferred until multiple consumers need it — see `docs/project-review-2026-07-19.md` (P4).
 
-The default rule set has 42 rules, grouped by concern (canonical list in `cmd/gorefactor/lint_registry_test.go`):
+The default rule set has 47 rules, grouped by concern (canonical list in `cmd/gorefactor/lint_registry_test.go`):
 
-- **Size & structure**: `file-size` (>500 lines, split hints by receiver/prefix), `long-function`, `deep-nesting`, `complexity` (cyclomatic), `extract-candidate`
+- **Size & structure**: `file-size` (>500 lines, split hints by receiver/prefix), `hard-to-maintain` (long *and* complex/nested/error-dense — allows long-but-simple orchestrators), `long-function` / `deep-nesting` / `complexity` (single-axis info sensors), `extract-candidate`
 - **Duplication**: `duplicate-block` (>100-line clones with consolidation hints), `duplicate-bare-sentinel`
 - **Design smells**: `god-object`, `large-class`, `fat-interface`, `excessive-params`, `excessive-returns`, `data-clumps`, `type-switch`, `premature-abstraction`, `high-coupling`
-- **Error handling**: `error-not-wrapped` (bare `return err`), `if-err-log-return`, `wrap-log-return`, `wrap-bridge-log-return`
+- **Error handling**: `error-not-wrapped` (bare `return err`), `if-err-log-return`, `wrap-log-return`, `wrap-bridge-log-return`, `redundant-nil-guard` (unexported entry nil-checks already proven by all in-package callers)
 - **Ordering**: `funcorder-constructor` (constructor must follow the struct, before its methods), `funcorder-struct-method` (exported methods before unexported), `funcorder-function` (exported top-level functions before unexported ones, excluding constructors and `init()`) — ports golangci-lint's `funcorder` default checks plus its opt-in `function` check
 - **Coverage**: `untested-function`, `untested-package`
 - **Test hygiene**: `vacuous-test`, `sleep-in-test`
@@ -250,7 +250,7 @@ Methods use `Receiver:Method` (no `*` on the receiver). Many commands accept `-`
 
 | Command | Purpose |
 |---------|---------|
-| `lint` | 45 structural rules (size, duplication, smells, error handling, ordering, coverage, dead-code, arch); skips `vendor`/`.git`/`node_modules` and `*.gen.go`/`_gen.go`. `--fix` autofixes `file-size`, `dead-code`, `error-not-wrapped`, `complexity`, the log-propagation family, `funcorder-constructor`/`funcorder-struct-method`/`funcorder-function` (via `reorder-funcorder`) (add `--verify` to revert any fix that breaks build/test). `--fix-level aggressive` (requires `--fix --verify`) additionally autofixes `long-function`/`extract-candidate` by extraction, lifts return-bearing blocks, fixes non-adjacent log/return pairs, and deletes module-wide unreferenced exported functions. `--fail-only` shows blocking issues only |
+| `lint` | 47 structural rules (size, duplication, smells, error handling, ordering, coverage, dead-code, arch); skips `vendor`/`.git`/`node_modules` and `*.gen.go`/`_gen.go`. `--fix` autofixes `file-size`, `dead-code`, `error-not-wrapped`, `complexity`, the log-propagation family, `funcorder-constructor`/`funcorder-struct-method`/`funcorder-function` (via `reorder-funcorder`) (add `--verify` to revert any fix that breaks build/test). `--fix-level aggressive` (requires `--fix --verify`) additionally autofixes `long-function`/`extract-candidate` by extraction, lifts return-bearing blocks, fixes non-adjacent log/return pairs, and deletes module-wide unreferenced exported functions. `--fail-only` shows blocking issues only |
 | `doctor` | Gate: full structural lint registry + golangci-lint + go-arch-lint + `go build` + `go test`; non-zero on failure. `--report` merges substrates into one advisory report (optional `--score`) |
 | `adherence` | Harness self-audit: fraction of changed `.go` files edited via gorefactor vs raw Write/Edit |
 | `intent` | Declare a deliberate exported-API change so the apidiff gate passes it |

@@ -48,7 +48,7 @@ func (r longFunctionRule) Run(ctx LintContext) []lintIssue {
 			iss := lintIssue{
 				File:      f,
 				Rule:      "long-function",
-				Severity:  "warning",
+				Severity:  "info", // single-axis proxy; hard-to-maintain is the gate
 				Message:   fmt.Sprintf("%s is %d lines (threshold %d, line %d) — consider extracting", m.Key(), m.Lines, threshold, m.Line),
 				Value:     m.Lines,
 				Threshold: threshold,

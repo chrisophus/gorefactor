@@ -48,6 +48,7 @@ var scoreProxyRules = map[string]bool{
 	"long-function":     true,
 	"complexity":        true,
 	"deep-nesting":      true,
+	"hard-to-maintain":  true,
 	"god-object":        true,
 	"god-package":       true,
 	"large-class":       true,

@@ -116,6 +116,12 @@
       "count": 1
     },
     {
+      "fingerprint": "cmd/gorefactor/cmd_add_field_run.go\u0000hard-to-maintain\u0000addFieldCommand is hard to maintain (line #): # logic lines and # early-return paths (bar #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_add_field_run.go",
+      "rule": "hard-to-maintain",
+      "count": 1
+    },
+    {
       "fingerprint": "cmd/gorefactor/cmd_add_field_run.go\u0000long-function\u0000addFieldCommand is # lines (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor/cmd_add_field_run.go",
       "rule": "long-function",
@@ -131,6 +137,12 @@
       "fingerprint": "cmd/gorefactor/cmd_change_receiver.go\u0000deep-nesting\u0000samePackageInterfacesDeclaring has nesting depth # (threshold #, line #) — consider extracting inner blocks",
       "file": "cmd/gorefactor/cmd_change_receiver.go",
       "rule": "deep-nesting",
+      "count": 1
+    },
+    {
+      "fingerprint": "cmd/gorefactor/cmd_change_receiver.go\u0000hard-to-maintain\u0000changeReceiverCommand is hard to maintain (line #): # logic lines and # early-return paths (bar #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_change_receiver.go",
+      "rule": "hard-to-maintain",
       "count": 1
     },
     {
@@ -182,6 +194,12 @@
       "count": 1
     },
     {
+      "fingerprint": "cmd/gorefactor/cmd_file_sizes.go\u0000hard-to-maintain\u0000analyzeFileSizes is hard to maintain (line #): # logic lines and complexity # (bar #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_file_sizes.go",
+      "rule": "hard-to-maintain",
+      "count": 1
+    },
+    {
       "fingerprint": "cmd/gorefactor/cmd_file_sizes.go\u0000long-function\u0000analyzeFileSizes is # lines (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor/cmd_file_sizes.go",
       "rule": "long-function",
@@ -218,9 +236,21 @@
       "count": 1
     },
     {
+      "fingerprint": "cmd/gorefactor/cmd_inline_run.go\u0000hard-to-maintain\u0000inlineCommand is hard to maintain (line #): # logic lines and complexity # (bar #) and # early-return paths (bar #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_inline_run.go",
+      "rule": "hard-to-maintain",
+      "count": 1
+    },
+    {
       "fingerprint": "cmd/gorefactor/cmd_inline_run.go\u0000long-function\u0000inlineCommand is # lines (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor/cmd_inline_run.go",
       "rule": "long-function",
+      "count": 1
+    },
+    {
+      "fingerprint": "cmd/gorefactor/cmd_insert_switch_case.go\u0000hard-to-maintain\u0000insertSwitchCaseCommand is hard to maintain (line #): # logic lines and # early-return paths (bar #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_insert_switch_case.go",
+      "rule": "hard-to-maintain",
       "count": 1
     },
     {
@@ -233,6 +263,12 @@
       "fingerprint": "cmd/gorefactor/cmd_inspect.go\u0000complexity\u0000inspectCommand has cyclomatic complexity # (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor/cmd_inspect.go",
       "rule": "complexity",
+      "count": 1
+    },
+    {
+      "fingerprint": "cmd/gorefactor/cmd_inspect.go\u0000hard-to-maintain\u0000inspectCommand is hard to maintain (line #): # logic lines and complexity # (bar #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_inspect.go",
+      "rule": "hard-to-maintain",
       "count": 1
     },
     {
@@ -254,9 +290,33 @@
       "count": 1
     },
     {
+      "fingerprint": "cmd/gorefactor/cmd_lint_redundant_nil_guard.go\u0000pass-through-param\u0000parameter \"name\" of enclosingNonNilGuard (line #) is forwarded through # call layers without being used — prop drilling; consider a params struct or restructuring the call chain",
+      "file": "cmd/gorefactor/cmd_lint_redundant_nil_guard.go",
+      "rule": "pass-through-param",
+      "count": 1
+    },
+    {
+      "fingerprint": "cmd/gorefactor/cmd_lint_redundant_nil_guard.go\u0000pass-through-param\u0000parameter \"name\" of precedingNilReject (line #) is forwarded through # call layers without being used — prop drilling; consider a params struct or restructuring the call chain",
+      "file": "cmd/gorefactor/cmd_lint_redundant_nil_guard.go",
+      "rule": "pass-through-param",
+      "count": 1
+    },
+    {
+      "fingerprint": "cmd/gorefactor/cmd_lint_redundant_nil_guard.go\u0000pass-through-param\u0000parameter \"param\" of hasEntryNilGuard (line #) is forwarded through # call layers without being used — prop drilling; consider a params struct or restructuring the call chain",
+      "file": "cmd/gorefactor/cmd_lint_redundant_nil_guard.go",
+      "rule": "pass-through-param",
+      "count": 1
+    },
+    {
       "fingerprint": "cmd/gorefactor/cmd_orchestrate.go\u0000complexity\u0000orchestrateRefactoring has cyclomatic complexity # (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor/cmd_orchestrate.go",
       "rule": "complexity",
+      "count": 1
+    },
+    {
+      "fingerprint": "cmd/gorefactor/cmd_orchestrate.go\u0000hard-to-maintain\u0000orchestrateRefactoring is hard to maintain (line #): # logic lines and complexity # (bar #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_orchestrate.go",
+      "rule": "hard-to-maintain",
       "count": 1
     },
     {
@@ -269,6 +329,12 @@
       "fingerprint": "cmd/gorefactor/cmd_recommend_reduce_length.go\u0000pass-through-param\u0000parameter \"allowReturns\" of reduceLengthByExtraction (line #) is forwarded through # call layers without being used — prop drilling; consider a params struct or restructuring the call chain",
       "file": "cmd/gorefactor/cmd_recommend_reduce_length.go",
       "rule": "pass-through-param",
+      "count": 1
+    },
+    {
+      "fingerprint": "cmd/gorefactor/cmd_replace_text.go\u0000hard-to-maintain\u0000replaceTextCommand is hard to maintain (line #): # logic lines and # early-return paths (bar #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_replace_text.go",
+      "rule": "hard-to-maintain",
       "count": 1
     },
     {
@@ -296,6 +362,12 @@
       "count": 1
     },
     {
+      "fingerprint": "cmd/gorefactor/cmd_suggest.go\u0000hard-to-maintain\u0000suggestPlanCommand is hard to maintain (line #): # logic lines and complexity # (bar #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_suggest.go",
+      "rule": "hard-to-maintain",
+      "count": 1
+    },
+    {
       "fingerprint": "cmd/gorefactor/cmd_suggest.go\u0000long-function\u0000suggestPlanCommand is # lines (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor/cmd_suggest.go",
       "rule": "long-function",
@@ -314,6 +386,12 @@
       "count": 1
     },
     {
+      "fingerprint": "cmd/gorefactor/cmd_txn_run.go\u0000hard-to-maintain\u0000txnCommand is hard to maintain (line #): # logic lines and complexity # (bar #) — consider extracting",
+      "file": "cmd/gorefactor/cmd_txn_run.go",
+      "rule": "hard-to-maintain",
+      "count": 1
+    },
+    {
       "fingerprint": "cmd/gorefactor/cmd_txn_run.go\u0000long-function\u0000txnCommand is # lines (threshold #, line #) — consider extracting",
       "file": "cmd/gorefactor/cmd_txn_run.go",
       "rule": "long-function",
@@ -323,6 +401,12 @@
       "fingerprint": "cmd/gorefactor/cmd_wrap_errors_process.go\u0000complexity\u0000recurseIntoStmt has cyclomatic complexity # (threshold #, line #) — dispatch table: # cases, worst case #; per-branch score # is under threshold",
       "file": "cmd/gorefactor/cmd_wrap_errors_process.go",
       "rule": "complexity",
+      "count": 1
+    },
+    {
+      "fingerprint": "coverage.out\u0000untested-function\u0000coverage profile is stale or unreadable (go tool cover -func failed); regenerate it with `make coverage` or delete coverage.out",
+      "file": "coverage.out",
+      "rule": "untested-function",
       "count": 1
     },
     {
@@ -338,8 +422,8 @@
       "count": 1
     },
     {
-      "fingerprint": "doctor/score.go:100\u0000test-only-live\u0000exported function score.go.ScoreClassifiedRules is referenced only from _test.go files — unexport it, move it into a test file, or delete it (or ignore if it is intentional external API)",
-      "file": "doctor/score.go:100",
+      "fingerprint": "doctor/score.go:101\u0000test-only-live\u0000exported function score.go.ScoreClassifiedRules is referenced only from _test.go files — unexport it, move it into a test file, or delete it (or ignore if it is intentional external API)",
+      "file": "doctor/score.go:101",
       "rule": "test-only-live",
       "count": 1
     },
@@ -395,6 +479,12 @@
       "fingerprint": "orchestrator/dry_run_execute.go\u0000complexity\u0000simulateOperationChange has cyclomatic complexity # (threshold #, line #) — consider extracting",
       "file": "orchestrator/dry_run_execute.go",
       "rule": "complexity",
+      "count": 1
+    },
+    {
+      "fingerprint": "orchestrator/dry_run_execute.go\u0000hard-to-maintain\u0000Orchestrator:simulateOperationChange is hard to maintain (line #): # logic lines and complexity # (bar #) — consider extracting",
+      "file": "orchestrator/dry_run_execute.go",
+      "rule": "hard-to-maintain",
       "count": 1
     },
     {

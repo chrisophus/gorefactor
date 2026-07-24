@@ -8,6 +8,7 @@ import (
 
 	"github.com/chrisophus/gorefactor/analyzer"
 	"github.com/chrisophus/gorefactor/config"
+	"github.com/chrisophus/gorefactor/doctor"
 )
 
 // lintFixOptions groups the flags controlling the autofix pass; embedded in
@@ -251,7 +252,18 @@ func (opts *lintOptions) loadConfig() error {
 	}
 	// Item 6c: feed configured duplicate-ignore patterns to the analyzer.
 	analyzer.DuplicateIgnorePatterns = cfg.Lint.DuplicateIgnore
-	return cfg.ValidateKnownRules(knownLintRuleNames())
+	known := knownLintRuleNames()
+	if err := cfg.ValidateKnownRules(known); err != nil {
+		return err
+	}
+	// Cross-check the doctor score layer against the live registry so a typo
+	// in scoreProxyRules / scoreExemptRules cannot silently mis-weight findings.
+	for _, name := range doctor.ScoreClassifiedRules() {
+		if _, ok := known[name]; !ok {
+			return fmt.Errorf("doctor score classifies unknown lint rule %q", name)
+		}
+	}
+	return nil
 }
 
 func filterLintRules(all []LintRule, opts lintOptions) []LintRule {

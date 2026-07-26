@@ -70,4 +70,4 @@ orchestrator/gorefactor
 
 # Mutation testing output (make gomutants)
 mutation-report.json
-.gomu_history.json
+.gomutants-cache.json

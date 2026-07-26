@@ -31,12 +31,13 @@ func Top() { Mid() }
 func Mid() { Leaf() }
 func Leaf() {}
 
-func Dup() { Leaf(); Leaf() }
+func Dup() { Leaf(); Leaf(); Mid() }
 func Fan() { Mid(); Leaf() }
 
 func UseMethod(s S) { s.Solo() }
 func CallShadow() { Shadow() }
 func CallSel(t T) { t.Shadow() }
+func Two(t T) { Shadow(); t.Shadow() }
 
 func Nested() {
 	if len("x") > 0 {
@@ -50,6 +51,8 @@ func CycB() { CycA() }
 func Inner() int { return 0 }
 func Discard(x int) {}
 func Wrap() { Discard(Inner()) }
+
+func Stub() int
 `
 
 func TestCgDefKey(t *testing.T) {
@@ -273,9 +276,29 @@ func TestEdgeResolution(t *testing.T) {
 		t.Errorf("CallSel callees: want [Shadow T:Shadow], got %v", callSel)
 	}
 
-	// Duplicate calls collapse to one edge.
-	if n := len(idx.Callees["Dup"]); n != 1 {
-		t.Errorf("Dup callees: want 1 deduped edge, got %d", n)
+	// Duplicate calls collapse to one edge, and edges after the duplicate
+	// are still recorded.
+	var dup []string
+	for _, d := range idx.Callees["Dup"] {
+		dup = append(dup, d.Key())
+	}
+	if !eqStrings(dup, []string{"Leaf", "Mid"}) {
+		t.Errorf("Dup callees: want deduped [Leaf Mid], got %v", dup)
+	}
+
+	// Bodyless declarations (e.g. assembly stubs) are not definitions.
+	if _, ok := idx.Defs["Stub"]; ok {
+		t.Errorf("bodyless declaration Stub must not be indexed as a def")
+	}
+
+	// A raw call resolving to several callees where the first is already an
+	// edge: the duplicate is skipped and the REST of the callees still land.
+	var two []string
+	for _, d := range idx.Callees["Two"] {
+		two = append(two, d.Key())
+	}
+	if !eqStrings(two, []string{"Shadow", "T:Shadow"}) {
+		t.Errorf("Two callees: want [Shadow T:Shadow], got %v", two)
 	}
 
 	// Adjacency lists are sorted by key for deterministic output.
@@ -303,22 +326,75 @@ func TestEdgeResolution(t *testing.T) {
 }
 
 // TestBuildWithSkipsBadFiles pins the best-effort contract: missing and
-// unparseable files are skipped, everything else still indexes.
+// unparseable files are skipped, everything else still indexes. The bad
+// entries deliberately come FIRST in the list — skipping must be per-file
+// (continue), not abort the whole build (break).
 func TestBuildWithSkipsBadFiles(t *testing.T) {
 	dir := t.TempDir()
-	good := writeTempGo(t, dir, "good.go", "package p\n\nfunc Good() {}\n")
 	bad := writeTempGo(t, dir, "bad.go", "package p\n\nfunc {\n")
 	missing := dir + "/does-not-exist.go"
+	good := writeTempGo(t, dir, "good.go", "package p\n\nfunc Good() { Helper() }\nfunc Helper() {}\n")
 
-	idx, err := NewCallIndexCache().BuildWith(NewParseCache(), []string{good, bad, missing})
+	idx, err := NewCallIndexCache().BuildWith(NewParseCache(), []string{bad, missing, good})
 	if err != nil {
 		t.Fatalf("BuildWith with bad files must not error: %v", err)
 	}
 	if _, ok := idx.Defs["Good"]; !ok {
-		t.Errorf("good file not indexed; defs: %v", cgIndexDefs(idx))
+		t.Errorf("good file after bad files not indexed; defs: %v", cgIndexDefs(idx))
 	}
-	if len(idx.Defs) != 1 {
-		t.Errorf("want exactly 1 def, got %v", cgIndexDefs(idx))
+	if len(idx.Defs) != 2 {
+		t.Errorf("want exactly 2 defs, got %v", cgIndexDefs(idx))
+	}
+	if !contains(cgIndexEdges(idx), "Good->Helper") {
+		t.Errorf("edges from a file after bad files were dropped: %v", cgIndexEdges(idx))
+	}
+}
+
+// TestBuildWithWarmReturnsAllFiles pins warm-rebuild output, not just its
+// cost: on a second build with no changes, every cached file's defs and
+// edges must still appear (a cache hit must contribute its data and move on
+// to the next file, and the parse cache must surface cached ASTs).
+func TestBuildWithWarmReturnsAllFiles(t *testing.T) {
+	dir := t.TempDir()
+	a := writeTempGo(t, dir, "a.go", "package p\n\nfunc A() { B() }\n")
+	b := writeTempGo(t, dir, "b.go", "package p\n\nfunc B() {}\n")
+	files := []string{a, b}
+
+	pc := NewParseCache()
+	cc := NewCallIndexCache()
+	if _, err := cc.BuildWith(pc, files); err != nil {
+		t.Fatal(err)
+	}
+	warm, err := cc.BuildWith(pc, files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cc.ExtractCount() != 2 {
+		t.Fatalf("warm build re-extracted: count %d, want 2", cc.ExtractCount())
+	}
+	if len(warm.Defs) != 2 {
+		t.Errorf("warm build dropped defs: %v", cgIndexDefs(warm))
+	}
+	if !contains(cgIndexEdges(warm), "A->B") {
+		t.Errorf("warm build dropped edges: %v", cgIndexEdges(warm))
+	}
+
+	// The parse cache's own warm output: every cached file's AST must be
+	// returned, not just counted.
+	_, asts := pc.Load(files)
+	if asts[a] == nil || asts[b] == nil {
+		t.Errorf("warm Load dropped cached ASTs: a=%v b=%v", asts[a] != nil, asts[b] != nil)
+	}
+}
+
+// TestLoadOmitsUnparseableFiles pins that a file failing to parse yields no
+// AST entry at all — not a partial or nil one.
+func TestLoadOmitsUnparseableFiles(t *testing.T) {
+	dir := t.TempDir()
+	bad := writeTempGo(t, dir, "bad.go", "package p\n\nfunc {\n")
+	_, asts := NewParseCache().Load([]string{bad})
+	if _, ok := asts[bad]; ok {
+		t.Errorf("unparseable file must not appear in Load output, got %v", asts[bad])
 	}
 }
 
@@ -349,12 +425,89 @@ func TestParseCacheKeysByAbsolutePath(t *testing.T) {
 	}
 }
 
+// treeSrc isolates the path-visited bookkeeping cases (self-loop with a
+// sibling, diamond, cycle entered through a tail) from querySrc so the two
+// fixtures' caller sets cannot interfere.
+const treeSrc = `package tree
+
+func AaCyc() { AaCyc(); Tail() }
+func Tail() {}
+
+func DiaTop() { DiaL(); DiaR() }
+func DiaL() { DiaEnd() }
+func DiaR() { DiaEnd() }
+func DiaEnd() {}
+
+func EntA() { EntB() }
+func EntB() { EntC() }
+func EntC() { EntB() }
+`
+
+// TestBuildTreeVisitedBookkeeping pins the visited-map discipline in
+// BuildTree: marks are added on descent, removed on return, and a cycle hit
+// skips only that child.
+func TestBuildTreeVisitedBookkeeping(t *testing.T) {
+	idx := buildTreeIndex(t)
+
+	// Self-loop first in sort order: the cycle child is marked and the
+	// NEXT sibling is still expanded.
+	self := idx.Defs["AaCyc"]
+	tree := idx.BuildTree(self, "callees", 3, map[string]bool{self.Key(): true})
+	if len(tree.Children) != 2 {
+		t.Fatalf("AaCyc: want [AaCyc Tail] children, got %+v", tree.Children)
+	}
+	if tree.Children[0].Name != "AaCyc" || !tree.Children[0].Cycle {
+		t.Errorf("AaCyc's first child must be the self-loop marked cycle, got %+v", tree.Children[0])
+	}
+	if tree.Children[1].Name != "Tail" {
+		t.Errorf("sibling after a cycle child was dropped, got %+v", tree.Children[1])
+	}
+
+	// Diamond: DiaEnd sits on two sibling paths; finishing the first path
+	// must unmark it so the second path expands it as a normal node.
+	top := idx.Defs["DiaTop"]
+	tree = idx.BuildTree(top, "callees", 3, map[string]bool{top.Key(): true})
+	if len(tree.Children) != 2 {
+		t.Fatalf("DiaTop: want [DiaL DiaR], got %+v", tree.Children)
+	}
+	for _, side := range tree.Children {
+		if len(side.Children) != 1 || side.Children[0].Name != "DiaEnd" || side.Children[0].Cycle {
+			t.Errorf("%s must expand DiaEnd as a non-cycle child, got %+v", side.Name, side.Children)
+		}
+	}
+
+	// Cycle entered through a tail: the revisit deeper in the path must be
+	// marked, which requires nodes to be marked on descent.
+	entA := idx.Defs["EntA"]
+	tree = idx.BuildTree(entA, "callees", 5, map[string]bool{entA.Key(): true})
+	entB := tree.Children[0]
+	entC := entB.Children[0]
+	if entB.Name != "EntB" || entC.Name != "EntC" {
+		t.Fatalf("want EntA -> EntB -> EntC, got %+v", tree)
+	}
+	if len(entC.Children) != 1 || !entC.Children[0].Cycle || len(entC.Children[0].Children) != 0 {
+		t.Errorf("EntC's revisit of EntB must be an unexpanded cycle node, got %+v", entC.Children)
+	}
+}
+
 // buildQueryIndex builds a throwaway index over querySrc, touching no global
 // caches so tests stay independent.
 func buildQueryIndex(t *testing.T) *CgIndex {
 	t.Helper()
 	dir := t.TempDir()
 	f := writeTempGo(t, dir, "q.go", querySrc)
+	idx, err := NewCallIndexCache().BuildWith(NewParseCache(), []string{f})
+	if err != nil {
+		t.Fatalf("BuildWith: %v", err)
+	}
+	return idx
+}
+
+// buildTreeIndex is buildQueryIndex for the treeSrc fixture.
+func buildTreeIndex(t *testing.T) *CgIndex {
+	t.Helper()
+	dir := t.TempDir()
+	f := writeTempGo(t, dir, "t.go", treeSrc)
 	idx, err := NewCallIndexCache().BuildWith(NewParseCache(), []string{f})
 	if err != nil {
 		t.Fatalf("BuildWith: %v", err)

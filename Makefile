@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt vet check clean install-tools help gate gate-self-clean refactor refactor-campaign install
+.PHONY: build test lint fmt vet check clean install-tools help gate gate-self-clean refactor refactor-campaign install gomutants
 
 # Default target
 .DEFAULT_GOAL := help
@@ -122,6 +122,21 @@ clean: ## Clean build artifacts
 	rm -f coverage.out coverage.html
 	go clean
 	@echo "$(GREEN)✓ Clean complete$(NC)"
+
+# Mutation testing (optional; not part of gate/CI). Verifies tests actually
+# assert behavior: gomu mutates the package's source in a build overlay and
+# re-runs its tests — a mutant that "survives" marks logic no test pins down.
+# Scope it to one package: whole-repo runs are slow by nature. Survivors need
+# review, not reflexive fixes: some mutants are equivalent (e.g. len(x) > 0
+# vs len(x) != 0) and cannot be killed. Single worker by default — parallel
+# workers have produced flaky false "survived" results.
+GOMU_WORKERS ?= 1
+
+gomutants: ## Mutation-test one package via gomu (usage: make gomutants PKG=./parser)
+	@command -v gomu >/dev/null 2>&1 || { echo "$(YELLOW)gomu not found. Install: go install github.com/sivchari/gomu/cmd/gomu@latest$(NC)"; exit 1; }
+	@echo "$(BLUE)Mutation-testing $(or $(PKG),./parser)...$(NC)"
+	gomu run $(or $(PKG),./parser) --incremental=false --fail-on-gate=false --workers $(GOMU_WORKERS) --output json
+	@echo "$(GREEN)✓ Report: mutation-report.json (SURVIVED entries are potential test gaps)$(NC)"
 
 # Development helpers
 watch-test: ## Watch for changes and run tests

@@ -67,3 +67,7 @@ go.work
 /gorefactor-phase2
 /phase4-test
 orchestrator/gorefactor
+
+# Mutation testing output (make gomutants)
+mutation-report.json
+.gomu_history.json

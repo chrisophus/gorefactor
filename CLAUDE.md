@@ -40,31 +40,14 @@ large-scale changes.
 | `cmd/gorefactor-agent/` | Experimental LLM harness. |
 | `benchmark/` | Token-efficiency and agent-reliability measurements; findings in `FINDINGS.md`. |
 
-## Editing .go files: use gorefactor, not Write/Edit
+## Editing .go files
 
-Default rule: modify `.go` files through `./bin/gorefactor` commands — this repo dogfoods its own
-harness. Run `./bin/gorefactor` (no args) for the full command list; `./bin/gorefactor help <cmd>` for
-usage. The ops you'll use most:
-
-| Want to… | Use |
-|---|---|
-| Create a file / add a declaration | `create <path> -` / `insert <file> <at-end\|after:F\|inside:F> -` |
-| Replace within a function | `edit <file> <Func> <old> <new>` (auto statement-or-text) |
-| Replace a whole body | `replace-body <file> <Func> -` |
-| Move / delete / rename | `move <src> <F> <dest>` / `delete <file> <F> --safe` / `rename <file> <old> <new>` |
-| Batch all-or-nothing | `txn` |
-| Understand before changing | `skeleton`, `inspect`, `context <Sym>`, `find-callers`, `find-uses` |
-| Roll back | `undo` |
-
-Conventions: methods are addressed as `Receiver:Method`; `-` as the last arg reads stdin; a bare
-`--` ends flag parsing when values start with `-`.
-
-`Write`/`Edit` are fine for non-Go files, and as a documented fallback when no command fits.
-Note: `rename` is type-aware — it resolves the symbol with `go/types` and rewrites only the
-identifiers that share the same object (shadowing locals and same-named fields are left alone),
-following it across every file in the package. It requires the package to type-check and is scoped
-to **unexported** symbols; use gopls for exported symbols, which may be referenced from packages the
-command does not load.
+Edit `.go` files with whatever tool fits — `Write`/`Edit` included. The repo previously mandated
+routing its own edits through `./bin/gorefactor` mutation commands; that dogfooding rule is
+retired (it didn't prove its keep). What we do still dogfood are the **sensors**, lint above all:
+`./bin/gorefactor lint`, the baseline ratchet, `doctor`, and the analysis commands (`skeleton`,
+`context`, `find-callers`, `find-uses`) — use them to understand code cheaply and to keep the
+structural-findings ratchet honest. Run `./bin/gorefactor` (no args) for the command list.
 
 ## Build, test, gate
 

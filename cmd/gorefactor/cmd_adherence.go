@@ -229,7 +229,7 @@ func printAdherence(rep adherenceReport) {
 	}
 	fmt.Println()
 	if len(rep.ModifiedRaw) > 0 {
-		fmt.Println("  → route existing-file edits through gorefactor (see the command table in CLAUDE.md)")
+		fmt.Println("  → route existing-file edits through gorefactor (run `gorefactor` for the command list)")
 	}
 	fmt.Println("  note: file-level, time-bounded attribution — a ranking signal, not a proof")
 }

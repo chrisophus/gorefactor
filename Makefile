@@ -123,12 +123,6 @@ clean: ## Clean build artifacts
 	go clean
 	@echo "$(GREEN)✓ Clean complete$(NC)"
 
-# Mutation testing (optional; not part of gate/CI). Verifies tests actually
-# assert behavior: gomutants mutates the package's source and re-runs its
-# tests — a mutant that LIVED marks logic no test pins down. Scope it to one
-# package: whole-repo runs are slow by nature. Survivors need review, not
-# reflexive fixes: some mutants are equivalent (e.g. len(x) > 0 vs
-# len(x) != 0) and cannot be killed.
 # Native Go fuzzing (optional; not part of gate/CI). Fuzz targets' seed
 # corpora also run as plain tests in `go test`, so CI regression coverage is
 # free; this target does the actual coverage-guided exploration. Crashing
@@ -147,6 +141,12 @@ fuzz: ## Run every native Fuzz target briefly (usage: make fuzz [FUZZTIME=30s])
 	done
 	@echo "$(GREEN)✓ fuzz targets held$(NC)"
 
+# Mutation testing (optional; not part of gate/CI). Verifies tests actually
+# assert behavior: gomutants mutates the package's source and re-runs its
+# tests — a mutant that LIVED marks logic no test pins down. Scope it to one
+# package: whole-repo runs are slow by nature. Survivors need review, not
+# reflexive fixes: some mutants are equivalent (e.g. len(x) > 0 vs
+# len(x) != 0) and cannot be killed.
 gomutants: ## Mutation-test one package via gomutants (usage: make gomutants PKG=./parser)
 	@command -v gomutants >/dev/null 2>&1 || { echo "$(YELLOW)gomutants not found. Install: go install github.com/szhekpisov/gomutants@latest$(NC)"; exit 1; }
 	@echo "$(BLUE)Mutation-testing $(or $(PKG),./parser)...$(NC)"

@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt vet check clean install-tools help gate gate-self-clean refactor refactor-campaign install gomutants
+.PHONY: build test lint fmt vet check clean install-tools help gate gate-self-clean refactor refactor-campaign install gomutants fuzz
 
 # Default target
 .DEFAULT_GOAL := help
@@ -122,6 +122,24 @@ clean: ## Clean build artifacts
 	rm -f coverage.out coverage.html
 	go clean
 	@echo "$(GREEN)✓ Clean complete$(NC)"
+
+# Native Go fuzzing (optional; not part of gate/CI). Fuzz targets' seed
+# corpora also run as plain tests in `go test`, so CI regression coverage is
+# free; this target does the actual coverage-guided exploration. Crashing
+# inputs land in <pkg>/testdata/fuzz/ — commit them: they become permanent
+# regression seeds.
+FUZZTIME ?= 30s
+
+fuzz: ## Run every native Fuzz target briefly (usage: make fuzz [FUZZTIME=30s])
+	@set -e; for pkg in $$(go list ./...); do \
+	  dir=$$(go list -f '{{.Dir}}' $$pkg); \
+	  targets=$$(grep -ho 'func Fuzz[A-Za-z0-9_]*' $$dir/*_test.go 2>/dev/null | sed 's/^func //' | sort -u); \
+	  for t in $$targets; do \
+	    echo "$(BLUE)fuzz $$pkg $$t ($(FUZZTIME))$(NC)"; \
+	    go test $$pkg -run '^$$' -fuzz "^$$t\$$" -fuzztime $(FUZZTIME); \
+	  done; \
+	done
+	@echo "$(GREEN)✓ fuzz targets held$(NC)"
 
 # Mutation testing (optional; not part of gate/CI). Verifies tests actually
 # assert behavior: gomutants mutates the package's source and re-runs its

@@ -395,6 +395,7 @@ func defaultLintRules() []LintRule {
 		deepNestingRule{},
 		hardToMaintainRule{},
 		redundantNilGuardRule{},
+		unnecessaryNilCheckRule{},
 		errWrapRule{},
 		couplingRule{},
 		blastRadiusRule{},

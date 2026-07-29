@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`unnecessary-nil-check` lint rule** — flags nil checks that are provably
+  excessive within a single function body: checks on freshly constructed
+  values (`&x`, `new`, `make`, slice/map literals), duplicate guards after an
+  earlier nil-reject, checks nested inside a branch that already established
+  `x != nil`, and `x != nil && len(x) > 0` (or `x == nil || len(x) == 0`) on
+  slices/maps where `len(nil) == 0` makes the nil test redundant. Purely
+  syntactic and conservative: facts are tracked for local variables only and
+  dropped on reassignment, address-taking, closure capture, or method calls
+  that could rebind the value.
+
+### Changed
+- **`redundant-nil-guard` sees the whole entry prologue** — a function that
+  guards several parameters in sequence now has every guard recognized (not
+  just the first), combined `a == nil || b == nil { return }` rejects count as
+  a guard for each name, and caller-side proofs accept `x != nil && …` and
+  `x == nil || y == nil` conditions.
+
 ## [0.14.0] - 2026-07-24
 
 ### Added

@@ -100,6 +100,93 @@ func caller() int { return Use(&T{N: 1}) }
 	}
 }
 
+func TestRedundantNilGuardRule_SecondGuardInPrologue(t *testing.T) {
+	dir := t.TempDir()
+	src := `package p
+
+type T struct{ N int }
+
+func use(a, b *T) int {
+	if a == nil {
+		return 0
+	}
+	if b == nil {
+		return 0
+	}
+	return a.N + b.N
+}
+
+func caller() int {
+	return use(&T{N: 1}, &T{N: 2})
+}
+`
+	path := filepath.Join(dir, "a.go")
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	issues := redundantNilGuardRule{}.Run(LintContext{Files: []string{path}})
+	if len(issues) != 2 {
+		t.Fatalf("issues = %+v, want guards on both a and b flagged", issues)
+	}
+}
+
+func TestRedundantNilGuardRule_CombinedOrGuard(t *testing.T) {
+	dir := t.TempDir()
+	src := `package p
+
+type T struct{ N int }
+
+func use(a, b *T) int {
+	if a == nil || b == nil {
+		return 0
+	}
+	return a.N + b.N
+}
+
+func caller(a, b *T) int {
+	if a == nil || b == nil {
+		return -1
+	}
+	return use(a, b)
+}
+`
+	path := filepath.Join(dir, "a.go")
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	issues := redundantNilGuardRule{}.Run(LintContext{Files: []string{path}})
+	if len(issues) != 2 {
+		t.Fatalf("issues = %+v, want the combined guard flagged for both params", issues)
+	}
+}
+
+func TestRedundantNilGuardRule_MixedGuardQuiet(t *testing.T) {
+	dir := t.TempDir()
+	src := `package p
+
+type T struct{ N int }
+
+func broken() bool { return false }
+
+func use(t *T) int {
+	if t == nil || broken() {
+		return 0
+	}
+	return t.N
+}
+
+func caller() int { return use(&T{N: 1}) }
+`
+	path := filepath.Join(dir, "a.go")
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	issues := redundantNilGuardRule{}.Run(LintContext{Files: []string{path}})
+	if len(issues) != 0 {
+		t.Fatalf("mixed guards do more than nil-check; must stay quiet: %+v", issues)
+	}
+}
+
 func TestRedundantNilGuardRule_NewAndAmpersand(t *testing.T) {
 	dir := t.TempDir()
 	src := `package p

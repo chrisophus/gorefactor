@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -19,6 +20,10 @@ import (
 //
 // Scope (v1): package-local plain functions only (no methods — receiver
 // arguments are not in CallExpr.Args and need type info to resolve safely).
+// A function's entry prologue may hold several guards in sequence, and a
+// combined `a == nil || b == nil` reject counts as a guard for each name;
+// caller-side proofs likewise accept `x != nil && …` and `x == nil || y ==
+// nil` conditions.
 
 type redundantNilGuardRule struct{}
 
@@ -184,6 +189,12 @@ func nilableKind(typ ast.Expr) string {
 	return ""
 }
 
+// hasEntryNilGuard reports whether fd nil-checks param in its entry prologue.
+// The prologue may hold several guards in sequence — each an `x == nil`-shaped
+// reject (a single compare or an `||` chain of them) whose body immediately
+// returns — interleaved with simple assign/decl/expr statements. Scanning
+// continues past guards for other parameters, so every guard in the prologue
+// is recognized, not just the first.
 func hasEntryNilGuard(fd *ast.FuncDecl, param string) bool {
 	if fd.Body == nil || len(fd.Body.List) == 0 {
 		return false
@@ -193,7 +204,17 @@ func hasEntryNilGuard(fd *ast.FuncDecl, param string) bool {
 		case *ast.AssignStmt, *ast.DeclStmt, *ast.ExprStmt:
 			continue
 		case *ast.IfStmt:
-			return isNilCompareOp(s.Cond, param, token.EQL) && bodyStartsWithReturn(s.Body)
+			if !bodyStartsWithReturn(s.Body) {
+				return false
+			}
+			names := nilRejectGuardNames(s.Cond)
+			if len(names) == 0 {
+				return false
+			}
+			if slices.Contains(names, param) {
+				return true
+			}
+			continue // a nil guard for other params — still function entry
 		default:
 			return false
 		}
@@ -201,18 +222,91 @@ func hasEntryNilGuard(fd *ast.FuncDecl, param string) bool {
 	return false
 }
 
-func isNilCompareOp(cond ast.Expr, param string, op token.Token) bool {
-	bin, ok := cond.(*ast.BinaryExpr)
-	if !ok || bin.Op != op {
-		return false
-	}
-	return (isIdentName(bin.X, param) && isNilIdent(bin.Y)) ||
-		(isIdentName(bin.Y, param) && isNilIdent(bin.X))
+// nilRejectGuardNames returns the names x for which cond is an `x == nil`
+// test, treating a top-level `||` chain as one combined guard: falling past
+// `if a == nil || b == nil { return }` proves both a and b non-nil. Any
+// disjunct that is not a plain `ident == nil` compare disqualifies the whole
+// condition — a mixed guard does more than nil-check, so "drop the guard" is
+// not safe advice for it.
+func nilRejectGuardNames(cond ast.Expr) []string {
+	return nilEqDisjunctNames(cond, true)
 }
 
-func isIdentName(e ast.Expr, name string) bool {
-	id, ok := e.(*ast.Ident)
-	return ok && id.Name == name
+// nilEqDisjunctNames collects the names x with an `x == nil` disjunct at the
+// top level of cond. With strict set, every disjunct must be such a compare
+// or nothing is returned; loose callers rely only on "cond false ⇒ every
+// disjunct false", which tolerates mixed conditions like
+// `err != nil || x == nil`.
+func nilEqDisjunctNames(cond ast.Expr, strict bool) []string {
+	var names []string
+	for _, d := range flattenBool(cond, token.LOR) {
+		if be, ok := stripParens(d).(*ast.BinaryExpr); ok {
+			if name, ok := identNilCompare(be, token.EQL); ok {
+				names = append(names, name)
+				continue
+			}
+		}
+		if strict {
+			return nil
+		}
+	}
+	return names
+}
+
+// nonNilConjunctNames returns the names x for which cond being true
+// establishes x != nil: the top-level `&&` conjuncts of cond that are plain
+// `x != nil` compares. Other conjuncts are allowed — a true conjunction makes
+// every conjunct true.
+func nonNilConjunctNames(cond ast.Expr) []string {
+	var names []string
+	for _, c := range flattenBool(cond, token.LAND) {
+		if be, ok := stripParens(c).(*ast.BinaryExpr); ok {
+			if name, ok := identNilCompare(be, token.NEQ); ok {
+				names = append(names, name)
+			}
+		}
+	}
+	return names
+}
+
+// flattenBool splits e into its leaves under the given boolean operator
+// (token.LAND or token.LOR), looking through parentheses.
+func flattenBool(e ast.Expr, op token.Token) []ast.Expr {
+	if be, ok := stripParens(e).(*ast.BinaryExpr); ok && be.Op == op {
+		return append(flattenBool(be.X, op), flattenBool(be.Y, op)...)
+	}
+	return []ast.Expr{e}
+}
+
+// identNilCompare returns the identifier compared against nil when be is a
+// plain `ident <op> nil` (or `nil <op> ident`) comparison.
+func identNilCompare(be *ast.BinaryExpr, op token.Token) (string, bool) {
+	if be.Op != op {
+		return "", false
+	}
+	other := ast.Expr(nil)
+	if isNilIdent(be.Y) {
+		other = be.X
+	} else if isNilIdent(be.X) {
+		other = be.Y
+	} else {
+		return "", false
+	}
+	id, ok := stripParens(other).(*ast.Ident)
+	if !ok || id.Name == "_" || id.Name == "nil" {
+		return "", false
+	}
+	return id.Name, true
+}
+
+func stripParens(e ast.Expr) ast.Expr {
+	for {
+		p, ok := e.(*ast.ParenExpr)
+		if !ok {
+			return e
+		}
+		e = p.X
+	}
 }
 
 func isNilIdent(e ast.Expr) bool {
@@ -348,7 +442,7 @@ func enclosingNonNilGuard(body *ast.BlockStmt, call *ast.CallExpr, name string) 
 		if !ok {
 			return true
 		}
-		if isNilCompareOp(ifs.Cond, name, token.NEQ) && nodeContains(ifs.Body, call) {
+		if slices.Contains(nonNilConjunctNames(ifs.Cond), name) && nodeContains(ifs.Body, call) {
 			found = true
 			return false
 		}
@@ -368,7 +462,7 @@ func precedingNilReject(body *ast.BlockStmt, call *ast.CallExpr, name string) bo
 			if nodeContains(stmt, call) {
 				for j := 0; j < i; j++ {
 					ifs, ok := list[j].(*ast.IfStmt)
-					if ok && isNilCompareOp(ifs.Cond, name, token.EQL) && bodyStartsWithReturn(ifs.Body) {
+					if ok && slices.Contains(nilRejectGuardNames(ifs.Cond), name) && bodyStartsWithReturn(ifs.Body) {
 						okProven = true
 						return
 					}

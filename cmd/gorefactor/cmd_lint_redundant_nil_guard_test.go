@@ -187,6 +187,74 @@ func caller() int { return use(&T{N: 1}) }
 	}
 }
 
+func TestRedundantNilGuardRule_QuietWhenCallerReassignsAfterGuard(t *testing.T) {
+	// Modeled on cmd/compile's implements(): the caller nil-rejects t at
+	// entry but then reassigns it from a call that may return nil, so the
+	// callee's guard is load-bearing.
+	dir := t.TempDir()
+	src := `package p
+
+type T struct{ N int }
+
+func derive(t *T) *T { return nil }
+
+func use(t *T) int {
+	if t == nil {
+		return 0
+	}
+	return t.N
+}
+
+func caller(t *T) int {
+	if t == nil {
+		return -1
+	}
+	t = derive(t)
+	return use(t)
+}
+`
+	path := filepath.Join(dir, "a.go")
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	issues := redundantNilGuardRule{}.Run(LintContext{Files: []string{path}})
+	if len(issues) != 0 {
+		t.Fatalf("guard proof must not survive a reassignment: %+v", issues)
+	}
+}
+
+func TestRedundantNilGuardRule_QuietWhenCallerClosureMutates(t *testing.T) {
+	dir := t.TempDir()
+	src := `package p
+
+type T struct{ N int }
+
+func use(t *T) int {
+	if t == nil {
+		return 0
+	}
+	return t.N
+}
+
+func caller(t *T) int {
+	if t == nil {
+		return -1
+	}
+	f := func() { t = nil }
+	f()
+	return use(t)
+}
+`
+	path := filepath.Join(dir, "a.go")
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	issues := redundantNilGuardRule{}.Run(LintContext{Files: []string{path}})
+	if len(issues) != 0 {
+		t.Fatalf("guard proof must not survive a closure mutation: %+v", issues)
+	}
+}
+
 func TestRedundantNilGuardRule_NewAndAmpersand(t *testing.T) {
 	dir := t.TempDir()
 	src := `package p

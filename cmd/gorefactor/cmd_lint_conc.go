@@ -120,7 +120,7 @@ func (r nakedGoroutineRule) Run(ctx LintContext) []lintIssue {
 				return true
 			}
 			out = append(out, lintIssue{
-				File:     f,
+				File:     fmt.Sprintf("%s:%d", f, fset.Position(goStmt.Pos()).Line),
 				Rule:     "naked-goroutine",
 				Severity: "info",
 				Message: fmt.Sprintf("%s: goroutine at line %d has no visible lifecycle — no context, done channel, or WaitGroup; callers cannot cancel it or know it finished",

@@ -30,7 +30,7 @@ func (r complexityRule) Run(ctx LintContext) []lintIssue {
 
 			if d := c.Dispatch; d != nil && d.NormalizedComplexity <= threshold {
 				out = append(out, lintIssue{
-					File:     f,
+					File:     fmt.Sprintf("%s:%d", f, c.Line),
 					Rule:     "complexity",
 					Severity: "info",
 					Message: fmt.Sprintf("%s has cyclomatic complexity %d (threshold %d, line %d) — dispatch table: %d cases, worst case %d; per-branch score %d is under threshold",
@@ -41,7 +41,7 @@ func (r complexityRule) Run(ctx LintContext) []lintIssue {
 
 			sev := "info" // single-axis proxy; hard-to-maintain is the gate
 			iss := lintIssue{
-				File:      f,
+				File:      fmt.Sprintf("%s:%d", f, c.Line),
 				Rule:      "complexity",
 				Severity:  sev,
 				Message:   fmt.Sprintf("%s has cyclomatic complexity %d (threshold %d, line %d) — consider extracting", c.Name, c.Complexity, threshold, c.Line),

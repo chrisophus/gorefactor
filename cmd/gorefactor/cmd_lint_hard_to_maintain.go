@@ -63,7 +63,7 @@ func (r hardToMaintainRule) Run(ctx LintContext) []lintIssue {
 				sev = "error"
 			}
 			out = append(out, lintIssue{
-				File:      f,
+				File:      fmt.Sprintf("%s:%d", f, m.Line),
 				Rule:      "hard-to-maintain",
 				Severity:  sev,
 				Message:   fmt.Sprintf("%s is hard to maintain (line %d): %d logic lines and %s — consider extracting", m.Key(), m.Line, lines, joinAnd(reasons)),

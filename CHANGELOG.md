@@ -19,6 +19,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   native tier. Unlike the `rules:` allowlist (listing one rule turns off all
   the rest), it is the config-file equivalent of repeating `--skip-rule`.
 
+### Changed
+- **Function- and statement-scoped findings now carry their line** in the
+  `file` location (`path:line`), matching what `funcorder` already emitted, so
+  consumers can point at the finding in code. Covers `long-function`,
+  `complexity`, `hard-to-maintain`, `error-not-wrapped`, `naked-goroutine`,
+  `sleep-in-test`, `stranded-comment`, `pass-through-param`,
+  `unnecessary-nil-check`, `linear-search-in-loop`, and `string-concat-in-loop`.
+  `duplicate-block` (many locations) and the `smells` family
+  (`excessive-returns`, `large-class`, `data-clumps`, `fat-interface`,
+  `type-switch`, `excessive-params`) stay file-level — the former reports a set
+  of sites in its message, the latter has no node position in its detector.
+
 ## [0.15.0] - 2026-07-30
 
 ### Added

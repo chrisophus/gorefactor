@@ -79,7 +79,7 @@ func strandedCommentsInPackage(files []string) []lintIssue {
 					continue
 				}
 				out = append(out, lintIssue{
-					File:     pf.path,
+					File:     fmt.Sprintf("%s:%d", pf.path, pf.fset.Position(dc.doc.Pos()).Line),
 					Rule:     "stranded-comment",
 					Severity: "warning",
 					Message: fmt.Sprintf("doc comment at line %d opens with %q but documents %s — the comment appears stranded from the declaration it describes",
@@ -157,7 +157,7 @@ func freeFloatingStranded(path string, fset *token.FileSet, file *ast.File, pkgN
 			continue
 		}
 		out = append(out, lintIssue{
-			File:     path,
+			File:     fmt.Sprintf("%s:%d", path, fset.Position(cg.Pos()).Line),
 			Rule:     "stranded-comment",
 			Severity: "warning",
 			Message: fmt.Sprintf("free-floating comment at line %d opens with %q, which names a declaration elsewhere in the package — likely narration stranded by a mechanical edit; delete it or reattach it",

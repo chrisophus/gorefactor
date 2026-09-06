@@ -73,7 +73,7 @@ func passThroughIssuesForPackage(files []string) []lintIssue {
 				continue
 			}
 			out = append(out, lintIssue{
-				File:     pf.file,
+				File:     fmt.Sprintf("%s:%d", pf.file, pf.fset.Position(pf.decl.Pos()).Line),
 				Rule:     "pass-through-param",
 				Severity: "info",
 				Message: fmt.Sprintf("parameter %q of %s (line %d) is forwarded through %d call layers without being used — prop drilling; consider a params struct or restructuring the call chain",

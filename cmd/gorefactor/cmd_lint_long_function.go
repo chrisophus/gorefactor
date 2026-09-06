@@ -32,7 +32,7 @@ func (r longFunctionRule) Run(ctx LintContext) []lintIssue {
 
 			if d := m.Dispatch; d != nil && m.LogicLines()-d.LineDiscount < threshold {
 				out = append(out, lintIssue{
-					File:     f,
+					File:     fmt.Sprintf("%s:%d", f, m.Line),
 					Rule:     "long-function",
 					Severity: "info",
 					Message: fmt.Sprintf("%s is %d lines (threshold %d, line %d) — dispatch table: %d cases, worst case %d lines; per-branch length %d is under threshold",
@@ -46,7 +46,7 @@ func (r longFunctionRule) Run(ctx LintContext) []lintIssue {
 			}
 
 			iss := lintIssue{
-				File:      f,
+				File:      fmt.Sprintf("%s:%d", f, m.Line),
 				Rule:      "long-function",
 				Severity:  "info", // single-axis proxy; hard-to-maintain is the gate
 				Message:   fmt.Sprintf("%s is %d lines (threshold %d, line %d) — consider extracting", m.Key(), m.Lines, threshold, m.Line),

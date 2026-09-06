@@ -21,7 +21,7 @@ func (r errWrapRule) Run(ctx LintContext) []lintIssue {
 		for _, e := range issues {
 			autoFixCmd := fmt.Sprintf("wrap-errors %s %s", f, e.Function)
 			out = append(out, lintIssue{
-				File:       f,
+				File:       fmt.Sprintf("%s:%d", f, e.Line),
 				Rule:       "error-not-wrapped",
 				Severity:   "warning",
 				Message:    e.Message,

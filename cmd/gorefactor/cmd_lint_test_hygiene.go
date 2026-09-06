@@ -155,7 +155,7 @@ func (r sleepInTestRule) Run(ctx LintContext) []lintIssue {
 				return true
 			}
 			out = append(out, lintIssue{
-				File:     f,
+				File:     fmt.Sprintf("%s:%d", f, fset.Position(call.Pos()).Line),
 				Rule:     "sleep-in-test",
 				Severity: "warning",
 				Message: fmt.Sprintf("time.Sleep in test (line %d) — sleep-based synchronization is flaky; poll with a deadline, or use channels or a fake clock",

@@ -219,7 +219,7 @@ func (s *nilCheckScanner) checkNilCompare(be *ast.BinaryExpr, vars map[string]ni
 		op = "!="
 	}
 	s.issues = append(s.issues, lintIssue{
-		File:     s.file,
+		File:     fmt.Sprintf("%s:%d", s.file, s.line(be)),
 		Rule:     "unnecessary-nil-check",
 		Severity: "warning",
 		Message: fmt.Sprintf("func %s: `%s %s nil` (line %d) %s — %s; drop the redundant check",
@@ -261,7 +261,7 @@ func (s *nilCheckScanner) checkLenCombo(be *ast.BinaryExpr, vars map[string]nilV
 				op = "=="
 			}
 			s.issues = append(s.issues, lintIssue{
-				File:     s.file,
+				File:     fmt.Sprintf("%s:%d", s.file, s.line(cmp)),
 				Rule:     "unnecessary-nil-check",
 				Severity: "warning",
 				Message: fmt.Sprintf("func %s: `%s %s nil` (line %d) is redundant — len(nil) == 0, so `len(%s) %s` alone suffices",

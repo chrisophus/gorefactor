@@ -43,7 +43,7 @@ func (r stringConcatInLoopRule) Run(ctx LintContext) []lintIssue {
 			}
 			seen[key] = true
 			out = append(out, lintIssue{
-				File:     f,
+				File:     fmt.Sprintf("%s:%d", f, line),
 				Rule:     "string-concat-in-loop",
 				Severity: "warning",
 				Message:  fmt.Sprintf("string concatenation in loop (line %d) — quadratic allocation; use strings.Builder", line),
@@ -229,7 +229,7 @@ func scanLoopsDeduped(ctx LintContext, match func(ast.Node) (rule, msgFmt string
 				severity = "info"
 			}
 			out = append(out, lintIssue{
-				File:     f,
+				File:     fmt.Sprintf("%s:%d", f, line),
 				Rule:     rule,
 				Severity: severity,
 				Message:  fmt.Sprintf(msgFmt, line),

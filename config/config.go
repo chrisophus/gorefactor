@@ -46,6 +46,11 @@ type Lint struct {
 	ExcludeTestFiles []string                  `yaml:"exclude_test_files"`
 	ExcludePackages  map[string][]string       `yaml:"exclude_packages"`
 	Thresholds       map[string]LintThresholds `yaml:"thresholds"`
+	// Disable turns off the named rules while leaving every other rule at its
+	// native tier. Unlike the rules allowlist (any listed rule implies every
+	// unlisted rule is off), disable is subtractive: it is the config-file
+	// equivalent of repeating --skip-rule, for rules a repo considers noise.
+	Disable []string `yaml:"disable"`
 }
 
 // TrackedArtifact holds allowlists for the tracked-artifact rule.
@@ -86,6 +91,21 @@ func (f *File) Path() string {
 // HasRules reports whether the config file defined a rules section.
 func (f *File) HasRules() bool {
 	return f != nil && f.hasRules
+}
+
+// RuleDisabled reports whether name is in the lint.disable list. It works
+// independently of the rules allowlist: a disabled rule is off even when no
+// rules section exists, and every other rule keeps its native tier.
+func (f *File) RuleDisabled(name string) bool {
+	if f == nil {
+		return false
+	}
+	for _, r := range f.Lint.Disable {
+		if strings.TrimSpace(r) == name {
+			return true
+		}
+	}
+	return false
 }
 
 // WalkOptions maps walk YAML to analyzer.WalkOptions.
@@ -238,6 +258,11 @@ func (f *File) ValidateKnownRules(known map[string]struct{}) error {
 	}
 	for rule := range f.Lint.Thresholds {
 		if err := check(rule, "lint.thresholds"); err != nil {
+			return fmt.Errorf("validate lint policy: %w", err)
+		}
+	}
+	for _, rule := range f.Lint.Disable {
+		if err := check(strings.TrimSpace(rule), "lint.disable"); err != nil {
 			return fmt.Errorf("validate lint policy: %w", err)
 		}
 	}

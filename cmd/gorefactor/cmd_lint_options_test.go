@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/chrisophus/gorefactor/config"
 )
 
 func TestParseLintOptions_RuleFlags(t *testing.T) {
@@ -44,6 +46,21 @@ func TestFilterLintRules_OnlyAndSkip(t *testing.T) {
 	got := filterLintRules(all, opts)
 	if len(got) != 1 || got[0].Name() != "file-size" {
 		t.Fatalf("filter = %v, want [file-size]", ruleNames(got))
+	}
+}
+
+func TestFilterLintRules_Disable(t *testing.T) {
+	all := defaultLintRules()
+	opts := lintOptions{cfg: &config.File{Lint: config.Lint{Disable: []string{"file-size"}}}}
+	got := filterLintRules(all, opts)
+	for _, r := range got {
+		if r.Name() == "file-size" {
+			t.Fatal("file-size should be disabled")
+		}
+	}
+	// Subtractive: exactly the one named rule is removed, the rest survive.
+	if len(got) != len(all)-1 {
+		t.Fatalf("disable removed %d rules, want 1", len(all)-len(got))
 	}
 }
 

@@ -26,6 +26,7 @@ type lintOptions struct {
 	maxSet  bool
 	lintFixOptions
 	jsonOut    bool
+	sarifOut   bool
 	quiet      bool
 	failOnly   bool
 	info       bool // --info: include [info] issues (default hides them)
@@ -176,6 +177,8 @@ func (opts *lintOptions) parseOutputFlags(args []string, i int) (int, bool, erro
 	switch args[i] {
 	case "--json":
 		opts.jsonOut = true
+	case "--sarif":
+		opts.sarifOut = true
 	case "--quiet":
 		opts.quiet = true
 	case "--fail-only":
@@ -274,6 +277,9 @@ func filterLintRules(all []LintRule, opts lintOptions) []LintRule {
 			continue
 		}
 		if opts.skipRules[name] {
+			continue
+		}
+		if opts.cfg.RuleDisabled(name) {
 			continue
 		}
 		if opts.cfg != nil && opts.cfg.HasRules() {

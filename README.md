@@ -88,6 +88,8 @@ gorefactor doctor                  # Lint + golangci-lint + build + test (final 
 
 With `--quiet --fail-only`, lint exits silently when nothing reaches `--fail-on` — warnings and info below the gate are intentionally hidden.
 
+To turn off a few noisy rules while keeping every other rule at its native tier, use the subtractive `lint.disable` list rather than the `rules:` allowlist (which turns off every rule you *don't* list). It is the config-file equivalent of repeating `--skip-rule`.
+
 **Focused policy config** (optional YAML blocks):
 
 ```yaml
@@ -97,6 +99,7 @@ tracked_artifact:
 
 lint:
   exclude_test_files: [error-not-wrapped]
+  disable: [high-blast-radius, untested-function]
   exclude_packages:
     high-coupling: [internal/domain, internal/wire]
   thresholds:
@@ -187,6 +190,8 @@ Every command that accepts `--json` emits one shared envelope — `{"ok": bool,
 "error": "...", "data": {...}}` — with the command-specific payload under
 `data`. Machine consumers can branch on `ok` without knowing per-command
 shapes (pinned by `TestEnvelopeContractIsUniversal`).
+
+`gorefactor lint --sarif` emits [SARIF 2.1.0](https://sarifweb.azurewebsites.net/) instead of the native envelope, so GitHub code scanning and other SARIF consumers ingest findings without a bespoke adapter. It reads the same filtered issue list as `--json`, so `--fail-only` and `--info` shape it identically.
 
 ### Analysis (read-only)
 

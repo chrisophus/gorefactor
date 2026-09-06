@@ -69,7 +69,7 @@ func init() {
 		ReadOnly:    true,
 		MCPTool:     true,
 		Description: "Run structural lints (file size, duplicates) [--fix [--verify]] [--json] [--max N] [--fail-only]",
-		Usage:       "lint [path] [--fix] [--verify] [--fix-level safe|aggressive] [--baseline] [--no-baseline] [--write-baseline] [--baseline-file PATH] [--baseline-ratchet REF] [--json] [--quiet] [--fail-only] [--info] [--verbose] [--max N] [--rule NAME] [--skip-rule NAME] [--fail-on error|warning] [--config PATH] [--profile NAME]",
+		Usage:       "lint [path] [--fix] [--verify] [--fix-level safe|aggressive] [--baseline] [--no-baseline] [--write-baseline] [--baseline-file PATH] [--baseline-ratchet REF] [--json] [--sarif] [--quiet] [--fail-only] [--info] [--verbose] [--max N] [--rule NAME] [--skip-rule NAME] [--fail-on error|warning] [--config PATH] [--profile NAME]",
 		MinArgs:     0,
 		MaxArgs:     1,
 		Flags: map[string]bool{
@@ -83,6 +83,7 @@ func init() {
 			"--verify":           false,
 			"--fix-level":        true,
 			"--json":             false,
+			"--sarif":            false,
 			"--quiet":            false,
 			"--fail-only":        false,
 			"--info":             false,

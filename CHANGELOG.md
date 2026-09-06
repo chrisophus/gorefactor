@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`lint --sarif`** — emit lint findings as [SARIF 2.1.0](https://sarifweb.azurewebsites.net/)
+  (OASIS) so GitHub code scanning and other SARIF consumers ingest them without
+  a bespoke adapter. Reads the same filtered issue list as `--json`, so
+  `--fail-only` and `--info` shape it identically; severities map
+  error/warning/info to the SARIF level/note enum, and file:line:col findings
+  carry a physical-location region.
+- **`lint.disable` config** — a subtractive per-rule off-switch under the
+  `lint:` block that turns off the named rules while every other rule keeps its
+  native tier. Unlike the `rules:` allowlist (listing one rule turns off all
+  the rest), it is the config-file equivalent of repeating `--skip-rule`.
+
 ## [0.15.0] - 2026-07-30
 
 ### Added

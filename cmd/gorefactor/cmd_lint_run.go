@@ -47,6 +47,9 @@ func lintCommand(args []string) error {
 		outputIssues = failingIssues(issues, opts.failOn)
 	}
 
+	if opts.sarifOut {
+		return lintOutputSARIF(outputIssues, issues, opts, shouldFail)
+	}
 	if opts.jsonOut {
 		return lintOutputJSON(outputIssues, issues, opts, shouldFail)
 	}

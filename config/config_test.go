@@ -116,3 +116,45 @@ func TestDiscover_FindsGorefactorYaml(t *testing.T) {
 		t.Fatalf("discover = %q want %q", got, cfgPath)
 	}
 }
+
+func TestRuleDisabled_SubtractiveAndAllowlistIndependent(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".gorefactor.yaml")
+	const yamlDoc = `
+lint:
+  disable:
+    - high-blast-radius
+    - untested-function
+`
+	if err := os.WriteFile(path, []byte(yamlDoc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f, err := Load(path, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !f.RuleDisabled("high-blast-radius") || !f.RuleDisabled("untested-function") {
+		t.Fatal("listed rules must be disabled")
+	}
+	if f.RuleDisabled("file-size") {
+		t.Fatal("unlisted rule must not be disabled")
+	}
+	// disable is subtractive: it must not turn on the rules allowlist, so an
+	// unlisted rule keeps its native tier (RuleTier reports no override).
+	if f.HasRules() {
+		t.Fatal("disable alone must not enable the rules allowlist")
+	}
+	if _, ok := f.RuleTier("file-size", ""); ok {
+		t.Fatal("disable must not force other rules off via the allowlist")
+	}
+}
+
+func TestValidateKnownRules_RejectsUnknownDisable(t *testing.T) {
+	t.Parallel()
+	f := &File{Lint: Lint{Disable: []string{"not-a-real-rule"}}}
+	err := f.ValidateKnownRules(map[string]struct{}{"file-size": {}})
+	if err == nil {
+		t.Fatal("expected error for unknown disabled rule")
+	}
+}

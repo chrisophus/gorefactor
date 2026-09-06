@@ -12,6 +12,9 @@
 # Runtime snapshots and state
 .gorefactor/
 
+# Redline review evidence (written by `redline run`)
+.redline/
+
 # Generated templates (created by generate-templates command)
 test_templates/
 templates/

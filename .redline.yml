@@ -1,0 +1,47 @@
+# .redline.yml — GoRefactor.
+#
+# Built in, detected by their own config, NOT listed here:
+#   golangci-lint  (.golangci.yml)      gorefactor structural lint (.gorefactor.yaml)
+#
+# Requires redline built from source at or after the harness/mutation work
+# (`go install github.com/chrisophus/redline/cmd/redline@latest`). An older
+# binary ignores the harness: block silently.
+
+harness:
+  profiles:
+    # Diff coverage. CI runs `make ci-test` (-v -race); this drops both so
+    # --prepare stays interactive-fast. Same profile, same file name.
+    - path: coverage.out
+      produce:
+        command: go
+        args: ["test", "./...", "-coverprofile=coverage.out"]
+      when: stale
+      scope: ["**/*.go"]
+
+    # Mutation testing. Redline reads this report, it never runs gomutants:
+    # a full run is minutes of repeated test executions. Produce it with
+    #   make gomutants PKG=./parser        (writes mutation-report.json)
+    # Coverage says a test ran the line; a LIVED mutant says nothing asserted
+    # it — which is exactly the "generator shipped empty test bodies past a
+    # green gate" failure CLAUDE.md records.
+    - path: mutation-report.json
+      when: missing
+      scope: ["parser/**/*.go", "analyzer/**/*.go", "orchestrator/**/*.go"]
+
+tools:
+  # deadcode (golang.org/x/tools) — reachability analysis. `deadcode -json`
+  # nests funcs under packages, which the flat field mapping cannot walk, so
+  # scripts/deadcode-json.sh flattens it to one object per unreachable func.
+  # Catches what golangci-lint's unused misses: exported-but-never-called and
+  # cross-package dead code, the "phantom surface area" CLAUDE.md calls a bug.
+  - name: deadcode
+    command: scripts/deadcode-json.sh
+    scope: ["**/*.go"]
+    format: json
+    resultsPath: ""
+    fields:
+      file: file
+      line: line
+      rule: rule
+      message: message
+      severity: severity

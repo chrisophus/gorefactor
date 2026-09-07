@@ -210,6 +210,7 @@ shapes (pinned by `TestEnvelopeContractIsUniversal`).
 | `suggest-plan` | Suggested refactoring plan for a file |
 | `callgraph` | Transitive call tree (callees, or `--callers`) for a function/method |
 | `context` | One-shot LLM context pack for a symbol: def, callers, signature types, tests (`--budget N`) |
+| `context --changed <ref>` | Context envelope for a whole change: classified file manifest, changed symbols, and the enclosing declarations, callers, types, siblings, tests, and line history around them (JSON for an external reviewer, emitted whole) |
 | `skeleton` | File with function bodies elided — token-cheap file shape |
 | `search-ast` | Structural search; match a statement/expression pattern (`$_` wildcard) |
 | `api-diff` | Diff the exported API surface vs a git ref (default HEAD) |

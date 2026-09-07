@@ -11,7 +11,7 @@ import (
 	"unicode/utf8"
 )
 
-var contextFlags = map[string]bool{"--json": false, "--in": true, "--budget": true}
+var contextFlags = map[string]bool{"--json": false, "--in": true, "--budget": true, "--changed": true}
 
 const defaultContextBudget = 4000
 
@@ -20,9 +20,9 @@ func init() {
 		Name:        "context",
 		ReadOnly:    true,
 		MCPTool:     true,
-		Description: "One-shot LLM context pack for a symbol: definition, callers, signature types, tests [--budget N] [--json]",
-		Usage:       "context <Symbol|Receiver:Method> [--budget N] [--in path] [--json]",
-		MinArgs:     1,
+		Description: "One-shot LLM context pack for a symbol, or --changed <ref> for a whole change: definition, callers, signature types, tests [--budget N] [--json]",
+		Usage:       "context <Symbol|Receiver:Method> [--budget N] [--in path] [--json] | context --changed <ref> [--in path] [--json]",
+		MinArgs:     0,
 		MaxArgs:     1,
 		Flags:       contextFlags,
 		Run:         contextCommand,
@@ -62,11 +62,18 @@ type contextPack struct {
 
 func contextCommand(args []string) error {
 	positional, flags := parseFlags(args, contextFlags)
-	target := positional[0]
 	root := "."
 	if flags["--in"] != "" {
 		root = flags["--in"]
 	}
+	if ref := flags["--changed"]; ref != "" {
+		return changedContextCommand(ref, root, positional, flags)
+	}
+	if len(positional) == 0 {
+		return usageErrorf("context needs a symbol, or --changed <ref>\nusage: gorefactor %s",
+			getCommands()["context"].usageLine())
+	}
+	target := positional[0]
 	budget := defaultContextBudget
 	if flags["--budget"] != "" {
 		n, err := strconv.Atoi(flags["--budget"])

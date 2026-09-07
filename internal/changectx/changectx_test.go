@@ -269,6 +269,76 @@ func TestSummaryCountsRolesAndClasses(t *testing.T) {
 	}
 }
 
+// A deletion is where history earns its place: the lines are gone, so the
+// diff carries no trace of why they were there, and a guard removed on
+// purpose reads exactly like a simplification.
+func TestBuildTracesTheHistoryOfDeletedLines(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	t.Setenv("GOWORK", "off")
+	dir := t.TempDir()
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = resolved
+	}
+	commit := func(msg string) {
+		gitRun(t, dir, "add", "-A")
+		gitRun(t, dir, "-c", "user.email=fixture@example.com", "-c", "user.name=Fixture",
+			"-c", "commit.gpgsign=false", "commit", "-q", "-m", msg)
+	}
+	const plain = `package q
+
+func Drain(items []string) []string {
+	var out []string
+	for _, it := range items {
+		out = append(out, it)
+	}
+	return out
+}
+`
+	const guarded = `package q
+
+func Drain(items []string) []string {
+	var out []string
+	for _, it := range items {
+		if it == "" {
+			continue
+		}
+		out = append(out, it)
+	}
+	return out
+}
+`
+	writeFile(t, dir, "go.mod", "module example.com/q\n\ngo 1.26\n")
+	writeFile(t, dir, "q.go", plain)
+	gitRun(t, dir, "init", "-q")
+	commit("add the queue")
+	writeFile(t, dir, "q.go", guarded)
+	commit("skip empty entries: a nil from the retry path panicked in production")
+	writeFile(t, dir, "q.go", plain)
+
+	env, err := Build(Options{Root: dir, BaseRef: "HEAD", Version: "v0.0.0-test"})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var found bool
+	for _, x := range env.Expansions {
+		if x.Role != RoleHistory {
+			continue
+		}
+		if strings.Contains(x.Content, "panicked in production") {
+			found = true
+			if x.Details["kind"] != "removed-line-history" {
+				t.Errorf("kind = %q, want removed-line-history", x.Details["kind"])
+			}
+		}
+	}
+	if !found {
+		t.Fatal("the commit that added the deleted guard did not reach the envelope, " +
+			"so nothing distinguishes this change from an ordinary simplification")
+	}
+}
+
 func rolesOf(env *Envelope) []string {
 	seen := map[string]bool{}
 	var out []string
@@ -352,74 +422,4 @@ func buildFixture(t *testing.T, dir string) *Envelope {
 		t.Fatalf("Build: %v", err)
 	}
 	return env
-}
-
-// A deletion is where history earns its place: the lines are gone, so the
-// diff carries no trace of why they were there, and a guard removed on
-// purpose reads exactly like a simplification.
-func TestBuildTracesTheHistoryOfDeletedLines(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git is not installed")
-	}
-	t.Setenv("GOWORK", "off")
-	dir := t.TempDir()
-	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
-		dir = resolved
-	}
-	commit := func(msg string) {
-		gitRun(t, dir, "add", "-A")
-		gitRun(t, dir, "-c", "user.email=fixture@example.com", "-c", "user.name=Fixture",
-			"-c", "commit.gpgsign=false", "commit", "-q", "-m", msg)
-	}
-	const plain = `package q
-
-func Drain(items []string) []string {
-	var out []string
-	for _, it := range items {
-		out = append(out, it)
-	}
-	return out
-}
-`
-	const guarded = `package q
-
-func Drain(items []string) []string {
-	var out []string
-	for _, it := range items {
-		if it == "" {
-			continue
-		}
-		out = append(out, it)
-	}
-	return out
-}
-`
-	writeFile(t, dir, "go.mod", "module example.com/q\n\ngo 1.26\n")
-	writeFile(t, dir, "q.go", plain)
-	gitRun(t, dir, "init", "-q")
-	commit("add the queue")
-	writeFile(t, dir, "q.go", guarded)
-	commit("skip empty entries: a nil from the retry path panicked in production")
-	writeFile(t, dir, "q.go", plain)
-
-	env, err := Build(Options{Root: dir, BaseRef: "HEAD", Version: "v0.0.0-test"})
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
-	var found bool
-	for _, x := range env.Expansions {
-		if x.Role != RoleHistory {
-			continue
-		}
-		if strings.Contains(x.Content, "panicked in production") {
-			found = true
-			if x.Details["kind"] != "removed-line-history" {
-				t.Errorf("kind = %q, want removed-line-history", x.Details["kind"])
-			}
-		}
-	}
-	if !found {
-		t.Fatal("the commit that added the deleted guard did not reach the envelope, " +
-			"so nothing distinguishes this change from an ordinary simplification")
-	}
 }

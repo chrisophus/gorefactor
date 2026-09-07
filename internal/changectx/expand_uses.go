@@ -26,15 +26,22 @@ func (u useSite) sortKey() string {
 
 // expandUses emits the caller and test roles. Both come from the same walk:
 // every identifier the type checker resolved to a changed declaration.
+//
+// Call sites of unexported declarations count. Gating them out was the first
+// shape of this and it was wrong twice over. It dropped exactly the case the
+// role exists for, since most signature changes are to unexported functions
+// used within their own package, and it was inconsistent with the test role
+// beside it, which never had the gate: a reviewer was shown the test calling
+// a changed unexported function and not the production code calling it.
+// Exportedness is a ranking input rather than a filter, and priorityFor
+// already scores it, so the consumer's budget drops these first when space is
+// short instead of never seeing them.
 func (b *builder) expandUses() {
 	sites := b.collectUses()
 	seenTest := map[string]bool{}
 	for _, s := range sites {
 		if strings.HasSuffix(s.rel, "_test.go") {
 			b.addTestSite(s, seenTest)
-			continue
-		}
-		if !s.target.exported {
 			continue
 		}
 		b.addCallerSite(s)

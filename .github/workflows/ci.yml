@@ -34,7 +34,13 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.12.2
+          # v2.12.2 cannot type-check the Go 1.27 standard library: it fails
+          # importing math/rand/v2 with "method must have no type parameters"
+          # and reports it as two typecheck issues in crypto/internal/randutil,
+          # a path no diff here touches. main has been red on it since the
+          # runner moved to 1.27. v2.13.2 is built with go1.27.0 and runs clean
+          # over this repository with no new findings.
+          version: v2.13.2
           args: --timeout=5m
 
       - name: Run gorefactor structural lint gate

@@ -69,30 +69,42 @@ func (b *builder) expandEnclosing() {
 // expandHistory emits the recent history of the changed line spans. It is
 // cheap, and it stops a whole class of bad review comment: the suggestion to
 // undo a deliberate fix.
+//
+// The span is asked for in base coordinates and reported in working-tree
+// ones. Walking base with a working-tree position traces whatever happens to
+// sit at that offset in the older file, which on any file whose earlier hunks
+// shifted line numbers is not the code under review — and git reports no
+// error for it.
 func (b *builder) expandHistory() {
 	for _, f := range b.files {
-		ranges, dropped := rankedRanges(b.ranges[f.Path], historyRangesPerFile)
+		sides, err := hunkSides(b.repo, b.base, f.Path)
+		if err != nil {
+			b.notes = append(b.notes, "no history for "+f.Path+": "+err.Error())
+			continue
+		}
+		sides, dropped := rankedSides(sides, historyRangesPerFile)
 		if dropped > 0 {
 			b.notes = append(b.notes, fmt.Sprintf(
 				"%d further changed span(s) of %s were not traced (cap %d per file)",
 				dropped, f.Path, historyRangesPerFile))
 		}
-		for _, r := range ranges {
-			out, err := logLineHistory(b.repo, b.base, f.Path, r, historyRevisions)
+		for _, s := range sides {
+			out, err := logLineHistory(b.repo, b.base, f.Path, s.base, historyRevisions)
 			if err != nil || strings.TrimSpace(out) == "" {
 				continue
 			}
-			d, priority := b.historyContext(f.Path, r)
+			d, priority := b.historyContext(f.Path, s.head)
 			e := Expansion{
 				Role:      RoleHistory,
 				Priority:  priority,
 				File:      f.Path,
-				StartLine: r.start,
-				EndLine:   r.end,
+				StartLine: s.head.start,
+				EndLine:   s.head.end,
 				Content:   out,
 				Details: map[string]string{
 					"kind":      "line-history",
-					"lines":     fmt.Sprintf("%d-%d", r.start, r.end),
+					"lines":     fmt.Sprintf("%d-%d", s.head.start, s.head.end),
+					"baseLines": fmt.Sprintf("%d-%d", s.base.start, s.base.end),
 					"revisions": strconv.Itoa(historyRevisions),
 				},
 			}
@@ -169,6 +181,27 @@ func rankedRanges(ranges []lineRange, limit int) ([]lineRange, int) {
 	kept := ranked[:limit]
 	sort.Slice(kept, func(i, j int) bool { return kept[i].start < kept[j].start })
 	return kept, len(ranges) - limit
+}
+
+// rankedSides applies the same cap to paired hunk halves, ranking on the
+// working-tree span because that is the side whose size says how much of the
+// change the span accounts for.
+func rankedSides(sides []hunkSide, limit int) ([]hunkSide, int) {
+	if len(sides) <= limit {
+		return sides, 0
+	}
+	ranked := append([]hunkSide(nil), sides...)
+	sort.Slice(ranked, func(i, j int) bool {
+		li := ranked[i].head.end - ranked[i].head.start
+		lj := ranked[j].head.end - ranked[j].head.start
+		if li != lj {
+			return li > lj
+		}
+		return ranked[i].head.start < ranked[j].head.start
+	})
+	kept := ranked[:limit]
+	sort.Slice(kept, func(i, j int) bool { return kept[i].head.start < kept[j].head.start })
+	return kept, len(sides) - limit
 }
 
 // historyContext returns the changed declaration a history span belongs to,

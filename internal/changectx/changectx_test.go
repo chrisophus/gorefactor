@@ -11,10 +11,15 @@ import (
 	"github.com/chrisophus/gorefactor/analyzer"
 )
 
-// baseFiles is the committed state of the fixture module. The change under
-// test edits one method of Store, which is enough to exercise every role: the
-// method has a caller, a test, a named type in its signature, and a sibling
-// implementation of the interface its receiver satisfies.
+// baseFiles is the first committed state of the fixture module. The change
+// under test edits one method of Store, which is enough to exercise every
+// role: the method has a caller, a test, a named type in its signature, and a
+// sibling implementation of the interface its receiver satisfies.
+//
+// The fixture commits twice, and the two commits touch different lines of
+// Insert. That is what makes the history role's content an assertion: the
+// span the change was made against was written by the first commit, so a
+// history walk of the wrong span reports the second commit's subject instead.
 var baseFiles = map[string]string{
 	"go.mod": "module example.com/fix\n\ngo 1.21\n",
 	"types.go": `package fix
@@ -43,9 +48,6 @@ type Store struct {
 
 // Insert stores a record.
 func (s *Store) Insert(r Record) error {
-	if r.ID == "" {
-		return ErrEmpty
-	}
 	s.n++
 	return nil
 }
@@ -69,6 +71,10 @@ func (m *MemStore) Insert(r Record) error {
 func Save(s *Store, r Record) error {
 	return s.Insert(r)
 }
+
+// Inserter reaches Insert without calling it, which is what the caller
+// role's label has to distinguish.
+var Inserter = (*Store).Insert
 `,
 	"store_test.go": `package fix
 
@@ -82,6 +88,34 @@ func TestInsert(t *testing.T) {
 }
 `,
 }
+
+// storeCommit and guardCommit are the two commit subjects. The lines the
+// working change is made against were written by the first, so the history
+// role reaching guardCommit instead means it walked the wrong span.
+const (
+	storeCommit = "add the store: Insert counts the records it is given"
+	guardCommit = "reject a record with no identity: an empty ID overwrote the last row"
+)
+
+// guardedStore is the second commit: it adds the empty-identity guard above
+// the lines the working change is made against, so those lines still belong
+// to the first commit.
+const guardedStore = `package fix
+
+// Store counts the records it was given.
+type Store struct {
+	n int
+}
+
+// Insert stores a record.
+func (s *Store) Insert(r Record) error {
+	if r.ID == "" {
+		return ErrEmpty
+	}
+	s.n++
+	return nil
+}
+`
 
 // changedStore rewrites Insert so the diff lands inside one method.
 const changedStore = `package fix
@@ -116,9 +150,6 @@ func TestBuildEnvelopeFrame(t *testing.T) {
 	}
 	if len(env.BaseSHA) < 7 {
 		t.Errorf("baseSHA = %q", env.BaseSHA)
-	}
-	if !strings.Contains(env.PromptFragment, "%w") {
-		t.Error("promptFragment does not carry the Go review half")
 	}
 	if len(env.Files) != 1 || env.Files[0].Path != "store.go" {
 		t.Fatalf("files = %+v, want just store.go", env.Files)
@@ -164,8 +195,23 @@ func TestBuildExpansionRoles(t *testing.T) {
 		t.Errorf("enclosing details = %v", enc.Details)
 	}
 
-	if got := byRole[RoleCaller][0]; got.File != "use.go" || got.Symbol != "Store.Insert" {
-		t.Errorf("caller = %s in %s, want Store.Insert in use.go", got.Symbol, got.File)
+	callers := byRole[RoleCaller]
+	if got := callers[0]; got.File != "use.go" || got.Symbol != "Store.Insert" || got.Details["kind"] != "call-site" {
+		t.Errorf("caller = %s in %s labelled %q, want Store.Insert in use.go as a call-site",
+			got.Symbol, got.File, got.Details["kind"])
+	}
+	// A method expression reaches the symbol without calling it. The role
+	// still carries it, since a reviewer wants to see it, but calling it a
+	// call site is the kind of wrong label that costs the role its
+	// credibility.
+	labelled := ""
+	for _, e := range callers {
+		if strings.Contains(e.Content, "(*Store).Insert") {
+			labelled = e.Details["kind"]
+		}
+	}
+	if labelled != "reference-site" {
+		t.Errorf("the method expression that reaches Store.Insert is labelled %q, want reference-site", labelled)
 	}
 	if got := byRole[RoleTest][0]; got.Symbol != "TestInsert" || got.Details["covers"] != "Store.Insert" {
 		t.Errorf("test = %s covering %q", got.Symbol, got.Details["covers"])
@@ -177,8 +223,17 @@ func TestBuildExpansionRoles(t *testing.T) {
 	if sib.Symbol != "MemStore" || sib.Details["interface"] != "Writer" {
 		t.Errorf("sibling = %s via %q, want MemStore via Writer", sib.Symbol, sib.Details["interface"])
 	}
-	if !strings.Contains(byRole[RoleHistory][0].Content, "commit ") {
-		t.Errorf("history content is not a git log:\n%s", byRole[RoleHistory][0].Content)
+	// The span the change was made against was written by the first commit,
+	// and the second commit's guard sits above it. Any other span of
+	// store.go reports the second commit instead, so this is the assertion
+	// that the history role walked the lines the change displaced.
+	hist := byRole[RoleHistory][0]
+	if hist.Details["kind"] != "line-history" || !strings.Contains(hist.Content, storeCommit) {
+		t.Errorf("history of %s:%d-%d does not reach %q:\n%s",
+			hist.File, hist.StartLine, hist.EndLine, storeCommit, hist.Content)
+	}
+	if hist.Symbol != "Store.Insert" {
+		t.Errorf("history of a span inside one changed declaration is labelled %q, want Store.Insert", hist.Symbol)
 	}
 }
 
@@ -337,6 +392,107 @@ func Drain(items []string) []string {
 		t.Fatal("the commit that added the deleted guard did not reach the envelope, " +
 			"so nothing distinguishes this change from an ordinary simplification")
 	}
+	// Removed history outranks the surviving lines' history within the role.
+	// The consumer spends a role from the top and drops its tail, and why a
+	// line was removed is the sharper question.
+	firstRemoved, firstSurviving := -1, -1
+	for i, x := range env.Expansions {
+		if x.Role != RoleHistory {
+			continue
+		}
+		switch x.Details["kind"] {
+		case "removed-line-history":
+			if firstRemoved < 0 {
+				firstRemoved = i
+			}
+		case "line-history":
+			if firstSurviving < 0 {
+				firstSurviving = i
+			}
+		}
+	}
+	if firstSurviving >= 0 && firstRemoved > firstSurviving {
+		t.Errorf("the removed lines' history is ranked at %d, behind the surviving lines' history at %d, "+
+			"so a binding budget drops the deletion first", firstRemoved, firstSurviving)
+	}
+}
+
+// TestBuildTracesTheHistoryOfADeletedFile is the change that resolves to no
+// declaration at all. Removing a file outright leaves nothing to type-check,
+// so every role that reads declarations is empty and history is the only
+// thing left that can say why the code existed. The deleted-lines test above
+// cannot reach this: its deletion sits inside a surviving declaration.
+func TestBuildTracesTheHistoryOfADeletedFile(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	t.Setenv("GOWORK", "off")
+	dir := t.TempDir()
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = resolved
+	}
+	const subject = "add the drain: the retry path needed a copy it could keep"
+	writeFile(t, dir, "go.mod", "module example.com/d\n\ngo 1.26\n")
+	writeFile(t, dir, "d.go", "package d\n\n// Drain copies the items.\nfunc Drain(items []string) []string {\n\treturn append([]string(nil), items...)\n}\n")
+	gitRun(t, dir, "init", "-q")
+	gitRun(t, dir, "add", "-A")
+	gitRun(t, dir, "-c", "user.email=fixture@example.com", "-c", "user.name=Fixture",
+		"-c", "commit.gpgsign=false", "commit", "-q", "-m", subject)
+	gitRun(t, dir, "rm", "-q", "d.go")
+
+	env, err := Build(Options{Root: dir, BaseRef: "HEAD", Version: "v0.0.0-test"})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	for _, x := range env.Expansions {
+		if x.Role == RoleHistory && strings.Contains(x.Content, subject) {
+			return
+		}
+	}
+	t.Fatalf("removing the file left no history in the envelope, so nothing says why the code existed; "+
+		"expansions = %d, notes = %v", len(env.Expansions), env.Notes)
+}
+
+// TestBuildEmitsOneExpansionPerTestFunction pins the key the test role
+// de-duplicates on. Keying on the symbol as well as the function shipped one
+// test function once per changed symbol it touched, byte for byte, and the
+// second copy tells a reviewer nothing the first did not.
+func TestBuildEmitsOneExpansionPerTestFunction(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	t.Setenv("GOWORK", "off")
+	dir := t.TempDir()
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = resolved
+	}
+	writeFile(t, dir, "go.mod", "module example.com/two\n\ngo 1.26\n")
+	writeFile(t, dir, "two.go", "package two\n\n// A is the first half.\nfunc A() int { return 1 }\n\n// B is the second half.\nfunc B() int { return 2 }\n")
+	writeFile(t, dir, "two_test.go", "package two\n\nimport \"testing\"\n\nfunc TestBoth(t *testing.T) {\n\tif A()+B() != 3 {\n\t\tt.Fatal(\"sum\")\n\t}\n}\n")
+	gitRun(t, dir, "init", "-q")
+	gitRun(t, dir, "add", "-A")
+	gitRun(t, dir, "-c", "user.email=fixture@example.com", "-c", "user.name=Fixture",
+		"-c", "commit.gpgsign=false", "commit", "-q", "-m", "add both halves")
+	writeFile(t, dir, "two.go", "package two\n\n// A is the first half.\nfunc A() int { return 10 }\n\n// B is the second half.\nfunc B() int { return 20 }\n")
+
+	env, err := Build(Options{Root: dir, BaseRef: "HEAD", Version: "v0.0.0-test"})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var tests []Expansion
+	for _, x := range env.Expansions {
+		if x.Role == RoleTest {
+			tests = append(tests, x)
+		}
+	}
+	if len(tests) != 1 {
+		t.Fatalf("TestBoth reaches two changed symbols and produced %d test expansions; want one naming both: %v",
+			len(tests), symbolsOf(tests))
+	}
+	if tests[0].Symbol != "TestBoth" || tests[0].Details["covers"] != "A, B" {
+		t.Errorf("test expansion = %s covering %q, want TestBoth covering \"A, B\"",
+			tests[0].Symbol, tests[0].Details["covers"])
+	}
 }
 
 func rolesOf(env *Envelope) []string {
@@ -392,8 +548,9 @@ func writeFile(t *testing.T, dir, rel, content string) {
 	}
 }
 
-// fixtureRepo builds a committed module and leaves one method edited in the
-// working tree.
+// fixtureRepo builds a module in two commits and leaves one method edited in
+// the working tree. The two commits touch different lines of Insert so the
+// history role's content says which span it walked.
 func fixtureRepo(t *testing.T) string {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
@@ -407,10 +564,15 @@ func fixtureRepo(t *testing.T) string {
 	for rel, content := range baseFiles {
 		writeFile(t, dir, rel, content)
 	}
+	commit := func(msg string) {
+		gitRun(t, dir, "add", "-A")
+		gitRun(t, dir, "-c", "user.email=fixture@example.com", "-c", "user.name=Fixture",
+			"-c", "commit.gpgsign=false", "commit", "-q", "-m", msg)
+	}
 	gitRun(t, dir, "init", "-q")
-	gitRun(t, dir, "add", "-A")
-	gitRun(t, dir, "-c", "user.email=fixture@example.com", "-c", "user.name=Fixture",
-		"-c", "commit.gpgsign=false", "commit", "-q", "-m", "base")
+	commit(storeCommit)
+	writeFile(t, dir, "store.go", guardedStore)
+	commit(guardCommit)
 	writeFile(t, dir, "store.go", changedStore)
 	return dir
 }

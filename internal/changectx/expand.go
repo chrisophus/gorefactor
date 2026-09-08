@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -17,21 +18,34 @@ const historyRevisions = 3
 // historyRangesPerFile caps how many spans of one file get their own history.
 const historyRangesPerFile = 3
 
+// removedHistoryPriority ranks a deleted span's history above the surviving
+// lines' history: why something was removed is a sharper question than why it
+// is still there. priorityFor scores a declaration in the 50..100 band, so
+// this has to sit above that band to outrank it: the consumer sorts
+// descending within a role and drops the tail when the budget binds.
+const removedHistoryPriority = 120
+
 // callerContextLines is how much surrounding code a call site carries. A call
 // alone does not say what it is guarding or what it does with the result.
 const callerContextLines = 2
 
 // expand fills the envelope with the code around the change, in the order the
 // consumer ranks the roles.
+//
+// The roles that read declarations need declarations; history does not, and
+// is driven from the manifest instead. A change that only deletes files
+// resolves to no declaration at all, and that is precisely where history
+// earns its place: the lines are gone, so nothing else in the envelope says
+// why they were there.
 func (b *builder) expand() {
-	if len(b.decls) == 0 {
-		return
+	if len(b.decls) > 0 {
+		b.expandEnclosing()
+		b.expandUses()
+		b.expandTypes()
+		b.expandSiblings()
 	}
-	b.expandEnclosing()
-	b.expandUses()
-	b.expandTypes()
-	b.expandSiblings()
 	b.expandHistory()
+	b.noteEmptyRoles()
 }
 
 // expandEnclosing emits the whole declaration each changed hunk sits inside.
@@ -57,18 +71,21 @@ func (b *builder) expandEnclosing() {
 // undo a deliberate fix.
 func (b *builder) expandHistory() {
 	for _, f := range b.files {
-		ranges := b.ranges[f.Path]
-		for i, r := range ranges {
-			if i >= historyRangesPerFile {
-				break
-			}
-			out, err := logLineHistory(b.repo, f.Path, r, historyRevisions)
+		ranges, dropped := rankedRanges(b.ranges[f.Path], historyRangesPerFile)
+		if dropped > 0 {
+			b.notes = append(b.notes, fmt.Sprintf(
+				"%d further changed span(s) of %s were not traced (cap %d per file)",
+				dropped, f.Path, historyRangesPerFile))
+		}
+		for _, r := range ranges {
+			out, err := logLineHistory(b.repo, b.base, f.Path, r, historyRevisions)
 			if err != nil || strings.TrimSpace(out) == "" {
 				continue
 			}
-			d := b.declCovering(f.Path, r)
+			d, priority := b.historyContext(f.Path, r)
 			e := Expansion{
 				Role:      RoleHistory,
+				Priority:  priority,
 				File:      f.Path,
 				StartLine: r.start,
 				EndLine:   r.end,
@@ -80,7 +97,6 @@ func (b *builder) expandHistory() {
 				},
 			}
 			if d != nil {
-				e.Priority = priorityFor(d)
 				e.Symbol = d.symbol
 				e.Scope = d.scope
 			}
@@ -97,23 +113,24 @@ func (b *builder) expandHistory() {
 // exactly like a tidy simplification. Tracing the span against the base
 // revision recovers the commit that introduced it, and with it the reason.
 func (b *builder) expandRemovedHistory(path string) {
-	ranges, err := removedRanges(b.repo, b.base, path)
+	all, err := removedRanges(b.repo, b.base, path)
 	if err != nil {
 		return
 	}
-	for i, r := range ranges {
-		if i >= historyRangesPerFile {
-			break
-		}
+	ranges, dropped := rankedRanges(all, historyRangesPerFile)
+	if dropped > 0 {
+		b.notes = append(b.notes, fmt.Sprintf(
+			"%d further removed span(s) of %s were not traced (cap %d per file)",
+			dropped, path, historyRangesPerFile))
+	}
+	for _, r := range ranges {
 		out, err := logRemovedHistory(b.repo, b.base, path, r, historyRevisions)
 		if err != nil || strings.TrimSpace(out) == "" {
 			continue
 		}
 		b.add(Expansion{
-			Role: RoleHistory,
-			// Above the surviving lines' history: why something was removed
-			// is a sharper question than why it is still there.
-			Priority:  1,
+			Role:      RoleHistory,
+			Priority:  removedHistoryPriority,
 			File:      path,
 			StartLine: r.start,
 			EndLine:   r.end,
@@ -127,15 +144,105 @@ func (b *builder) expandRemovedHistory(path string) {
 	}
 }
 
-// declCovering returns the changed declaration a line span falls in, if the
-// span sits inside one.
-func (b *builder) declCovering(rel string, r lineRange) *decl {
+// rankedRanges applies the per-file cap to a set of changed spans, keeping
+// the longest ones. The spans arrive sorted by position, so keeping the first
+// few keeps whatever sits nearest the top of the file: on this provider's own
+// first change that meant a one-line map edit and a three-line metadata edit
+// survived while the span holding the added logic was dropped. Span length is
+// the proxy for substance, being how many lines the diff touched there.
+//
+// The second return is how many spans were dropped. The caller reports it as
+// a note, because a file whose history was cut has to say so; otherwise the
+// envelope reads as a file whose remaining spans were all there was.
+func rankedRanges(ranges []lineRange, limit int) ([]lineRange, int) {
+	if len(ranges) <= limit {
+		return ranges, 0
+	}
+	ranked := append([]lineRange(nil), ranges...)
+	sort.Slice(ranked, func(i, j int) bool {
+		li, lj := ranked[i].end-ranked[i].start, ranked[j].end-ranked[j].start
+		if li != lj {
+			return li > lj
+		}
+		return ranked[i].start < ranked[j].start
+	})
+	kept := ranked[:limit]
+	sort.Slice(kept, func(i, j int) bool { return kept[i].start < kept[j].start })
+	return kept, len(ranges) - limit
+}
+
+// historyContext returns the changed declaration a history span belongs to,
+// and the priority the expansion carries.
+//
+// A span covering more than one changed declaration belongs to none of them.
+// The whole-file span of an added file covers every declaration in it, and
+// since the declarations are ordered by position, naming one meant naming
+// whichever happened to be declared at the top of the file: a 315-line
+// expansion was labelled with the first option struct it contained and ranked
+// by that struct's own change. Such a span is left unlabelled and scored from
+// everything the change touched inside it.
+func (b *builder) historyContext(rel string, r lineRange) (*decl, int) {
+	var covered []*decl
 	for _, d := range b.decls {
 		if d.rel == rel && d.overlaps(r) {
-			return d
+			covered = append(covered, d)
 		}
 	}
-	return nil
+	switch len(covered) {
+	case 0:
+		return nil, 0
+	case 1:
+		return covered[0], priorityFor(covered[0])
+	}
+	// Scored through priorityFor so a whole-file span lands on the same scale
+	// as a span inside one declaration.
+	whole := &decl{}
+	for _, d := range covered {
+		whole.changed += d.changed
+		whole.exported = whole.exported || d.exported
+	}
+	return nil, priorityFor(whole)
+}
+
+// noteEmptyRoles records why a role produced nothing. A role that is merely
+// absent is indistinguishable from a stage that crashed, and nothing
+// downstream can tell the two apart: on this provider's own first change the
+// type and sibling roles were both legitimately empty and the notes were
+// empty too. Each note states the condition that emptied the role, which is
+// knowable here and nowhere else.
+func (b *builder) noteEmptyRoles() {
+	present := map[Role]bool{}
+	for _, e := range b.exps {
+		present[e.Role] = true
+	}
+	for _, role := range []Role{RoleEnclosing, RoleCaller, RoleType, RoleSibling, RoleTest, RoleHistory} {
+		if !present[role] {
+			b.notes = append(b.notes, "no "+string(role)+" expansions: "+b.emptyRoleReason(role))
+		}
+	}
+}
+
+// emptyRoleReason names what left a role empty. Every role but history reads
+// declarations, so an unresolved change explains all of them at once.
+func (b *builder) emptyRoleReason(role Role) string {
+	if len(b.decls) == 0 && role != RoleHistory {
+		return "the change resolved to no Go declaration"
+	}
+	switch role {
+	case RoleEnclosing:
+		return "the changed declarations had no readable content in the working tree"
+	case RoleCaller:
+		return "nothing outside the change references a changed symbol"
+	case RoleTest:
+		return "no test outside the change reaches a changed symbol"
+	case RoleType:
+		return "the changed signatures name no type declared outside the change, which is the case for a new package: its own types are part of the change"
+	case RoleSibling:
+		return "no changed type implements an interface declared in this module"
+	case RoleHistory:
+		return "git reported no history for the changed spans"
+	}
+	return "the stage produced nothing"
 }
 
 // rel converts an absolute path to the repo-relative, forward-slash form the

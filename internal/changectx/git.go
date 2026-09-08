@@ -197,6 +197,43 @@ func removedRanges(repo, base, path string) ([]lineRange, error) {
 	return mergeRanges(ranges), nil
 }
 
+// hunkSide pairs a hunk's working-tree span with the span it replaced at base.
+//
+// History needs both halves and they are not interchangeable. The revision
+// being walked is base, so the -L span has to be in base coordinates: a file
+// whose earlier hunks inserted or deleted lines has a working-tree position
+// that names different lines at base, and `git log -L` will happily trace
+// those instead of erroring. The working-tree half is what locates the span
+// for the reviewer and what maps it onto a changed declaration, since those
+// live in the head tree.
+type hunkSide struct {
+	head lineRange
+	base lineRange
+}
+
+// hunkSides returns both halves of every hunk that has a base-side span. A
+// hunk that only adds has none, and lines that did not exist before have no
+// prior history to trace.
+func hunkSides(repo, base, path string) ([]hunkSide, error) {
+	out, err := gitOutput(repo, "diff", "-U0", "--no-color", base, "--", path)
+	if err != nil {
+		return nil, err
+	}
+	var sides []hunkSide
+	for _, line := range strings.Split(out, "\n") {
+		if !strings.HasPrefix(line, "@@") {
+			continue
+		}
+		head, okHead := parseHunkHeader(line)
+		baseSide, okBase := parseRemovedHunkHeader(line)
+		if !okHead || !okBase {
+			continue
+		}
+		sides = append(sides, hunkSide{head: head, base: baseSide})
+	}
+	return sides, nil
+}
+
 // parseRemovedHunkHeader reads the "-start,count" half. A count of zero means
 // the hunk adds without removing, and there is nothing deleted to trace.
 func parseRemovedHunkHeader(line string) (lineRange, bool) {

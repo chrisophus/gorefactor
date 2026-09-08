@@ -118,6 +118,12 @@ func (s *Store) Insert(r Record) error {
 `
 
 // changedStore rewrites Insert so the diff lands inside one method.
+//
+// It both adds a guard and rewrites the counter line. The rewrite is what
+// gives the history role something to trace: a hunk that only inserts has no
+// base-side span, and lines that did not exist before have no prior history.
+// The counter line was written by the first commit, so tracing the span this
+// change displaces must reach that commit and not the second one.
 const changedStore = `package fix
 
 // Store counts the records it was given.
@@ -133,7 +139,7 @@ func (s *Store) Insert(r Record) error {
 	if len(r.ID) > 64 {
 		return ErrEmpty
 	}
-	s.n++
+	s.n += 1
 	return nil
 }
 `
@@ -227,10 +233,26 @@ func TestBuildExpansionRoles(t *testing.T) {
 	// and the second commit's guard sits above it. Any other span of
 	// store.go reports the second commit instead, so this is the assertion
 	// that the history role walked the lines the change displaced.
-	hist := byRole[RoleHistory][0]
-	if hist.Details["kind"] != "line-history" || !strings.Contains(hist.Content, storeCommit) {
+	//
+	// Selected by kind rather than by position: removed-line history is
+	// ranked above surviving-line history on purpose, so it sorts first.
+	var hist Expansion
+	for _, e := range byRole[RoleHistory] {
+		if e.Details["kind"] == "line-history" {
+			hist = e
+			break
+		}
+	}
+	if hist.Content == "" {
+		t.Fatalf("no surviving-line history expansion: %v", byRole[RoleHistory])
+	}
+	if !strings.Contains(hist.Content, storeCommit) {
 		t.Errorf("history of %s:%d-%d does not reach %q:\n%s",
 			hist.File, hist.StartLine, hist.EndLine, storeCommit, hist.Content)
+	}
+	if strings.Contains(hist.Content, guardCommit) {
+		t.Errorf("history of %s:%d-%d reached the second commit, so it walked the wrong span:\n%s",
+			hist.File, hist.StartLine, hist.EndLine, hist.Content)
 	}
 	if hist.Symbol != "Store.Insert" {
 		t.Errorf("history of a span inside one changed declaration is labelled %q, want Store.Insert", hist.Symbol)
@@ -376,16 +398,16 @@ func Drain(items []string) []string {
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
+	// The removed-line role is the one under test. Surviving-line history of
+	// the same file can reach the same commit now that it walks base, so
+	// matching on content alone would pass without the role working.
 	var found bool
 	for _, x := range env.Expansions {
-		if x.Role != RoleHistory {
+		if x.Role != RoleHistory || x.Details["kind"] != "removed-line-history" {
 			continue
 		}
 		if strings.Contains(x.Content, "panicked in production") {
 			found = true
-			if x.Details["kind"] != "removed-line-history" {
-				t.Errorf("kind = %q, want removed-line-history", x.Details["kind"])
-			}
 		}
 	}
 	if !found {

@@ -79,7 +79,11 @@ func (c change) deleted() bool { return strings.HasPrefix(c.status, "D") }
 
 // changedFiles lists every path that differs between base and the working
 // tree, including files git does not track yet. A review that skips a new file
-// because it was never added is worse than one that never ran.
+// because it was never added is worse than one that never ran, so a failure to
+// list the untracked paths fails the call rather than returning a manifest
+// that looks complete: the symbols and every expansion are derived from this
+// list, and a silently dropped file leaves the envelope reading like a fully
+// covered change.
 func changedFiles(repo, base string) ([]change, error) {
 	tracked, err := gitOutput(repo, "diff", "--name-status", "-z", base)
 	if err != nil {
@@ -89,12 +93,14 @@ func changedFiles(repo, base string) ([]change, error) {
 	for _, c := range parseNameStatus(tracked) {
 		byPath[c.path] = c
 	}
-	if untracked, uerr := gitOutput(repo, "ls-files", "--others", "--exclude-standard", "-z"); uerr == nil {
-		for _, p := range splitNUL(untracked) {
-			p = filepath.ToSlash(p)
-			if _, seen := byPath[p]; !seen {
-				byPath[p] = change{path: p, status: "A"}
-			}
+	untracked, err := gitOutput(repo, "ls-files", "--others", "--exclude-standard", "-z")
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range splitNUL(untracked) {
+		p = filepath.ToSlash(p)
+		if _, seen := byPath[p]; !seen {
+			byPath[p] = change{path: p, status: "A"}
 		}
 	}
 	out := make([]change, 0, len(byPath))
@@ -290,8 +296,18 @@ func mergeRanges(in []lineRange) []lineRange {
 // logLineHistory returns the recent history of a line span, capped at max
 // revisions. The cap is what keeps this role cheap: a file rewritten fifty
 // times would otherwise bury everything else in the envelope.
-func logLineHistory(repo, path string, r lineRange, max int) (string, error) {
+//
+// The walk starts at rev rather than at HEAD, for the same reason
+// logRemovedHistory does: the change under review sits at the tip, so a walk
+// from HEAD answers "why is this line here" with the commit the reviewer is
+// already reading. Walking from the base answers it with the history the
+// change was made against. The span is the diff's working-tree side, so
+// against the base it names the lines the hunk displaced rather than the
+// added lines, which is the answerable half of the question: an added line
+// has no history, and what a reviewer needs is the history of the code it
+// was added into.
+func logLineHistory(repo, rev, path string, r lineRange, max int) (string, error) {
 	spec := fmt.Sprintf("-L%d,%d:%s", r.start, r.end, path)
 	return gitOutput(repo, "log", "--no-color", "--date=iso-strict",
-		"-n", strconv.Itoa(max), spec)
+		"-n", strconv.Itoa(max), spec, rev)
 }

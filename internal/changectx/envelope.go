@@ -19,7 +19,9 @@ type Role string
 const (
 	// RoleEnclosing is the whole declaration a changed hunk sits inside.
 	RoleEnclosing Role = "enclosing"
-	// RoleCaller is a call site of a changed exported symbol.
+	// RoleCaller is a place outside the change that reaches a changed
+	// symbol: a call site, or a reference that names it without calling it.
+	// The expansion's details.kind says which of the two it is.
 	RoleCaller Role = "caller"
 	// RoleType is the definition of a type named in a changed signature.
 	RoleType Role = "type"

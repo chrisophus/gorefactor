@@ -7,7 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-09-09
+
 ### Added
+- **`context --changed <ref>`** — a change-context mode that emits a context
+  envelope for everything a reviewer needs beyond the diff between `<ref>`'s
+  merge base and the working tree: the enclosing declaration of each hunk,
+  callers of changed exported symbols (resolved through `go/types` object
+  identity, not name matching), types named in changed signatures, sibling
+  implementations, covering tests, and the history of the changed lines —
+  deleted lines included, traced against the base revision, since the diff
+  carries no trace of a guard removed on purpose. Changed files are classified
+  as source, generated, vendored, test, migration, or lockfile. Expansions are
+  left untruncated: ranking and budgeting belong to the consumer, so
+  `--budget` with `--changed` is a usage error rather than silently ignored. A
+  package that fails to type-check is a note, not a failure.
 - **`lint --sarif`** — emit lint findings as [SARIF 2.1.0](https://sarifweb.azurewebsites.net/)
   (OASIS) so GitHub code scanning and other SARIF consumers ingest them without
   a bespoke adapter. Reads the same filtered issue list as `--json`, so

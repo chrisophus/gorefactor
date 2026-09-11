@@ -175,7 +175,15 @@ func exprLabel(expr ast.Expr) string {
 
 // loopCollection finds a `len(X)` operand in a for-loop condition and returns
 // the label of X, so counted loops can be named after what they iterate.
+//
+// The condition is optional in the grammar: `for {` and `for ; ; i++` parse
+// with a nil Cond, and ast.Inspect panics on a nil node rather than treating
+// it as an empty tree. A loop with no condition has no len(X) to find, which
+// is the same answer as a condition that does not mention one.
 func loopCollection(cond ast.Expr) string {
+	if cond == nil {
+		return ""
+	}
 	var found string
 	ast.Inspect(cond, func(n ast.Node) bool {
 		call, ok := n.(*ast.CallExpr)

@@ -33,6 +33,25 @@ func TestSuggestBlockName(t *testing.T) {
 	}
 }
 
+// A for statement's condition is optional, and naming a block walked it
+// without checking. `gorefactor lint` panicked with "ast.Walk: unexpected
+// node type <nil>" on any function complex enough to reach the complexity
+// rule that contained one, which took the whole lint run down: not a rule
+// that returned nothing, an exit code 2 and no output at all.
+func TestSuggestBlockNameOnALoopWithNoCondition(t *testing.T) {
+	for _, src := range []string{
+		"for {\nx++\nbreak\n}",
+		"for ; ; x++ {\nbreak\n}",
+		"for x := 0; ; x++ {\nbreak\n}",
+	} {
+		stmt, cmap := blockStmtFromSrc(t, src)
+		got := SuggestBlockName(stmt, cmap, 2, map[string]bool{})
+		if got != "extractBlockL2" {
+			t.Errorf("%q named %q, want the positional fallback", src, got)
+		}
+	}
+}
+
 func TestSuggestBlockNameUnique(t *testing.T) {
 	used := map[string]bool{}
 	stmt, cmap := blockStmtFromSrc(t, "total := 1\n_ = total")

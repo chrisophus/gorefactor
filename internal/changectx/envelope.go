@@ -23,6 +23,11 @@ const (
 	// symbol: a call site, or a reference that names it without calling it.
 	// The expansion's details.kind says which of the two it is.
 	RoleCaller Role = "caller"
+	// RoleRemoval is the history of lines the change deletes: the commits that
+	// added them, and with them the reason the lines were there. The consumer
+	// ranks it apart from RoleHistory, so a deletion's history is not dropped
+	// with the older history of lines that survive.
+	RoleRemoval Role = "removal"
 	// RoleType is the definition of a type named in a changed signature.
 	RoleType Role = "type"
 	// RoleSibling is another implementation of an interface a changed type
@@ -40,10 +45,11 @@ const (
 var roleRank = map[Role]int{
 	RoleEnclosing: 0,
 	RoleCaller:    1,
-	RoleType:      2,
-	RoleSibling:   3,
-	RoleTest:      4,
-	RoleHistory:   5,
+	RoleRemoval:   2,
+	RoleType:      3,
+	RoleSibling:   4,
+	RoleTest:      5,
+	RoleHistory:   6,
 }
 
 // Class is what a changed file is.

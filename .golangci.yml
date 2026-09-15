@@ -14,9 +14,12 @@ linters:
     # golangci's linters rather than a bespoke gorefactor rule; the doctor
     # golangci substrate maps these to the conc category.
     - contextcheck
-    # cyclop/funlen/dupl are intentionally NOT enabled: gorefactor owns the
-    # size/shape sensors (LogicLines, dispatch-shape) and their autofixes.
-    # Running both double-counts the same defects in doctor --report.
+    # Size, shape, and duplication are owned by the linters below rather than
+    # by gorefactor's own sensors: the equivalents exist off the shelf, and
+    # gorefactor's copies are disabled in .gorefactor.yaml (lint.disable) so
+    # doctor --report cannot double-count one defect. gorefactor keeps the
+    # rules with an autofix (file-size, error-not-wrapped, funcorder-*,
+    # dead-code) and the ones with no Go equivalent at all.
     - errcheck
     - gosec
     - govet
@@ -25,8 +28,55 @@ linters:
     # name-based and autofixable — doctor maps unused to dead category.
     - unused
     - gocritic
+    # Replacements for gorefactor's disabled structural rules, at the same
+    # thresholds: long-function -> funlen, complexity -> gocyclo/gocognit,
+    # deep-nesting -> nestif, hard-to-maintain -> maintidx,
+    # duplicate-block -> dupl, fat-interface -> interfacebloat,
+    # excessive-params/returns and fatal-in-library -> revive.
+    - funlen
+    - gocyclo
+    - gocognit
+    - nestif
+    - maintidx
+    - dupl
+    - interfacebloat
+    - revive
+    # Complementary, not replacements: errorlint covers the %v-instead-of-%w
+    # half of error wrapping that gorefactor's error-not-wrapped does not,
+    # modernize replaces string-concat-in-loop (with its own fix), and iface
+    # is the nearest thing to premature-abstraction.
+    - errorlint
+    - modernize
+    - iface
 
   settings:
+    funlen:
+      lines: 75
+      statements: 0
+      ignore-comments: true
+    gocyclo:
+      min-complexity: 15
+    gocognit:
+      min-complexity: 20
+    nestif:
+      min-complexity: 5
+    maintidx:
+      under: 20
+    dupl:
+      threshold: 150
+    interfacebloat:
+      max: 8
+    iface:
+      enable: [identical, unused, opaque]
+    revive:
+      rules:
+        - name: deep-exit
+        - name: argument-limit
+          arguments: [6]
+        - name: function-result-limit
+          arguments: [3]
+        - name: max-control-nesting
+          arguments: [5]
     gosec:
       excludes:
         - G304  # file path from variable — intentional in a file-editing tool
@@ -38,18 +88,18 @@ linters:
 
   exclusions:
     rules:
-      - linters: [funlen, dupl, cyclop, errcheck, gosec]
+      - linters: [funlen, dupl, cyclop, gocyclo, gocognit, nestif, maintidx, errcheck, gosec]
         path: _test\.go
       # CLI command files have inherent branching for flag parsing /
       # subcommand dispatch and aren't core logic; exempt them from
       # complexity, length, and unchecked-error noise.
-      - linters: [cyclop, funlen, errcheck, gocritic, gosec]
+      - linters: [cyclop, funlen, gocyclo, gocognit, nestif, maintidx, errcheck, gocritic, gosec]
         path: cmd/gorefactor/cmd_.*\.go$
       # The second-tier agent driver (gorefactor-agent) is the same
       # category: a harness of dispatch loops, flag parsing, provider
       # plumbing and stdout reporting, not core algorithmic logic. Same
       # rationale and exemption as the CLI command files above.
-      - linters: [cyclop, funlen, errcheck, gocritic, gosec]
+      - linters: [cyclop, funlen, gocyclo, gocognit, nestif, maintidx, errcheck, gocritic, gosec]
         path: cmd/gorefactor-agent/.*\.go$
       # Stylistic gocritic rules — preference, not correctness. Pre-existing
       # patterns; lint warnings here aren't worth churning the code.
@@ -85,11 +135,21 @@ linters:
       - linters: [cyclop]
         path: analyzer/log_propagation
       # diff.go and mutation.go are harness/dispatch files; complexity is structural.
-      - linters: [cyclop, funlen]
+      - linters: [cyclop, funlen, gocyclo, gocognit, nestif, maintidx]
         path: cmd/gorefactor/(diff|mutation)\.go$
       # AST walkers and orchestration dispatch — structural complexity.
-      - linters: [cyclop, funlen]
+      - linters: [cyclop, funlen, gocyclo, gocognit, nestif, maintidx]
         path: orchestrator/(conditions|cross_package_rewrite_find|cross_package_rewrite_non|dry_run_execute)\.go$
     paths:
       - ^examples/
       - ^benchmark/
+
+# A ratchet, the same shape as gorefactor's own lint baseline
+# (.gorefactor-lint-baseline.json): the linters newly enabled above report a few
+# hundred findings across a tree written before they ran, and fixing all of them
+# is a separate piece of work from adopting them. Only findings in code changed
+# since the merge base with origin/main fail. Audit the whole tree at any time
+# with `golangci-lint run --new-from-merge-base=""`, and note that many
+# modernize and errorlint findings carry fixes: `golangci-lint run --fix`.
+issues:
+  new-from-merge-base: origin/main

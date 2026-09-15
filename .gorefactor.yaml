@@ -26,3 +26,38 @@ walk:
   skip_dir_segments:
     - examples
     - testdata
+
+# Rules retired in favour of off-the-shelf linters (see .golangci.yml, which
+# enables the replacement at the same threshold). Running both would report one
+# defect twice and double-count it in doctor --report.
+#
+#   long-function      -> funlen (75 lines)
+#   complexity         -> gocyclo (15) / gocognit (20)
+#   deep-nesting       -> nestif (5) / revive max-control-nesting
+#   hard-to-maintain   -> maintidx (under 20)
+#   duplicate-block    -> dupl (threshold 150)
+#   excessive-params   -> revive argument-limit (6)
+#   excessive-returns  -> revive function-result-limit (3)
+#   fat-interface      -> interfacebloat (max 8)
+#   fatal-in-library   -> revive deep-exit
+#   string-concat-in-loop -> modernize stringsbuilder (which also rewrites it)
+#
+# What gorefactor keeps: every rule with an autofix no other linter offers
+# (file-size via split, error-not-wrapped, funcorder-*, dead-code, the
+# log-propagation family, regexp-compile-in-func), and every rule with no Go
+# equivalent — redundant-nil-guard, pass-through-param, data-clumps,
+# high-blast-radius, god-object/large-class/god-package, high-coupling,
+# naked-goroutine, unstopped-ticker, byvalue-buffer, linear-search-in-loop,
+# untested-*, test hygiene, and the harness-residue family.
+lint:
+  disable:
+    - long-function
+    - complexity
+    - deep-nesting
+    - hard-to-maintain
+    - duplicate-block
+    - excessive-params
+    - excessive-returns
+    - fat-interface
+    - fatal-in-library
+    - string-concat-in-loop

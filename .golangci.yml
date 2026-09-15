@@ -149,7 +149,10 @@ linters:
 # hundred findings across a tree written before they ran, and fixing all of them
 # is a separate piece of work from adopting them. Only findings in code changed
 # since the merge base with origin/main fail. Audit the whole tree at any time
-# with `golangci-lint run --new-from-merge-base=""`, and note that many
-# modernize and errorlint findings carry fixes: `golangci-lint run --fix`.
+# with `golangci-lint run --new-from-merge-base=""`. Note that
+# `golangci-lint run --fix` does not clear these: the modernize rewrites are
+# applied by the upstream tool, `go run
+# golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest -fix
+# ./...`, which fixes 425 of the 427 it finds here.
 issues:
   new-from-merge-base: origin/main

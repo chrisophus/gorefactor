@@ -516,6 +516,45 @@ func TestBuildEmitsOneExpansionPerTestFunction(t *testing.T) {
 	}
 }
 
+// TestBuildEmitsOneCallerPerLine pins the caller role's dedupe key. A caller
+// carries the lines around the use, so two uses of one changed symbol on one
+// line shipped the same expansion twice when the key included the column.
+func TestBuildEmitsOneCallerPerLine(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	t.Setenv("GOWORK", "off")
+	dir := t.TempDir()
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = resolved
+	}
+	writeFile(t, dir, "go.mod", "module example.com/half\n\ngo 1.26\n")
+	writeFile(t, dir, "half.go", "package half\n\n// Half halves.\nfunc Half(n int) int { return n / 2 }\n")
+	writeFile(t, dir, "quarter.go", "package half\n\n// Quarter halves twice.\nfunc Quarter(n int) int { return Half(Half(n)) }\n")
+	gitRun(t, dir, "init", "-q")
+	gitRun(t, dir, "add", "-A")
+	gitRun(t, dir, "-c", "user.email=fixture@example.com", "-c", "user.name=Fixture",
+		"-c", "commit.gpgsign=false", "commit", "-q", "-m", "add the halves")
+	writeFile(t, dir, "half.go", "package half\n\n// Half halves.\nfunc Half(n int) int { return n >> 1 }\n")
+
+	env, err := Build(Options{Root: dir, BaseRef: "HEAD", Version: "v0.0.0-test"})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var callers []Expansion
+	for _, x := range env.Expansions {
+		if x.Role == RoleCaller {
+			callers = append(callers, x)
+		}
+	}
+	if len(callers) != 1 {
+		t.Fatalf("Half(Half(n)) produced %d caller expansions, want one for the line: %+v", len(callers), callers)
+	}
+	if callers[0].File != "quarter.go" || callers[0].Details["line"] != "4" {
+		t.Errorf("caller = %s line %s, want quarter.go line 4", callers[0].File, callers[0].Details["line"])
+	}
+}
+
 func rolesOf(env *Envelope) []string {
 	seen := map[string]bool{}
 	var out []string

@@ -14,6 +14,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # Full history, because the lint ratchet needs a merge base. The
+          # default shallow checkout has no origin/main, and golangci-lint
+          # cannot tell "new since the base" from "everything" without one:
+          # it reports the whole pre-existing backlog instead of the diff.
+          # A --depth=1 fetch of the base is not enough either: two shallow
+          # tips share no ancestor, so merge-base still fails.
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v7

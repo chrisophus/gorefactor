@@ -18,11 +18,9 @@ const historyRevisions = 3
 // historyRangesPerFile caps how many spans of one file get their own history.
 const historyRangesPerFile = 3
 
-// removedHistoryPriority ranks a deleted span's history above the surviving
-// lines' history: why something was removed is a sharper question than why it
-// is still there. priorityFor scores a declaration in the 50..100 band, so
-// this has to sit above that band to outrank it: the consumer sorts
-// descending within a role and drops the tail when the budget binds.
+// removedHistoryPriority orders a deleted span's history within RoleRemoval.
+// It sits above priorityFor's 50..100 band, where it was set while removals
+// shared RoleHistory with the surviving lines and had to outrank them there.
 const removedHistoryPriority = 120
 
 // callerContextLines is how much surrounding code a call site carries. A call
@@ -141,7 +139,7 @@ func (b *builder) expandRemovedHistory(path string) {
 			continue
 		}
 		b.add(Expansion{
-			Role:      RoleHistory,
+			Role:      RoleRemoval,
 			Priority:  removedHistoryPriority,
 			File:      path,
 			StartLine: r.start,
@@ -248,7 +246,7 @@ func (b *builder) noteEmptyRoles() {
 	for _, e := range b.exps {
 		present[e.Role] = true
 	}
-	for _, role := range []Role{RoleEnclosing, RoleCaller, RoleType, RoleSibling, RoleTest, RoleHistory} {
+	for _, role := range []Role{RoleEnclosing, RoleCaller, RoleRemoval, RoleType, RoleSibling, RoleTest, RoleHistory} {
 		if !present[role] {
 			b.notes = append(b.notes, "no "+string(role)+" expansions: "+b.emptyRoleReason(role))
 		}
@@ -258,7 +256,7 @@ func (b *builder) noteEmptyRoles() {
 // emptyRoleReason names what left a role empty. Every role but history reads
 // declarations, so an unresolved change explains all of them at once.
 func (b *builder) emptyRoleReason(role Role) string {
-	if len(b.decls) == 0 && role != RoleHistory {
+	if len(b.decls) == 0 && role != RoleHistory && role != RoleRemoval {
 		return "the change resolved to no Go declaration"
 	}
 	switch role {
@@ -272,6 +270,8 @@ func (b *builder) emptyRoleReason(role Role) string {
 		return "the changed signatures name no type declared outside the change, which is the case for a new package: its own types are part of the change"
 	case RoleSibling:
 		return "no changed type implements an interface declared in this module"
+	case RoleRemoval:
+		return "the change deletes no line git has history for"
 	case RoleHistory:
 		return "git reported no history for the changed spans"
 	}

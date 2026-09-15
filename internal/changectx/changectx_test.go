@@ -403,7 +403,7 @@ func Drain(items []string) []string {
 	// matching on content alone would pass without the role working.
 	var found bool
 	for _, x := range env.Expansions {
-		if x.Role != RoleHistory || x.Details["kind"] != "removed-line-history" {
+		if x.Role != RoleRemoval || x.Details["kind"] != "removed-line-history" {
 			continue
 		}
 		if strings.Contains(x.Content, "panicked in production") {
@@ -414,12 +414,11 @@ func Drain(items []string) []string {
 		t.Fatal("the commit that added the deleted guard did not reach the envelope, " +
 			"so nothing distinguishes this change from an ordinary simplification")
 	}
-	// Removed history outranks the surviving lines' history within the role.
-	// The consumer spends a role from the top and drops its tail, and why a
-	// line was removed is the sharper question.
+	// Removed history is emitted ahead of the surviving lines' history, in the
+	// order the consumer ranks the two roles.
 	firstRemoved, firstSurviving := -1, -1
 	for i, x := range env.Expansions {
-		if x.Role != RoleHistory {
+		if x.Role != RoleHistory && x.Role != RoleRemoval {
 			continue
 		}
 		switch x.Details["kind"] {

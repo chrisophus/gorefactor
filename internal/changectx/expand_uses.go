@@ -94,17 +94,19 @@ func (b *builder) addTestSites(sites []useSite) {
 		priority int
 	}
 	var order []*group
-	byKey := map[string]*group{}
+	// Keyed by the declaration itself, which declsForRel hands out once per
+	// file, rather than by its name: a name is not an identity, and a file
+	// may declare several functions called init.
+	byDecl := map[*decl]*group{}
 	for _, s := range sites {
 		encl := b.enclosingAt(s.rel, s.line)
 		if encl == nil {
 			continue
 		}
-		key := encl.rel + ":" + encl.symbol
-		g, ok := byKey[key]
+		g, ok := byDecl[encl]
 		if !ok {
 			g = &group{encl: encl}
-			byKey[key] = g
+			byDecl[encl] = g
 			order = append(order, g)
 		}
 		g.covers = append(g.covers, s.target.scope)
@@ -164,7 +166,10 @@ func (b *builder) collectUses() []useSite {
 			if b.insideChanged(rel, pos.Line) {
 				continue
 			}
-			key := rel + ":" + strconv.Itoa(pos.Line) + ":" + strconv.Itoa(pos.Column) + ":" + target.scope
+			// Keyed on the line, not the column: a caller carries the lines
+			// around the use, so two uses of one symbol on one line —
+			// Half(Half(n)) — shipped the same expansion twice.
+			key := rel + ":" + strconv.Itoa(pos.Line) + ":" + target.scope
 			if seen[key] {
 				continue
 			}

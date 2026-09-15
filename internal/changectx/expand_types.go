@@ -260,9 +260,13 @@ func (b *builder) declFor(obj types.Object) *decl {
 }
 
 // isChanged reports whether a declaration is one the diff touched.
+//
+// Declarations come from one per-file cache, so the same declaration is the
+// same pointer. Comparing names as well would also match a different
+// declaration that shares one, as every init function in a file does.
 func (b *builder) isChanged(d *decl) bool {
 	for _, c := range b.decls {
-		if c == d || (c.rel == d.rel && c.symbol == d.symbol) {
+		if c == d {
 			return true
 		}
 	}

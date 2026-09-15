@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-09-15
+
+### Changed
+- **`context --changed` emits the history of deleted lines under a `removal`
+  role.** The history of lines that survive stays under `history`. A consumer
+  that ranks by role keeps a deletion's history apart from the older history
+  of surviving lines, where the two had shared one role and one rank; Redline
+  ranks `removal` after callers. `removedHistoryPriority` now orders removals
+  among themselves. A consumer that does not know the role ranks it last.
+
+### Fixed
+- **`lint` no longer panics on a `for` loop with no condition.** `for {`,
+  `for ; ; i++` and `for i := 0; ; i++` have a nil condition, and the block
+  naming walked it, so any function complex enough to reach the complexity
+  rule took the whole lint run down with exit code 2 and no output.
+
 ## [0.16.0] - 2026-09-09
 
 ### Added

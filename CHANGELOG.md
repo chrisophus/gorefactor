@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-09-15
+
+### Fixed
+- **`context --changed` no longer emits the same caller expansion twice for two
+  uses of a changed symbol on one line.** A caller carries the lines around the
+  use, so `Half(Half(n))` shipped two byte-identical expansions: the dedupe key
+  included the column. Callers now dedupe per file, line, and target.
+- **Declarations are identified by declaration rather than by name.** The test
+  role grouped use sites by file and symbol name, and `isChanged` matched
+  declarations by name as well as by identity, so a file declaring several
+  `init` functions conflated them. Both now compare the declaration itself,
+  which `declsForRel` hands out once per file.
+
 ## [0.17.0] - 2026-09-15
 
 ### Changed

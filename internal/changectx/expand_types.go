@@ -64,6 +64,10 @@ func (b *builder) expandSiblings() {
 	ifaces, concrete := b.moduleTypes()
 	emitted := map[string]bool{}
 	ifaceSeen := map[string]bool{}
+	// When the interface itself is what changed, the types implementing it are
+	// the answer: they are the ones owed the same change. The walk below starts
+	// from changed concrete types and never reached this.
+	b.addImplementations(concrete, emitted)
 	for _, ct := range changed {
 		for _, iface := range ifaces {
 			it, ok := iface.named.Underlying().(*types.Interface)
@@ -73,6 +77,62 @@ func (b *builder) expandSiblings() {
 			if b.addSiblings(ct, iface, it, concrete, emitted) > 0 {
 				b.addInterface(iface, ifaceSeen)
 			}
+		}
+	}
+}
+
+// addImplementations emits the types that implement an interface the change
+// edits. A changed interface is a changed contract, and the reviewer's question
+// is which implementations still keep it, which is the sibling question asked
+// from the other direction.
+func (b *builder) addImplementations(concrete []namedType, emitted map[string]bool) {
+	for _, d := range b.decls {
+		if d.kind != "type" || d.obj == nil {
+			continue
+		}
+		named, ok := d.obj.Type().(*types.Named)
+		if !ok {
+			continue
+		}
+		it, ok := named.Underlying().(*types.Interface)
+		if !ok || it.NumMethods() == 0 {
+			continue
+		}
+		kept, skipped := 0, 0
+		for _, other := range concrete {
+			if other.decl == nil || b.isChanged(other.decl) || !implements(other.named, it) {
+				continue
+			}
+			key := d.scope + "|" + other.decl.scope
+			if emitted[key] {
+				continue
+			}
+			if kept >= siblingsPerInterface {
+				skipped++
+				continue
+			}
+			emitted[key] = true
+			kept++
+			b.add(Expansion{
+				Role:      RoleSibling,
+				Priority:  priorityFor(other.decl),
+				Symbol:    other.decl.symbol,
+				Scope:     other.decl.scope,
+				File:      other.decl.rel,
+				StartLine: other.decl.start,
+				EndLine:   other.decl.end,
+				Content:   b.slice(other.decl.rel, other.decl.start, other.decl.end),
+				Details: map[string]string{
+					"kind":              "implementation",
+					"interface":         d.scope,
+					"implementsChanged": "true",
+				},
+			})
+		}
+		if skipped > 0 {
+			b.notes = append(b.notes, fmt.Sprintf(
+				"%d further implementation(s) of %s were not expanded (cap %d per interface)",
+				skipped, d.scope, siblingsPerInterface))
 		}
 	}
 }
@@ -234,6 +294,38 @@ func (b *builder) moduleTypes() (ifaces, concrete []namedType) {
 // satisfies the interface through the pointer.
 func satisfies(t *types.Named, it *types.Interface) bool {
 	return types.Implements(t, it) || types.Implements(types.NewPointer(t), it)
+}
+
+// implements reports whether a type is an implementation of an interface for
+// the purpose of a changed contract, which is not the same question satisfies
+// asks.
+//
+// An interface that gained a method is exactly the case where its
+// implementations stop satisfying it, and that is the moment a reviewer most
+// needs to see them: matching on satisfies alone would find the types that are
+// still fine and hide every one the change broke. So a type counts when it
+// satisfies the interface, or when it shares a method with it -- same name,
+// identical signature -- which is what an implementation halfway through a
+// contract change looks like.
+//
+// The shared method has to match by signature, not by name. A type with an
+// unrelated Write is not an implementation of a Writer.
+func implements(t *types.Named, it *types.Interface) bool {
+	if satisfies(t, it) {
+		return true
+	}
+	set := types.NewMethodSet(types.NewPointer(t))
+	for i := range it.NumMethods() {
+		m := it.Method(i)
+		sel := set.Lookup(m.Pkg(), m.Name())
+		if sel == nil {
+			continue
+		}
+		if types.Identical(sel.Obj().Type(), m.Type()) {
+			return true
+		}
+	}
+	return false
 }
 
 // signatureNamed collects the named types a signature mentions, following the

@@ -25,6 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never into a test file, and ranked last by the consumer, below history,
   because it is whole declarations that may have nothing to do with the change.
 
+- **A changed interface brings the types that implement it.** The sibling walk
+  started from changed concrete types, so editing the contract itself reached
+  nothing. Matching is deliberately not "still satisfies the interface": an
+  interface that gains a method is exactly when its implementations stop
+  satisfying it, and exactly when a reviewer needs them, so that test would find
+  the types that are fine and hide every one the change broke. A type counts
+  when it satisfies the interface or shares a method with it by name and
+  identical signature. `details.implementsChanged` marks them.
 - **The interface a changed type implements is emitted, not just named.** The
   `sibling` role has always carried `details.interface` and never the
   declaration behind it, so a reviewer held two implementations and no statement

@@ -3,6 +3,7 @@ package changectx
 import (
 	"fmt"
 	"go/ast"
+	"go/token"
 	"go/types"
 	"sort"
 	"strconv"
@@ -51,7 +52,7 @@ func (b *builder) expandUses() {
 		}
 		callers = append(callers, s)
 	}
-	b.addCallerSites(callers)
+	b.addIndirectCallerSites(b.addCallerSites(callers))
 	b.addTestSites(tests)
 }
 
@@ -69,7 +70,7 @@ func (b *builder) expandUses() {
 // not three copies of one body. Keying on the line was enough while an
 // expansion was five lines wide and is not now — two uses in one function,
 // twenty lines apart, would ship that function twice.
-func (b *builder) addCallerSites(sites []useSite) {
+func (b *builder) addCallerSites(sites []useSite) []*decl {
 	type group struct {
 		encl     *decl
 		calls    []string
@@ -129,6 +130,11 @@ func (b *builder) addCallerSites(sites []useSite) {
 			Details:   details,
 		})
 	}
+	out := make([]*decl, 0, len(order))
+	for _, g := range order {
+		out = append(out, g.encl)
+	}
+	return out
 }
 
 // addCallerWindow is the fallback for a use no declaration encloses.
@@ -214,7 +220,13 @@ func (b *builder) addTestSites(sites []useSite) {
 // sorted because the walk is over maps, and an envelope whose order depends on
 // map iteration cannot be compared with itself.
 func (b *builder) collectUses() []useSite {
-	byPos := b.changedByPos()
+	return b.collectUsesOf(b.changedByPos(), b.insideChanged)
+}
+
+// collectUsesOf is the walk behind both hops: it finds every identifier the
+// type checker resolved to one of the declarations in byPos, skipping uses
+// that sit inside code the caller of this already accounts for.
+func (b *builder) collectUsesOf(byPos map[token.Pos]*decl, skip func(rel string, line int) bool) []useSite {
 	if len(byPos) == 0 || b.idx == nil {
 		return nil
 	}
@@ -238,7 +250,7 @@ func (b *builder) collectUses() []useSite {
 			if !ok {
 				continue
 			}
-			if b.insideChanged(rel, pos.Line) {
+			if skip != nil && skip(rel, pos.Line) {
 				continue
 			}
 			// Keyed on the line, not the column: a caller carries the lines

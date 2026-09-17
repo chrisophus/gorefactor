@@ -46,6 +46,11 @@ type Store struct {
 	n int
 }
 
+// tooLong reports whether an ID is longer than the column holds.
+func tooLong(id string) bool {
+	return len(id) > 64
+}
+
 // Insert stores a record.
 func (s *Store) Insert(r Record) error {
 	s.n++
@@ -107,6 +112,11 @@ type Store struct {
 	n int
 }
 
+// tooLong reports whether an ID is longer than the column holds.
+func tooLong(id string) bool {
+	return len(id) > 64
+}
+
 // Insert stores a record.
 func (s *Store) Insert(r Record) error {
 	if r.ID == "" {
@@ -131,12 +141,17 @@ type Store struct {
 	n int
 }
 
+// tooLong reports whether an ID is longer than the column holds.
+func tooLong(id string) bool {
+	return len(id) > 64
+}
+
 // Insert stores a record.
 func (s *Store) Insert(r Record) error {
 	if r.ID == "" {
 		return ErrEmpty
 	}
-	if len(r.ID) > 64 {
+	if tooLong(r.ID) {
 		return ErrEmpty
 	}
 	s.n += 1
@@ -180,7 +195,7 @@ func TestBuildExpansionRoles(t *testing.T) {
 	for _, e := range env.Expansions {
 		byRole[e.Role] = append(byRole[e.Role], e)
 	}
-	for _, role := range []Role{RoleEnclosing, RoleCaller, RoleType, RoleSibling, RoleTest, RoleHistory} {
+	for _, role := range []Role{RoleEnclosing, RoleCaller, RoleCallee, RoleType, RoleSibling, RoleTest, RoleHistory} {
 		if len(byRole[role]) == 0 {
 			t.Errorf("no %s expansion; roles present: %v", role, rolesOf(env))
 		}
@@ -194,7 +209,7 @@ func TestBuildExpansionRoles(t *testing.T) {
 	if !strings.HasPrefix(enc.Content, "// Insert stores a record.") || !strings.HasSuffix(enc.Content, "}\n") {
 		t.Errorf("enclosing content is not the whole declaration:\n%s", enc.Content)
 	}
-	if !strings.Contains(enc.Content, "len(r.ID) > 64") {
+	if !strings.Contains(enc.Content, "tooLong(r.ID)") {
 		t.Errorf("enclosing content missing the change:\n%s", enc.Content)
 	}
 	if enc.Details["kind"] != "method" || enc.Details["receiver"] != "Store" {
@@ -227,6 +242,22 @@ func TestBuildExpansionRoles(t *testing.T) {
 	if labelled != "reference-site" {
 		t.Errorf("the method expression that reaches Store.Insert is labelled %q, want reference-site", labelled)
 	}
+	// The callee role is the other half of the caller role: Insert's new guard
+	// delegates to tooLong, and whether the guard is right is a fact about
+	// tooLong, which no caller of Insert shows.
+	callees := byRole[RoleCallee]
+	if len(callees) != 1 {
+		t.Fatalf("callees = %d, want 1: %v", len(callees), callees)
+	}
+	if got := callees[0]; got.Symbol != "tooLong" || got.File != "store.go" ||
+		got.Details["calledBy"] != "Store.Insert" {
+		t.Errorf("callee = %s in %s calledBy %q, want tooLong in store.go calledBy Store.Insert",
+			got.Symbol, got.File, got.Details["calledBy"])
+	}
+	if got := callees[0]; !strings.HasPrefix(got.Content, "// tooLong reports") || !strings.Contains(got.Content, "len(id) > 64") {
+		t.Errorf("callee content is not the whole declaration:\n%s", got.Content)
+	}
+
 	if got := byRole[RoleTest][0]; got.Symbol != "TestInsert" || got.Details["covers"] != "Store.Insert" {
 		t.Errorf("test = %s covering %q", got.Symbol, got.Details["covers"])
 	}

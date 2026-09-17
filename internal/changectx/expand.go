@@ -23,8 +23,10 @@ const historyRangesPerFile = 3
 // shared RoleHistory with the surviving lines and had to outrank them there.
 const removedHistoryPriority = 120
 
-// callerContextLines is how much surrounding code a call site carries. A call
-// alone does not say what it is guarding or what it does with the result.
+// callerContextLines is the fallback window for a use no declaration encloses.
+// A caller normally carries its whole enclosing function, which is what says
+// what the call is guarding and what it does with the result; this is what is
+// left when there is no function to carry.
 const callerContextLines = 2
 
 // expand fills the envelope with the code around the change, in the order the

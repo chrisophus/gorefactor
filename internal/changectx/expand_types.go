@@ -70,15 +70,19 @@ func (b *builder) expandSiblings() {
 			if !ok || it.NumMethods() == 0 || !satisfies(ct.named, it) {
 				continue
 			}
-			b.addInterface(iface, ifaceSeen)
-			b.addSiblings(ct, iface, it, concrete, emitted)
+			if b.addSiblings(ct, iface, it, concrete, emitted) > 0 {
+				b.addInterface(iface, ifaceSeen)
+			}
 		}
 	}
 }
 
-// addInterface emits the interface a changed type implements, once.
+// addInterface emits the interface a changed type implements, once, and only
+// when a sibling was emitted under it.
 //
-// The sibling role names it in details.interface and has never sent it. A
+// The sibling role names it in details.interface and has never sent it. With no
+// sibling there is no details.interface either, so there is nothing to complete
+// and the interface is one more type the reviewer did not ask for. A
 // reviewer holding two implementations and no interface has been shown that
 // the two are peers and not what they are peers under, which is the only place
 // the contract they both have to keep is written down.
@@ -113,7 +117,7 @@ type namedType struct {
 	decl  *decl
 }
 
-func (b *builder) addSiblings(ct, iface namedType, it *types.Interface, concrete []namedType, emitted map[string]bool) {
+func (b *builder) addSiblings(ct, iface namedType, it *types.Interface, concrete []namedType, emitted map[string]bool) int {
 	kept := 0
 	skipped := 0
 	for _, other := range concrete {
@@ -151,6 +155,7 @@ func (b *builder) addSiblings(ct, iface namedType, it *types.Interface, concrete
 			"%d further implementation(s) of %s were not expanded (cap %d per interface)",
 			skipped, iface.decl.scope, siblingsPerInterface))
 	}
+	return kept
 }
 
 // changedNamedTypes returns the named types the change touches: types declared

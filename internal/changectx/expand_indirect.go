@@ -14,6 +14,35 @@ import (
 // the one with a hard ceiling.
 const maxIndirectCallers = 8
 
+// hopGroup is one declaration at the second hop and the direct callers it
+// reaches the change through.
+type hopGroup struct {
+	encl     *decl
+	reaches  []string
+	lines    []string
+	priority int
+}
+
+// resolvedByPos keys declarations by their type-checker object position.
+//
+// Only changed declarations are resolved when the change is read, and these are
+// the callers of those, so without this the second hop finds nothing at all --
+// which is what the first run of it did. Resolving is idempotent and skips a
+// declaration whose package did not type-check, which is what keeps a hop from
+// being guessed at by name.
+func resolvedByPos(decls []*decl) map[token.Pos]*decl {
+	out := map[token.Pos]*decl{}
+	for _, d := range decls {
+		if d.obj == nil {
+			resolveObject(d)
+		}
+		if d.obj != nil {
+			out[d.obj.Pos()] = d
+		}
+	}
+	return out
+}
+
 // addIndirectCallerSites emits the second hop: the declarations that call the
 // direct callers of a changed symbol.
 //
@@ -30,19 +59,7 @@ func (b *builder) addIndirectCallerSites(direct []*decl) {
 	if len(direct) == 0 {
 		return
 	}
-	byPos := map[token.Pos]*decl{}
-	for _, d := range direct {
-		// Only changed declarations are resolved when the change is read, and
-		// these are the callers of those. Resolving is idempotent and skips a
-		// declaration whose package did not type-check, which is what keeps a
-		// second hop from being guessed at by name.
-		if d.obj == nil {
-			resolveObject(d)
-		}
-		if d.obj != nil {
-			byPos[d.obj.Pos()] = d
-		}
-	}
+	byPos := resolvedByPos(direct)
 	if len(byPos) == 0 {
 		return
 	}
@@ -60,46 +77,7 @@ func (b *builder) addIndirectCallerSites(direct []*decl) {
 		return b.insideChanged(rel, line) || inDirect(rel, line)
 	})
 
-	type group struct {
-		encl     *decl
-		reaches  []string
-		lines    []string
-		priority int
-	}
-	var order []*group
-	byDecl := map[*decl]*group{}
-	dropped := 0
-	var indirectTests []useSite
-	for _, s := range sites {
-		// A test at the second hop is a test, not a caller. The test role
-		// carries the tests that name a changed symbol; one that reaches it
-		// through another declaration -- usually from another package -- is
-		// the case that role never covered, and it is still the answer to
-		// "what checks this".
-		if strings.HasSuffix(s.rel, "_test.go") {
-			indirectTests = append(indirectTests, s)
-			continue
-		}
-		encl := b.enclosingAt(s.rel, s.line)
-		if encl == nil || b.isChanged(encl) {
-			continue
-		}
-		g, ok := byDecl[encl]
-		if !ok {
-			if len(order) >= maxIndirectCallers {
-				dropped++
-				continue
-			}
-			g = &group{encl: encl}
-			byDecl[encl] = g
-			order = append(order, g)
-		}
-		g.reaches = append(g.reaches, s.target.scope)
-		g.lines = append(g.lines, strconv.Itoa(s.line))
-		if p := priorityFor(s.target); p > g.priority {
-			g.priority = p
-		}
-	}
+	order, indirectTests, dropped := b.groupHops(sites)
 	if dropped > 0 {
 		b.notes = append(b.notes, fmt.Sprintf(
 			"%d further indirect caller(s) were not expanded (cap %d)", dropped, maxIndirectCallers))
@@ -127,6 +105,44 @@ func (b *builder) addIndirectCallerSites(direct []*decl) {
 	}
 }
 
+// groupHops sorts the second-hop uses into the declarations that hold them,
+// setting the tests aside for the test role, and reports how many declarations
+// the cap turned away.
+//
+// A test at the second hop is a test, not a caller. The test role carries the
+// tests that name a changed symbol; one that reaches it through another
+// declaration -- usually from another package -- is the case that role never
+// covered, and it is still the answer to "what checks this".
+func (b *builder) groupHops(sites []useSite) (order []*hopGroup, tests []useSite, dropped int) {
+	byDecl := map[*decl]*hopGroup{}
+	for _, s := range sites {
+		if strings.HasSuffix(s.rel, "_test.go") {
+			tests = append(tests, s)
+			continue
+		}
+		encl := b.enclosingAt(s.rel, s.line)
+		if encl == nil || b.isChanged(encl) {
+			continue
+		}
+		g, ok := byDecl[encl]
+		if !ok {
+			if len(order) >= maxIndirectCallers {
+				dropped++
+				continue
+			}
+			g = &hopGroup{encl: encl}
+			byDecl[encl] = g
+			order = append(order, g)
+		}
+		g.reaches = append(g.reaches, s.target.scope)
+		g.lines = append(g.lines, strconv.Itoa(s.line))
+		if p := priorityFor(s.target); p > g.priority {
+			g.priority = p
+		}
+	}
+	return order, tests, dropped
+}
+
 // addIndirectTestSites emits the tests that reach the change through one of its
 // callers, under the test role.
 //
@@ -136,13 +152,8 @@ func (b *builder) addIndirectCallerSites(direct []*decl) {
 // details.hop says it is not a direct test, so a reviewer reading "what checks
 // this" knows how far away the check sits.
 func (b *builder) addIndirectTestSites(sites []useSite) {
-	type group struct {
-		encl     *decl
-		reaches  []string
-		priority int
-	}
-	var order []*group
-	byDecl := map[*decl]*group{}
+	var order []*hopGroup
+	byDecl := map[*decl]*hopGroup{}
 	for _, s := range sites {
 		encl := b.enclosingAt(s.rel, s.line)
 		if encl == nil || b.isChanged(encl) {
@@ -153,7 +164,7 @@ func (b *builder) addIndirectTestSites(sites []useSite) {
 			if len(order) >= maxIndirectCallers {
 				continue
 			}
-			g = &group{encl: encl}
+			g = &hopGroup{encl: encl}
 			byDecl[encl] = g
 			order = append(order, g)
 		}

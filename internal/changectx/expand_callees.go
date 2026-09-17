@@ -13,6 +13,13 @@ import (
 // consumer's whole budget describing code the change only passes through.
 const maxCalleesPerDecl = 12
 
+// calleeGroup is one emitted callee and the changed declarations reaching it.
+type calleeGroup struct {
+	target   *decl
+	from     []string
+	priority int
+}
+
 // expandCallees emits what the change calls: for every changed function, the
 // declarations its body reaches that this module declares.
 //
@@ -33,52 +40,22 @@ const maxCalleesPerDecl = 12
 // role carries tests, and a changed test would otherwise drag its own
 // scaffolding in under a role meant for contracts.
 func (b *builder) expandCallees() {
-	type group struct {
-		target   *decl
-		from     []string
-		priority int
+	var order []*calleeGroup
+	byDecl := map[*decl]*calleeGroup{}
+	record := func(target, from *decl) {
+		g, ok := byDecl[target]
+		if !ok {
+			g = &calleeGroup{target: target}
+			byDecl[target] = g
+			order = append(order, g)
+		}
+		g.from = append(g.from, from.scope)
+		if p := priorityFor(target); p > g.priority {
+			g.priority = p
+		}
 	}
-	var order []*group
-	byDecl := map[*decl]*group{}
 	for _, d := range b.decls {
-		if d.fn == nil || d.fn.Body == nil {
-			continue
-		}
-		info := b.typesInfoFor(d)
-		if info == nil {
-			continue
-		}
-		kept, dropped := 0, 0
-		for _, obj := range calleeObjects(d.fn.Body, info) {
-			target := b.declFor(obj)
-			if target == nil || target == d || b.isChanged(target) {
-				continue
-			}
-			// Never into a test file. A test helper is not the other half of a
-			// contract, and the test role already carries tests; without this a
-			// changed test drags its own scaffolding in as context.
-			if strings.HasSuffix(target.rel, "_test.go") {
-				continue
-			}
-			if _, seen := byDecl[target]; !seen {
-				if kept >= maxCalleesPerDecl {
-					dropped++
-					continue
-				}
-				kept++
-			}
-			g, ok := byDecl[target]
-			if !ok {
-				g = &group{target: target}
-				byDecl[target] = g
-				order = append(order, g)
-			}
-			g.from = append(g.from, d.scope)
-			if p := priorityFor(target); p > g.priority {
-				g.priority = p
-			}
-		}
-		if dropped > 0 {
+		if dropped := b.collectCallees(d, byDecl, record); dropped > 0 {
 			b.notes = append(b.notes, fmt.Sprintf(
 				"%d further callee(s) of %s were not expanded (cap %d per declaration)",
 				dropped, d.scope, maxCalleesPerDecl))
@@ -99,6 +76,45 @@ func (b *builder) expandCallees() {
 			Details:   details,
 		})
 	}
+}
+
+// collectCallees records what one changed declaration calls, and returns how
+// many were dropped to the cap. A declaration already carried by the groups
+// does not count against this one's cap: it costs nothing more to name.
+func (b *builder) collectCallees(d *decl, byDecl map[*decl]*calleeGroup, record func(target, from *decl)) int {
+	info := b.typesInfoFor(d)
+	if d.fn == nil || d.fn.Body == nil || info == nil {
+		return 0
+	}
+	kept, dropped := 0, 0
+	for _, obj := range calleeObjects(d.fn.Body, info) {
+		target := b.declFor(obj)
+		if !b.calleeWorthEmitting(d, target) {
+			continue
+		}
+		if _, seen := byDecl[target]; !seen {
+			if kept >= maxCalleesPerDecl {
+				dropped++
+				continue
+			}
+			kept++
+		}
+		record(target, d)
+	}
+	return dropped
+}
+
+// calleeWorthEmitting reports whether a resolved callee belongs in the role.
+//
+// Never the declaration doing the calling, never one the change already
+// carries -- the enclosing role has that -- and never one in a test file: a
+// test helper is not the other half of a contract, and without this a changed
+// test drags its own scaffolding in as context.
+func (b *builder) calleeWorthEmitting(from, target *decl) bool {
+	if target == nil || target == from || b.isChanged(target) {
+		return false
+	}
+	return !strings.HasSuffix(target.rel, "_test.go")
 }
 
 // typesInfoFor returns the type information for the package a declaration was

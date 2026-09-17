@@ -238,37 +238,52 @@ func (b *builder) collectUsesOf(byPos map[token.Pos]*decl, skip func(rel string,
 		}
 		calls := callFuns(p)
 		for id, obj := range p.TypesInfo.Uses {
-			if obj == nil {
-				continue
-			}
-			target := byPos[obj.Pos()]
-			if target == nil {
-				continue
-			}
-			pos := p.Fset.Position(id.Pos())
-			rel, ok := b.rel(pos.Filename)
+			site, ok := b.useSiteAt(p, id, obj, byPos, skip)
 			if !ok {
-				continue
-			}
-			if skip != nil && skip(rel, pos.Line) {
 				continue
 			}
 			// Keyed on the line, not the column: a caller carries the lines
 			// around the use, so two uses of one symbol on one line —
 			// Half(Half(n)) — shipped the same expansion twice.
-			key := rel + ":" + strconv.Itoa(pos.Line) + ":" + target.scope
+			key := site.rel + ":" + strconv.Itoa(site.line) + ":" + site.target.scope
 			if seen[key] {
 				continue
 			}
 			seen[key] = true
-			out = append(out, useSite{
-				rel: rel, line: pos.Line, col: pos.Column,
-				kind: useKind(obj, calls[id]), target: target,
-			})
+			site.kind = useKind(obj, calls[id])
+			out = append(out, site)
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].sortKey() < out[j].sortKey() })
 	return out
+}
+
+// useSiteAt resolves one identifier to a use of a target declaration, or
+// reports that it is not one: it resolves to nothing tracked, it sits outside
+// the work tree, or a nearer role already carries the line it is on.
+func (b *builder) useSiteAt(
+	p *packages.Package,
+	id *ast.Ident,
+	obj types.Object,
+	byPos map[token.Pos]*decl,
+	skip func(rel string, line int) bool,
+) (useSite, bool) {
+	if obj == nil {
+		return useSite{}, false
+	}
+	target := byPos[obj.Pos()]
+	if target == nil {
+		return useSite{}, false
+	}
+	pos := p.Fset.Position(id.Pos())
+	rel, ok := b.rel(pos.Filename)
+	if !ok {
+		return useSite{}, false
+	}
+	if skip != nil && skip(rel, pos.Line) {
+		return useSite{}, false
+	}
+	return useSite{rel: rel, line: pos.Line, col: pos.Column, target: target}, true
 }
 
 // insideChanged reports whether a line falls inside a declaration the diff

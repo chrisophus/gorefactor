@@ -63,15 +63,47 @@ func (b *builder) expandSiblings() {
 	}
 	ifaces, concrete := b.moduleTypes()
 	emitted := map[string]bool{}
+	ifaceSeen := map[string]bool{}
 	for _, ct := range changed {
 		for _, iface := range ifaces {
 			it, ok := iface.named.Underlying().(*types.Interface)
 			if !ok || it.NumMethods() == 0 || !satisfies(ct.named, it) {
 				continue
 			}
+			b.addInterface(iface, ifaceSeen)
 			b.addSiblings(ct, iface, it, concrete, emitted)
 		}
 	}
+}
+
+// addInterface emits the interface a changed type implements, once.
+//
+// The sibling role names it in details.interface and has never sent it. A
+// reviewer holding two implementations and no interface has been shown that
+// the two are peers and not what they are peers under, which is the only place
+// the contract they both have to keep is written down.
+func (b *builder) addInterface(iface namedType, seen map[string]bool) {
+	if iface.decl == nil || seen[iface.decl.scope] {
+		return
+	}
+	seen[iface.decl.scope] = true
+	if b.isChanged(iface.decl) {
+		return // the enclosing role already carries it
+	}
+	b.add(Expansion{
+		Role:      RoleType,
+		Priority:  priorityFor(iface.decl),
+		Symbol:    iface.decl.symbol,
+		Scope:     iface.decl.scope,
+		File:      iface.decl.rel,
+		StartLine: iface.decl.start,
+		EndLine:   iface.decl.end,
+		Content:   b.slice(iface.decl.rel, iface.decl.start, iface.decl.end),
+		Details: map[string]string{
+			"kind":     "interface",
+			"whyShown": "the interface the changed type implements",
+		},
+	})
 }
 
 // namedType pairs a type with the declaration that defines it, so an

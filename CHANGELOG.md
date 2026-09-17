@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never into a test file, and ranked last by the consumer, below history,
   because it is whole declarations that may have nothing to do with the change.
 
+- **The interface a changed type implements is emitted, not just named.** The
+  `sibling` role has always carried `details.interface` and never the
+  declaration behind it, so a reviewer held two implementations and no statement
+  of what they are peers under — the one place the contract they both keep is
+  written down. It arrives under `type` with `details.kind: interface`, once per
+  interface, and is skipped when the change already contains it.
+
 ### Changed
 - **A `caller` expansion carries the whole calling function, and is named for
   it.** It used to be the use line and two either side, which cannot show a nil

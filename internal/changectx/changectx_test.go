@@ -253,6 +253,23 @@ func TestBuildExpansionRoles(t *testing.T) {
 	if labelled != "reference-site" {
 		t.Errorf("the method expression that reaches Store.Insert is labelled %q, want reference-site", labelled)
 	}
+	// The interface a changed type implements, which the sibling role has
+	// always named in details.interface and never sent. Two implementations
+	// without it show that the pair are peers but not what they are peers
+	// under, which is where the contract is written down.
+	var iface *Expansion
+	for i, e := range byRole[RoleType] {
+		if e.Details["kind"] == "interface" {
+			iface = &byRole[RoleType][i]
+		}
+	}
+	if iface == nil {
+		t.Fatalf("no interface expansion; types = %v", byRole[RoleType])
+	}
+	if iface.Symbol != "Writer" || !strings.Contains(iface.Content, "Insert(r Record) error") {
+		t.Errorf("interface = %s:\n%s", iface.Symbol, iface.Content)
+	}
+
 	// The second hop. SaveAll never names Insert; it reaches it through Save,
 	// and whether the change is safe can be decided in SaveAll -- it returns on
 	// the first error, so a new error from Insert stops the batch.

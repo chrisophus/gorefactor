@@ -2,6 +2,7 @@ package changectx
 
 import (
 	"fmt"
+	"go/ast"
 	"go/token"
 	"go/types"
 	"sort"
@@ -21,37 +22,111 @@ func (b *builder) expandTypes() {
 		if d.obj == nil {
 			continue
 		}
-		sig, ok := d.obj.Type().(*types.Signature)
-		if !ok {
-			continue
-		}
-		for _, named := range signatureNamed(sig) {
-			obj := named.Obj()
-			if obj == nil || obj.Pkg() == nil || seen[obj.Pos()] {
-				continue
+		switch t := d.obj.Type().(type) {
+		case *types.Signature:
+			b.addTypes(d, signatureNamed(t), "signature", seen)
+			// What the body names, which a signature does not reach. A change
+			// that starts constructing a different type, or asserting to one,
+			// is judged against that type and the signature never mentions it.
+			b.addTypes(d, b.bodyNamed(d), "body", seen)
+		default:
+			// A changed type, var or const. Its own referents were never
+			// walked: the stage only ever looked at signatures, so editing a
+			// struct brought none of the types of its fields.
+			//
+			// A type declaration is walked through its underlying type. The
+			// walker stops at a named type, and a named type's own name is the
+			// declaration being changed, so walking it directly finds only
+			// itself.
+			referent := t
+			if _, isType := d.obj.(*types.TypeName); isType {
+				referent = t.Underlying()
 			}
-			seen[obj.Pos()] = true
-			target := b.declFor(obj)
-			if target == nil || b.isChanged(target) {
-				continue // its own declaration already carries the change
-			}
-			b.add(Expansion{
-				Role:      RoleType,
-				Priority:  priorityFor(d),
-				Symbol:    target.symbol,
-				Scope:     target.scope,
-				File:      target.rel,
-				StartLine: target.start,
-				EndLine:   target.end,
-				Content:   b.slice(target.rel, target.start, target.end),
-				Details: map[string]string{
-					"kind":         "type",
-					"referencedBy": d.scope,
-				},
-			})
+			b.addTypes(d, namedIn(referent), "declared", seen)
 		}
 	}
 }
+
+// addTypes emits the declarations of named types, once each across the whole
+// change, skipping the ones the change already carries.
+//
+// via says how the type was reached, because the three are worth different
+// amounts: a type in a signature is part of the contract, one in a body is what
+// the code works with, and one a changed type refers to is its shape.
+func (b *builder) addTypes(d *decl, named []*types.Named, via string, seen map[token.Pos]bool) {
+	kept := 0
+	for _, n := range named {
+		obj := n.Obj()
+		if obj == nil || obj.Pkg() == nil || seen[obj.Pos()] {
+			continue
+		}
+		target := b.declFor(obj)
+		if target == nil || b.isChanged(target) {
+			continue // its own declaration already carries the change
+		}
+		if kept >= typesPerDecl {
+			b.notes = append(b.notes, fmt.Sprintf(
+				"further %s type(s) of %s were not expanded (cap %d per declaration)",
+				via, d.scope, typesPerDecl))
+			return
+		}
+		seen[obj.Pos()] = true
+		kept++
+		b.add(Expansion{
+			Role:      RoleType,
+			Priority:  priorityFor(d),
+			Symbol:    target.symbol,
+			Scope:     target.scope,
+			File:      target.rel,
+			StartLine: target.start,
+			EndLine:   target.end,
+			Content:   b.slice(target.rel, target.start, target.end),
+			Details: map[string]string{
+				"kind":         "type",
+				"referencedBy": d.scope,
+				"via":          via,
+			},
+		})
+	}
+}
+
+// bodyNamed collects the named types a changed function's body mentions, found
+// through the type checker rather than by reading the syntax: a type name in a
+// body is an identifier that resolves to a TypeName, wherever it sits.
+func (b *builder) bodyNamed(d *decl) []*types.Named {
+	if d.fn == nil || d.fn.Body == nil {
+		return nil
+	}
+	info := b.typesInfoFor(d)
+	if info == nil {
+		return nil
+	}
+	var out []*types.Named
+	seen := map[*types.Named]bool{}
+	ast.Inspect(d.fn.Body, func(n ast.Node) bool {
+		id, ok := n.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		tn, ok := info.Uses[id].(*types.TypeName)
+		if !ok {
+			return true
+		}
+		named, ok := tn.Type().(*types.Named)
+		if !ok || seen[named] {
+			return true
+		}
+		seen[named] = true
+		out = append(out, named)
+		return true
+	})
+	return out
+}
+
+// typesPerDecl caps how many types one changed declaration contributes under
+// one route. A body that names thirty types would otherwise spend the
+// consumer's budget on the vocabulary of the package rather than the change.
+const typesPerDecl = 8
 
 // expandSiblings emits the other implementations of an interface a changed
 // type satisfies. It answers the question a diff cannot: whether the same
@@ -332,6 +407,18 @@ func implements(t *types.Named, it *types.Interface) bool {
 // type constructors that wrap them. It stops at a named type rather than
 // descending into it, so a struct field's type is not pulled in.
 func signatureNamed(sig *types.Signature) []*types.Named {
+	out := namedIn(sig.Params())
+	out = append(out, namedIn(sig.Results())...)
+	if recv := sig.Recv(); recv != nil {
+		out = append(out, namedIn(recv.Type())...)
+	}
+	return out
+}
+
+// namedIn collects the named types a type mentions, following the constructors
+// that wrap them. It stops at a named type rather than descending into it, so a
+// struct field's own field types are not pulled in with it.
+func namedIn(t0 types.Type) []*types.Named {
 	var out []*types.Named
 	seen := map[*types.Named]bool{}
 	var walk func(t types.Type, depth int)
@@ -363,13 +450,17 @@ func signatureNamed(sig *types.Signature) []*types.Named {
 			for i := 0; i < v.Len(); i++ {
 				walk(v.At(i).Type(), depth+1)
 			}
+		case *types.Struct:
+			for i := range v.NumFields() {
+				walk(v.Field(i).Type(), depth+1)
+			}
+		case *types.Interface:
+			for i := range v.NumMethods() {
+				walk(v.Method(i).Type(), depth+1)
+			}
 		}
 	}
-	walk(sig.Params(), 0)
-	walk(sig.Results(), 0)
-	if recv := sig.Recv(); recv != nil {
-		walk(recv.Type(), 0)
-	}
+	walk(t0, 0)
 	return out
 }
 

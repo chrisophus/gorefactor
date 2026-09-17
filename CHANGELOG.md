@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-09-17
+
 ### Added
 - **A `callee` role: what a changed declaration calls.** It is the other half of
   a contract defect and the half no caller shows. A change that starts returning

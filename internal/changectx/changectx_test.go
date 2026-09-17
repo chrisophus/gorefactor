@@ -201,10 +201,18 @@ func TestBuildExpansionRoles(t *testing.T) {
 		t.Errorf("enclosing details = %v", enc.Details)
 	}
 
+	// A caller is named for the function that does the calling and says what
+	// it reaches in details.calls, the same shape the test role uses. It
+	// carries that function whole: the window it used to send could not show
+	// what the caller does with the result.
 	callers := byRole[RoleCaller]
-	if got := callers[0]; got.File != "use.go" || got.Symbol != "Store.Insert" || got.Details["kind"] != "call-site" {
-		t.Errorf("caller = %s in %s labelled %q, want Store.Insert in use.go as a call-site",
-			got.Symbol, got.File, got.Details["kind"])
+	if got := callers[0]; got.File != "use.go" || got.Symbol != "Save" ||
+		got.Details["calls"] != "Store.Insert" || got.Details["kind"] != "call-site" {
+		t.Errorf("caller = %s in %s calling %q labelled %q, want Save in use.go calling Store.Insert as a call-site",
+			got.Symbol, got.File, got.Details["calls"], got.Details["kind"])
+	}
+	if got := callers[0]; !strings.HasPrefix(got.Content, "// Save writes a record") || !strings.HasSuffix(got.Content, "}\n") {
+		t.Errorf("caller content is not the whole calling function:\n%s", got.Content)
 	}
 	// A method expression reaches the symbol without calling it. The role
 	// still carries it, since a reviewer wants to see it, but calling it a

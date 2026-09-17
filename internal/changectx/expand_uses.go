@@ -43,25 +43,98 @@ func (u useSite) sortKey() string {
 // short instead of never seeing them.
 func (b *builder) expandUses() {
 	sites := b.collectUses()
-	var tests []useSite
+	var tests, callers []useSite
 	for _, s := range sites {
 		if strings.HasSuffix(s.rel, "_test.go") {
 			tests = append(tests, s)
 			continue
 		}
-		b.addCallerSite(s)
+		callers = append(callers, s)
 	}
+	b.addCallerSites(callers)
 	b.addTestSites(tests)
 }
 
-func (b *builder) addCallerSite(s useSite) {
+// addCallerSites emits the whole calling function, once per function, naming
+// every changed symbol it reaches.
+//
+// What it used to send was the use line and two either side. That window
+// cannot show a nil check five lines up, what the caller does with a returned
+// value, or what a handler clears before it returns, and those are the
+// relationships a contract defect turns on. The enclosing declaration carries
+// them, and it was already resolved right here to fill in details.callerSymbol.
+//
+// Keyed on the declaration for the reason the test role beside it is: one
+// function that reaches three changed symbols is one expansion naming three,
+// not three copies of one body. Keying on the line was enough while an
+// expansion was five lines wide and is not now — two uses in one function,
+// twenty lines apart, would ship that function twice.
+func (b *builder) addCallerSites(sites []useSite) {
+	type group struct {
+		encl     *decl
+		calls    []string
+		kinds    []string
+		lines    []string
+		uses     []string
+		priority int
+	}
+	var order []*group
+	byDecl := map[*decl]*group{}
+	for _, s := range sites {
+		encl := b.enclosingAt(s.rel, s.line)
+		if encl == nil {
+			// A use with no declaration around it: an import alias, or a file
+			// whose declarations did not resolve. The window is all there is.
+			b.addCallerWindow(s)
+			continue
+		}
+		g, ok := byDecl[encl]
+		if !ok {
+			g = &group{encl: encl}
+			byDecl[encl] = g
+			order = append(order, g)
+		}
+		g.calls = append(g.calls, s.target.scope)
+		g.kinds = append(g.kinds, s.kind)
+		g.lines = append(g.lines, strconv.Itoa(s.line))
+		g.uses = append(g.uses, strconv.Itoa(s.line)+":"+s.kind)
+		if p := priorityFor(s.target); p > g.priority {
+			g.priority = p
+		}
+	}
+	for _, g := range order {
+		details := map[string]string{
+			"kind":         strings.Join(sortedUnique(g.kinds), ", "),
+			"calls":        strings.Join(sortedUnique(g.calls), ", "),
+			"line":         g.lines[0],
+			"callerSymbol": g.encl.scope,
+			"callerKind":   g.encl.kind,
+		}
+		// Where the uses sit and what each one is, so a reader of a long
+		// function is not left to find them, a consumer can still preview the
+		// use in an index, and a function holding both a call and a bare
+		// reference does not lose which line is which to the joined kind.
+		if len(g.uses) > 1 {
+			details["uses"] = strings.Join(sortedUnique(g.uses), ", ")
+		}
+		b.add(Expansion{
+			Role:      RoleCaller,
+			Priority:  g.priority,
+			Symbol:    g.encl.symbol,
+			Scope:     g.encl.scope,
+			File:      g.encl.rel,
+			StartLine: g.encl.start,
+			EndLine:   g.encl.end,
+			Content:   b.slice(g.encl.rel, g.encl.start, g.encl.end),
+			Details:   details,
+		})
+	}
+}
+
+// addCallerWindow is the fallback for a use no declaration encloses.
+func (b *builder) addCallerWindow(s useSite) {
 	start := max(s.line-callerContextLines, 1)
 	end := s.line + callerContextLines
-	details := map[string]string{"kind": s.kind, "line": strconv.Itoa(s.line)}
-	if encl := b.enclosingAt(s.rel, s.line); encl != nil {
-		details["callerSymbol"] = encl.scope
-		details["callerKind"] = encl.kind
-	}
 	b.add(Expansion{
 		Role:      RoleCaller,
 		Priority:  priorityFor(s.target),
@@ -71,7 +144,9 @@ func (b *builder) addCallerSite(s useSite) {
 		StartLine: start,
 		EndLine:   end,
 		Content:   b.slice(s.rel, start, end),
-		Details:   details,
+		Details: map[string]string{
+			"kind": s.kind, "line": strconv.Itoa(s.line), "span": "window",
+		},
 	})
 }
 

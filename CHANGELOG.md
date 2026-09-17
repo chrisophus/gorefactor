@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **A `caller` expansion carries the whole calling function, and is named for
+  it.** It used to be the use line and two either side, which cannot show a nil
+  check five lines up, what the caller does with a returned value, or what a
+  handler clears before it returns — the relationships a contract defect turns
+  on. The enclosing declaration was already resolved to fill in
+  `details.callerSymbol`; it is now the expansion. `symbol` and `scope` name
+  the calling function and `details.calls` names the changed symbols it
+  reaches, which is the shape the `test` role already used.
+- **Callers are keyed on the enclosing declaration, not the use line.** One
+  function reaching three changed symbols is one expansion naming three, not
+  three copies of one body. Keying on the line was enough while an expansion
+  was five lines wide; two uses twenty lines apart in one function would now
+  ship that function twice. `details.uses` lists each use as `line:kind`, so a
+  function holding both a call and a bare reference does not lose which line is
+  which, and a consumer can still preview the use site. A use no declaration
+  encloses keeps the window and is marked `details.span: window`.
+
 ## [0.17.1] - 2026-09-15
 
 ### Fixed

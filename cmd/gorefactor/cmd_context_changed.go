@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/chrisophus/gorefactor/internal/changectx"
 	"github.com/chrisophus/gorefactor/version"
@@ -20,10 +21,20 @@ func changedContextCommand(ref, root string, positional []string, flags map[stri
 	if flags["--budget"] != "" {
 		return usageErrorf("--budget does not apply to --changed; expansions are emitted whole for the consumer to rank")
 	}
+	revisions, err := positiveFlag(flags, "--history-revisions")
+	if err != nil {
+		return err
+	}
+	spans, err := positiveFlag(flags, "--history-spans")
+	if err != nil {
+		return err
+	}
 	env, err := changectx.Build(changectx.Options{
-		Root:    root,
-		BaseRef: ref,
-		Version: version.Version(),
+		Root:                 root,
+		BaseRef:              ref,
+		Version:              version.Version(),
+		HistoryRevisions:     revisions,
+		HistoryRangesPerFile: spans,
 	})
 	if err != nil {
 		return err
@@ -34,4 +45,21 @@ func changedContextCommand(ref, root string, positional []string, flags map[stri
 	}
 	fmt.Print(changectx.Summary(env))
 	return nil
+}
+
+// positiveFlag reads a count flag. Unset is zero, which Build reads as its own
+// default; zero or negative is refused rather than silently emptying a role.
+func positiveFlag(flags map[string]string, name string) (int, error) {
+	raw := flags[name]
+	if raw == "" {
+		return 0, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, usageErrorf("%s takes a whole number (got %q)", name, raw)
+	}
+	if n < 1 {
+		return 0, usageErrorf("%s must be at least 1 (got %d); omit it for the default", name, n)
+	}
+	return n, nil
 }

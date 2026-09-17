@@ -31,14 +31,38 @@ type Options struct {
 	BaseRef string
 	// Version is reported as the provider version.
 	Version string
+	// HistoryRevisions caps how far back the history and removal roles read per
+	// span. Zero means the default.
+	//
+	// It is an option rather than a constant because how much history is worth
+	// reading is a property of the repository, not of this program: a tree that
+	// rewrites a file weekly buries the rest of the envelope at three, and one
+	// with a long-lived guard needs more than three to reach the commit that
+	// explains it.
+	HistoryRevisions int
+	// HistoryRangesPerFile caps how many spans of one file get their own
+	// history. Zero means the default.
+	HistoryRangesPerFile int
+}
+
+// orDefault takes a cap from the options when it was set, and the built-in
+// otherwise. Zero means unset rather than none: a cap of zero would read as
+// "trace nothing" and silently empty a role.
+func orDefault(v, fallback int) int {
+	if v > 0 {
+		return v
+	}
+	return fallback
 }
 
 // builder carries the state of one Build call. Every stage appends to it and
 // nothing reads back, which is what keeps the output a function of the
 // revision alone.
 type builder struct {
-	repo      string
-	base      string
+	repo             string
+	base             string
+	historyRevisions int
+	historyRanges    int
 	idx       *index
 	files     []File
 	exps      []Expansion
@@ -73,11 +97,13 @@ func Build(opts Options) (*Envelope, error) {
 	}
 
 	b := &builder{
-		repo:      repo,
-		base:      base,
-		ranges:    map[string][]lineRange{},
-		lines:     map[string][]string{},
-		declCache: map[string][]*decl{},
+		repo:             repo,
+		base:             base,
+		historyRevisions: orDefault(opts.HistoryRevisions, historyRevisions),
+		historyRanges:    orDefault(opts.HistoryRangesPerFile, historyRangesPerFile),
+		ranges:           map[string][]lineRange{},
+		lines:            map[string][]string{},
+		declCache:        map[string][]*decl{},
 	}
 	b.manifest(changes)
 	b.resolve(changes)

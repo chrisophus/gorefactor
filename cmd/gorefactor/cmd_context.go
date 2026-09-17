@@ -11,7 +11,8 @@ import (
 	"unicode/utf8"
 )
 
-var contextFlags = map[string]bool{"--json": false, "--in": true, "--budget": true, "--changed": true}
+var contextFlags = map[string]bool{"--json": false, "--in": true, "--budget": true, "--changed": true,
+	"--history-revisions": true, "--history-spans": true}
 
 const defaultContextBudget = 4000
 
@@ -21,7 +22,7 @@ func init() {
 		ReadOnly:    true,
 		MCPTool:     true,
 		Description: "One-shot LLM context pack for a symbol, or --changed <ref> for a whole change: definition, callers, signature types, tests [--budget N] [--json]",
-		Usage:       "context <Symbol|Receiver:Method> [--budget N] [--in path] [--json] | context --changed <ref> [--in path] [--json]",
+		Usage:       "context <Symbol|Receiver:Method> [--budget N] [--in path] [--json] | context --changed <ref> [--in path] [--json] [--history-revisions N] [--history-spans N]",
 		MinArgs:     0,
 		MaxArgs:     1,
 		Flags:       contextFlags,

@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   interface, and is skipped when the change already contains it.
 
 ### Changed
+- **`context --changed` takes `--history-revisions N` and `--history-spans N`.**
+  Three revisions per span and three spans per file were constants, and how much
+  history is worth reading is a property of the repository: a tree that rewrites
+  a file weekly buries the rest of the envelope at three, and a long-lived guard
+  can need more than three to reach the commit explaining it. Unset means the
+  default; zero is refused rather than silently emptying a role.
 - **A `caller` expansion carries the whole calling function, and is named for
   it.** It used to be the use line and two either side, which cannot show a nil
   check five lines up, what the caller does with a returned value, or what a

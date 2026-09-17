@@ -10,12 +10,14 @@ import (
 	"strings"
 )
 
-// historyRevisions caps how far back the history role reads per line span.
-// A handful of revisions is enough to show that a line was deliberate, and it
-// keeps a file rewritten fifty times from burying the rest of the envelope.
+// historyRevisions is the default for Options.HistoryRevisions: how far back
+// the history role reads per line span. A handful of revisions is enough to
+// show that a line was deliberate, and it keeps a file rewritten fifty times
+// from burying the rest of the envelope.
 const historyRevisions = 3
 
-// historyRangesPerFile caps how many spans of one file get their own history.
+// historyRangesPerFile is the default for Options.HistoryRangesPerFile: how
+// many spans of one file get their own history.
 const historyRangesPerFile = 3
 
 // removedHistoryPriority orders a deleted span's history within RoleRemoval.
@@ -83,14 +85,14 @@ func (b *builder) expandHistory() {
 			b.notes = append(b.notes, "no history for "+f.Path+": "+err.Error())
 			continue
 		}
-		sides, dropped := rankedSides(sides, historyRangesPerFile)
+		sides, dropped := rankedSides(sides, b.historyRanges)
 		if dropped > 0 {
 			b.notes = append(b.notes, fmt.Sprintf(
 				"%d further changed span(s) of %s were not traced (cap %d per file)",
-				dropped, f.Path, historyRangesPerFile))
+				dropped, f.Path, b.historyRanges))
 		}
 		for _, s := range sides {
-			out, err := logLineHistory(b.repo, b.base, f.Path, s.base, historyRevisions)
+			out, err := logLineHistory(b.repo, b.base, f.Path, s.base, b.historyRevisions)
 			if err != nil || strings.TrimSpace(out) == "" {
 				continue
 			}
@@ -130,14 +132,14 @@ func (b *builder) expandRemovedHistory(path string) {
 	if err != nil {
 		return
 	}
-	ranges, dropped := rankedRanges(all, historyRangesPerFile)
+	ranges, dropped := rankedRanges(all, b.historyRanges)
 	if dropped > 0 {
 		b.notes = append(b.notes, fmt.Sprintf(
 			"%d further removed span(s) of %s were not traced (cap %d per file)",
-			dropped, path, historyRangesPerFile))
+			dropped, path, b.historyRanges))
 	}
 	for _, r := range ranges {
-		out, err := logRemovedHistory(b.repo, b.base, path, r, historyRevisions)
+		out, err := logRemovedHistory(b.repo, b.base, path, r, b.historyRevisions)
 		if err != nil || strings.TrimSpace(out) == "" {
 			continue
 		}

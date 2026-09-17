@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **A `callee` role: what a changed declaration calls.** It is the other half of
+  a contract defect and the half no caller shows. A change that starts returning
+  nil is judged by the code reading the result, which is a caller; a change to
+  what a handler invalidates, refreshes or commits is judged by what it calls.
+  Only declarations this module makes are emitted, never one in a test file and
+  never one the change already contains, and `details.calledBy` names the
+  changed declarations that reach it. Capped at 12 per changed declaration, with
+  a note saying what was dropped.
+
 ### Changed
 - **A `caller` expansion carries the whole calling function, and is named for
   it.** It used to be the use line and two either side, which cannot show a nil

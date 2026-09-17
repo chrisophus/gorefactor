@@ -41,6 +41,7 @@ func (b *builder) expand() {
 	if len(b.decls) > 0 {
 		b.expandEnclosing()
 		b.expandUses()
+		b.expandCallees()
 		b.expandTypes()
 		b.expandSiblings()
 	}
@@ -248,7 +249,7 @@ func (b *builder) noteEmptyRoles() {
 	for _, e := range b.exps {
 		present[e.Role] = true
 	}
-	for _, role := range []Role{RoleEnclosing, RoleCaller, RoleRemoval, RoleType, RoleSibling, RoleTest, RoleHistory} {
+	for _, role := range []Role{RoleEnclosing, RoleCaller, RoleCallee, RoleRemoval, RoleType, RoleSibling, RoleTest, RoleHistory} {
 		if !present[role] {
 			b.notes = append(b.notes, "no "+string(role)+" expansions: "+b.emptyRoleReason(role))
 		}
@@ -266,6 +267,8 @@ func (b *builder) emptyRoleReason(role Role) string {
 		return "the changed declarations had no readable content in the working tree"
 	case RoleCaller:
 		return "nothing outside the change references a changed symbol"
+	case RoleCallee:
+		return "the changed declarations call nothing this module declares outside the change"
 	case RoleTest:
 		return "no test outside the change reaches a changed symbol"
 	case RoleType:

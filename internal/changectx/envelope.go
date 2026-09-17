@@ -23,6 +23,15 @@ const (
 	// symbol: a call site, or a reference that names it without calling it.
 	// The expansion's details.kind says which of the two it is.
 	RoleCaller Role = "caller"
+	// RoleCallee is a declaration a changed declaration calls. It is the other
+	// half of a contract defect: a change that starts returning nil is judged
+	// by its callers, and a change to what a handler invalidates or commits is
+	// judged by what it calls, which no caller shows.
+	RoleCallee Role = "callee"
+	// RoleIndirectCaller is a caller of a caller, the second hop out from a
+	// changed symbol. The consumer ranks it last, below history, because it is
+	// whole declarations that may have nothing to do with the change.
+	RoleIndirectCaller Role = "indirect-caller"
 	// RoleRemoval is the history of lines the change deletes: the commits that
 	// added them, and with them the reason the lines were there. The consumer
 	// ranks it apart from RoleHistory, so a deletion's history is not dropped
@@ -43,13 +52,15 @@ const (
 // own ranking so the output reads in the order it will be spent, and it has no
 // effect on what the consumer keeps.
 var roleRank = map[Role]int{
-	RoleEnclosing: 0,
-	RoleCaller:    1,
-	RoleRemoval:   2,
-	RoleType:      3,
-	RoleSibling:   4,
-	RoleTest:      5,
-	RoleHistory:   6,
+	RoleEnclosing:      0,
+	RoleCaller:         1,
+	RoleCallee:         2,
+	RoleRemoval:        3,
+	RoleType:           4,
+	RoleSibling:        5,
+	RoleTest:           6,
+	RoleHistory:        7,
+	RoleIndirectCaller: 8,
 }
 
 // Class is what a changed file is.

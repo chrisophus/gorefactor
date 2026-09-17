@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   changed declarations that reach it. Capped at 12 per changed declaration, with
   a note saying what was dropped.
 
+- **Tests that reach the change through a caller are emitted.** The `test` role
+  finds tests that name a changed symbol; a test in another package usually
+  names the function that calls it instead, which is the test most likely to
+  fail and the one nothing here reported. Found by the same second-hop walk,
+  emitted under `test` with `details.hop: 2` and `details.reaches` naming the
+  route.
 - **An `indirect-caller` role: the second hop out from the change.** One hop is
   often not where the caller's own contract is decided — a changed function
   returns a new error, its caller passes it up, and whether that matters is

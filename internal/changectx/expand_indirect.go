@@ -69,10 +69,15 @@ func (b *builder) addIndirectCallerSites(direct []*decl) {
 	var order []*group
 	byDecl := map[*decl]*group{}
 	dropped := 0
+	var indirectTests []useSite
 	for _, s := range sites {
-		// A test that reaches a caller is not a second hop worth paying for:
-		// the test role already carries the tests that reach the change.
+		// A test at the second hop is a test, not a caller. The test role
+		// carries the tests that name a changed symbol; one that reaches it
+		// through another declaration -- usually from another package -- is
+		// the case that role never covered, and it is still the answer to
+		// "what checks this".
 		if strings.HasSuffix(s.rel, "_test.go") {
+			indirectTests = append(indirectTests, s)
 			continue
 		}
 		encl := b.enclosingAt(s.rel, s.line)
@@ -99,6 +104,7 @@ func (b *builder) addIndirectCallerSites(direct []*decl) {
 		b.notes = append(b.notes, fmt.Sprintf(
 			"%d further indirect caller(s) were not expanded (cap %d)", dropped, maxIndirectCallers))
 	}
+	b.addIndirectTestSites(indirectTests)
 	for _, g := range order {
 		b.add(Expansion{
 			Role:      RoleIndirectCaller,
@@ -116,6 +122,60 @@ func (b *builder) addIndirectCallerSites(direct []*decl) {
 				// change is readable without opening both expansions.
 				"reaches": strings.Join(sortedUnique(g.reaches), ", "),
 				"line":    g.lines[0],
+			},
+		})
+	}
+}
+
+// addIndirectTestSites emits the tests that reach the change through one of its
+// callers, under the test role.
+//
+// The test role finds tests that name a changed symbol. A test in another
+// package usually does not: it exercises the function that calls the change,
+// which is the test most likely to fail and the one nothing here reported.
+// details.hop says it is not a direct test, so a reviewer reading "what checks
+// this" knows how far away the check sits.
+func (b *builder) addIndirectTestSites(sites []useSite) {
+	type group struct {
+		encl     *decl
+		reaches  []string
+		priority int
+	}
+	var order []*group
+	byDecl := map[*decl]*group{}
+	for _, s := range sites {
+		encl := b.enclosingAt(s.rel, s.line)
+		if encl == nil || b.isChanged(encl) {
+			continue
+		}
+		g, ok := byDecl[encl]
+		if !ok {
+			if len(order) >= maxIndirectCallers {
+				continue
+			}
+			g = &group{encl: encl}
+			byDecl[encl] = g
+			order = append(order, g)
+		}
+		g.reaches = append(g.reaches, s.target.scope)
+		if p := priorityFor(s.target); p > g.priority {
+			g.priority = p
+		}
+	}
+	for _, g := range order {
+		b.add(Expansion{
+			Role:      RoleTest,
+			Priority:  g.priority,
+			Symbol:    g.encl.symbol,
+			Scope:     g.encl.scope,
+			File:      g.encl.rel,
+			StartLine: g.encl.start,
+			EndLine:   g.encl.end,
+			Content:   b.slice(g.encl.rel, g.encl.start, g.encl.end),
+			Details: map[string]string{
+				"kind":    "test",
+				"hop":     "2",
+				"reaches": strings.Join(sortedUnique(g.reaches), ", "),
 			},
 		})
 	}

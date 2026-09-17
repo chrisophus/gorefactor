@@ -710,6 +710,49 @@ func TestBuildEmitsTypesAChangedTypeRefersTo(t *testing.T) {
 	}
 }
 
+// A test in another package usually does not name the changed symbol: it
+// exercises the function that calls it. That is the test most likely to fail,
+// and the test role never reported it.
+func TestBuildEmitsTestsThatReachTheChangeThroughACaller(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	t.Setenv("GOWORK", "off")
+	dir := t.TempDir()
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = resolved
+	}
+	writeFile(t, dir, "go.mod", "module example.com/hop\n\ngo 1.26\n")
+	writeFile(t, dir, "low/low.go", "package low\n\n// Half halves.\nfunc Half(n int) int { return n / 2 }\n")
+	writeFile(t, dir, "high/high.go", "package high\n\nimport \"example.com/hop/low\"\n\n// Quarter halves twice.\nfunc Quarter(n int) int { return low.Half(low.Half(n)) }\n")
+	// The test names Quarter, never Half.
+	writeFile(t, dir, "high/high_test.go", "package high\n\nimport \"testing\"\n\nfunc TestQuarter(t *testing.T) {\n\tif Quarter(8) != 2 {\n\t\tt.Fatal(\"quarter\")\n\t}\n}\n")
+	gitRun(t, dir, "init", "-q")
+	gitRun(t, dir, "add", "-A")
+	gitRun(t, dir, "-c", "user.email=fixture@example.com", "-c", "user.name=Fixture",
+		"-c", "commit.gpgsign=false", "commit", "-q", "-m", "add the hops")
+	writeFile(t, dir, "low/low.go", "package low\n\n// Half halves.\nfunc Half(n int) int { return n >> 1 }\n")
+
+	env, err := Build(Options{Root: dir, BaseRef: "HEAD", Version: "v0.0.0-test"})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var got []Expansion
+	for _, x := range env.Expansions {
+		if x.Role == RoleTest {
+			got = append(got, x)
+		}
+	}
+	if len(got) != 1 {
+		t.Fatalf("tests = %d, want the one that reaches Half through Quarter: %+v", len(got), got)
+	}
+	if got[0].Symbol != "TestQuarter" || got[0].Details["hop"] != "2" ||
+		got[0].Details["reaches"] != "high.Quarter" {
+		t.Errorf("test = %s hop %q reaching %q, want TestQuarter hop 2 reaching high.Quarter",
+			got[0].Symbol, got[0].Details["hop"], got[0].Details["reaches"])
+	}
+}
+
 func rolesOf(env *Envelope) []string {
 	seen := map[string]bool{}
 	var out []string

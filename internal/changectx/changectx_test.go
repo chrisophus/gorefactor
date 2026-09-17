@@ -80,6 +80,17 @@ func Save(s *Store, r Record) error {
 // Inserter reaches Insert without calling it, which is what the caller
 // role's label has to distinguish.
 var Inserter = (*Store).Insert
+
+// SaveAll reaches Insert only through Save, which is the second hop the
+// indirect-caller role carries.
+func SaveAll(s *Store, rs []Record) error {
+	for _, r := range rs {
+		if err := Save(s, r); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 `,
 	"store_test.go": `package fix
 
@@ -242,6 +253,19 @@ func TestBuildExpansionRoles(t *testing.T) {
 	if labelled != "reference-site" {
 		t.Errorf("the method expression that reaches Store.Insert is labelled %q, want reference-site", labelled)
 	}
+	// The second hop. SaveAll never names Insert; it reaches it through Save,
+	// and whether the change is safe can be decided in SaveAll -- it returns on
+	// the first error, so a new error from Insert stops the batch.
+	indirect := byRole[RoleIndirectCaller]
+	if len(indirect) != 1 {
+		t.Fatalf("indirect callers = %d, want 1: %v", len(indirect), indirect)
+	}
+	if got := indirect[0]; got.Symbol != "SaveAll" || got.Details["hop"] != "2" ||
+		got.Details["reaches"] != "Save" {
+		t.Errorf("indirect caller = %s hop %q reaching %q, want SaveAll hop 2 reaching Save",
+			got.Symbol, got.Details["hop"], got.Details["reaches"])
+	}
+
 	// The callee role is the other half of the caller role: Insert's new guard
 	// delegates to tooLong, and whether the guard is right is a fact about
 	// tooLong, which no caller of Insert shows.

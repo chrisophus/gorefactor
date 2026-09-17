@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   changed declarations that reach it. Capped at 12 per changed declaration, with
   a note saying what was dropped.
 
+- **An `indirect-caller` role: the second hop out from the change.** One hop is
+  often not where the caller's own contract is decided — a changed function
+  returns a new error, its caller passes it up, and whether that matters is
+  decided in the caller's caller. `details.hop` is `2` and `details.reaches`
+  names the direct callers it goes through. Capped at 8 across the whole change,
+  never into a test file, and ranked last by the consumer, below history,
+  because it is whole declarations that may have nothing to do with the change.
+
 ### Changed
 - **A `caller` expansion carries the whole calling function, and is named for
   it.** It used to be the use line and two either side, which cannot show a nil

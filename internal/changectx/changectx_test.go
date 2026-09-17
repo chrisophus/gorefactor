@@ -674,6 +674,42 @@ func TestBuildEmitsImplementationsOfAChangedInterface(t *testing.T) {
 	}
 }
 
+// A changed struct brings the types of its fields. The stage only ever looked
+// at signatures, so editing a type reached nothing it referred to.
+func TestBuildEmitsTypesAChangedTypeRefersTo(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	t.Setenv("GOWORK", "off")
+	dir := t.TempDir()
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = resolved
+	}
+	writeFile(t, dir, "go.mod", "module example.com/box\n\ngo 1.26\n")
+	writeFile(t, dir, "parts.go", "package box\n\n// Record is a record.\ntype Record struct {\n\tID string\n}\n\n// Tag labels a record.\ntype Tag struct {\n\tName string\n}\n")
+	writeFile(t, dir, "box.go", "package box\n\n// Box holds a record.\ntype Box struct {\n\tR Record\n}\n")
+	gitRun(t, dir, "init", "-q")
+	gitRun(t, dir, "add", "-A")
+	gitRun(t, dir, "-c", "user.email=fixture@example.com", "-c", "user.name=Fixture",
+		"-c", "commit.gpgsign=false", "commit", "-q", "-m", "add the box")
+	writeFile(t, dir, "box.go", "package box\n\n// Box holds a record.\ntype Box struct {\n\tR Record\n\tT Tag\n}\n")
+
+	env, err := Build(Options{Root: dir, BaseRef: "HEAD", Version: "v0.0.0-test"})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var got []string
+	for _, x := range env.Expansions {
+		if x.Role == RoleType && x.Details["via"] == "declared" {
+			got = append(got, x.Symbol)
+		}
+	}
+	sort.Strings(got)
+	if len(got) != 2 || got[0] != "Record" || got[1] != "Tag" {
+		t.Errorf("types the changed struct refers to = %v, want [Record Tag]", got)
+	}
+}
+
 func rolesOf(env *Envelope) []string {
 	seen := map[string]bool{}
 	var out []string

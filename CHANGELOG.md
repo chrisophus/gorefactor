@@ -25,6 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never into a test file, and ranked last by the consumer, below history,
   because it is whole declarations that may have nothing to do with the change.
 
+- **The `type` role reaches past a signature.** It only ever walked signatures,
+  so a changed struct brought none of the types of its fields, and a function
+  body that constructed or asserted to a type brought nothing either. Now a
+  changed type, var or const contributes what it refers to (`details.via:
+  declared`, walked through the underlying type so a struct's fields are
+  reached), and a changed function contributes what its body names
+  (`details.via: body`) alongside its signature (`details.via: signature`).
+  Capped at 8 per declaration per route.
 - **A changed interface brings the types that implement it.** The sibling walk
   started from changed concrete types, so editing the contract itself reached
   nothing. Matching is deliberately not "still satisfies the interface": an

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -632,6 +633,44 @@ func TestBuildEmitsOneCallerPerLine(t *testing.T) {
 	}
 	if callers[0].File != "quarter.go" || callers[0].Details["line"] != "4" {
 		t.Errorf("caller = %s line %s, want quarter.go line 4", callers[0].File, callers[0].Details["line"])
+	}
+}
+
+// A changed interface is a changed contract, and the question it raises is
+// which implementations still keep it. The sibling walk starts from changed
+// concrete types, so nothing reached this before.
+func TestBuildEmitsImplementationsOfAChangedInterface(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	t.Setenv("GOWORK", "off")
+	dir := t.TempDir()
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = resolved
+	}
+	writeFile(t, dir, "go.mod", "module example.com/sink\n\ngo 1.26\n")
+	writeFile(t, dir, "sink.go", "package sink\n\n// Sink takes a line.\ntype Sink interface {\n\tWrite(s string) error\n}\n")
+	writeFile(t, dir, "impl.go", "package sink\n\n// File writes to a file.\ntype File struct{}\n\n// Write takes a line.\nfunc (File) Write(s string) error { return nil }\n\n// Null discards.\ntype Null struct{}\n\n// Write takes a line.\nfunc (Null) Write(s string) error { return nil }\n")
+	gitRun(t, dir, "init", "-q")
+	gitRun(t, dir, "add", "-A")
+	gitRun(t, dir, "-c", "user.email=fixture@example.com", "-c", "user.name=Fixture",
+		"-c", "commit.gpgsign=false", "commit", "-q", "-m", "add the sink")
+	// The contract gains a return the implementations do not have yet.
+	writeFile(t, dir, "sink.go", "package sink\n\n// Sink takes a line.\ntype Sink interface {\n\tWrite(s string) error\n\tFlush() error\n}\n")
+
+	env, err := Build(Options{Root: dir, BaseRef: "HEAD", Version: "v0.0.0-test"})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	var got []string
+	for _, x := range env.Expansions {
+		if x.Role == RoleSibling && x.Details["implementsChanged"] == "true" {
+			got = append(got, x.Symbol)
+		}
+	}
+	sort.Strings(got)
+	if len(got) != 2 || got[0] != "File" || got[1] != "Null" {
+		t.Errorf("implementations of the changed interface = %v, want [File Null]", got)
 	}
 }
 

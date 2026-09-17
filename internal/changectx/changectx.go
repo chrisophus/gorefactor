@@ -45,16 +45,6 @@ type Options struct {
 	HistoryRangesPerFile int
 }
 
-// orDefault takes a cap from the options when it was set, and the built-in
-// otherwise. Zero means unset rather than none: a cap of zero would read as
-// "trace nothing" and silently empty a role.
-func orDefault(v, fallback int) int {
-	if v > 0 {
-		return v
-	}
-	return fallback
-}
-
 // builder carries the state of one Build call. Every stage appends to it and
 // nothing reads back, which is what keeps the output a function of the
 // revision alone.
@@ -63,14 +53,14 @@ type builder struct {
 	base             string
 	historyRevisions int
 	historyRanges    int
-	idx       *index
-	files     []File
-	exps      []Expansion
-	notes     []string
-	decls     []*decl
-	ranges    map[string][]lineRange
-	lines     map[string][]string
-	declCache map[string][]*decl
+	idx              *index
+	files            []File
+	exps             []Expansion
+	notes            []string
+	decls            []*decl
+	ranges           map[string][]lineRange
+	lines            map[string][]string
+	declCache        map[string][]*decl
 }
 
 // Build produces the envelope for the change between opts.BaseRef's merge base
@@ -254,6 +244,16 @@ func (b *builder) add(e Expansion) {
 // revision report the same unknowns in the same order.
 func (b *builder) finalNotes() []string {
 	return sortedUnique(b.notes)
+}
+
+// orDefault takes a cap from the options when it was set, and the built-in
+// otherwise. Zero means unset rather than none: a cap of zero would read as
+// "trace nothing" and silently empty a role.
+func orDefault(v, fallback int) int {
+	if v > 0 {
+		return v
+	}
+	return fallback
 }
 
 // priorityFor scores a declaration within its role. Exported symbols outrank

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -98,6 +99,9 @@ func golangciPathOrphans(root string, tree []string) []lintIssue {
 		if !alive && literalConfigPathExists(root, pat) {
 			alive = true
 		}
+		if !alive && literalConfigPathGitignored(root, pat) {
+			alive = true
+		}
 		if !alive {
 			out = append(out, lintIssue{
 				File:     cfgPath,
@@ -115,11 +119,43 @@ func golangciPathOrphans(root string, tree []string) []lintIssue {
 // listTreePaths, notably node_modules. Regex-shaped patterns still rely on the
 // tree scan; only a literal repository-relative path is safe to stat directly.
 func literalConfigPathExists(root, pattern string) bool {
-	if pattern == "" || strings.ContainsAny(pattern, `\.+*?()|[]{}^$`) {
+	if !isLiteralConfigPath(pattern) {
 		return false
 	}
 	_, err := os.Stat(filepath.Join(root, filepath.FromSlash(pattern)))
 	return err == nil
+}
+
+// literalConfigPathGitignored handles the other half of an absent-by-design
+// exemption: a checkout omits gitignored paths (node_modules, scratch/), so a
+// literal exemption for one is correct even though nothing matches it on disk.
+func literalConfigPathGitignored(root, pattern string) bool {
+	if !isLiteralConfigPath(pattern) {
+		return false
+	}
+	return pathGitignored(root, pattern)
+}
+
+// ignoreProbeName is a child name that cannot exist in a real tree. Probing a
+// child is how a path that is only ignored through its contents (`dir/*` with
+// a `!dir/.keep` exception) is recognized: git does not report `dir` itself as
+// ignored for that spelling, but `dir/<anything>` is.
+const ignoreProbeName = ".gorefactor-liveness-probe"
+
+// pathGitignored reports whether git ignores the path itself or anything
+// beneath it, under the repo's ignore rules. A path that is not in a git repo,
+// or that git does not ignore, reports false. Only paths that may be absent
+// reach this, so --no-index (ignore rules alone, not the index) is intended.
+func pathGitignored(root, rel string) bool {
+	paths := []string{rel, rel + "/" + ignoreProbeName}
+	out, err := exec.Command("git", append([]string{"-C", root, "check-ignore", "--no-index", "--"}, paths...)...).Output()
+	return err == nil && len(strings.TrimSpace(string(out))) > 0
+}
+
+// isLiteralConfigPath reports whether a config pattern is a plain
+// repository-relative path rather than a regex.
+func isLiteralConfigPath(pattern string) bool {
+	return pattern != "" && !strings.ContainsAny(pattern, `\.+*?()|[]{}^$`)
 }
 
 // baselinePathOrphans warns for every lint-baseline entry whose file no
@@ -144,7 +180,7 @@ func baselinePathOrphans(root string) []lintIssue {
 		if path == "" || missing[path] {
 			continue
 		}
-		if _, err := os.Stat(filepath.Join(root, path)); os.IsNotExist(err) {
+		if _, err := os.Stat(filepath.Join(root, path)); os.IsNotExist(err) && !pathGitignored(root, path) {
 			missing[path] = true
 		}
 	}

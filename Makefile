@@ -16,7 +16,7 @@ NC := \033[0m # No Color
 # the latest Go — `go install` would honor the linter's own go.mod
 # toolchain and produce a binary built with an older Go that then
 # refuses to type-check a project targeting a newer Go.
-GOLANGCI_VERSION := v2.12.2
+GOLANGCI_VERSION := v2.14.0
 
 help: ## Show this help message
 	@echo "$(BLUE)GoRefactor Build Targets$(NC)"

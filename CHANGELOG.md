@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-10-14
+
 ### Fixed
 - **`orphaned-config-path` no longer flags gitignored exemptions.** A literal path
   that the repo gitignores (`node_modules/`, `dir/*` with a `!dir/.keep` exception,

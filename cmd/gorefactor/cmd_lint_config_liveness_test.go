@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -101,6 +102,114 @@ func TestTrimLineColSuffix(t *testing.T) {
 		if got := trimLineColSuffix(tc.in); got != tc.want {
 			t.Errorf("trimLineColSuffix(%q) = %q, want %q", tc.in, got, tc.want)
 		}
+	}
+}
+
+// TestOrphanedConfigPath_GitignoredAbsentPathIsNotOrphan pins the marketplace-cp
+// shape: an exemption for a gitignored directory that a fresh checkout does not
+// contain. The gitignore spellings cover dir-only, dir/* with a re-included
+// placeholder, and a plain trailing-slash directory.
+func TestOrphanedConfigPath_GitignoredAbsentPathIsNotOrphan(t *testing.T) {
+	requireGit(t)
+	cases := []struct {
+		name      string
+		gitignore string
+		config    string
+	}{
+		{"dir-only", "ui/node_modules/\n", "ui/node_modules"},
+		{"contents-with-keep", "ui/node_modules/*\n!ui/node_modules/.keep\n", "ui/node_modules"},
+		{"scratch-dir", "scratch/\n", "scratch"},
+		{"regex-free-path-in-skip-list", "build/\n", "build"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := writeGitLivenessFixture(t, map[string]string{
+				".gitignore":    tc.gitignore,
+				".golangci.yml": "version: \"2\"\nlinters:\n  exclusions:\n    paths:\n      - " + tc.config + "\n",
+				"pkg/live.go":   "package pkg\n",
+			})
+			if issues := (orphanedConfigPathRule{}).Run(LintContext{Root: dir}); len(issues) != 0 {
+				t.Fatalf("gitignored absent path flagged as orphaned: %+v", issues)
+			}
+		})
+	}
+}
+
+// TestOrphanedConfigPath_NotIgnoredAbsentPathIsOrphan pins that the gitignore
+// exemption is narrow: a missing path the repo does not ignore is still stale,
+// even when other paths are ignored.
+func TestOrphanedConfigPath_NotIgnoredAbsentPathIsOrphan(t *testing.T) {
+	requireGit(t)
+	dir := writeGitLivenessFixture(t, map[string]string{
+		".gitignore": "scratch/\nui/node_modules/\n",
+		".golangci.yml": "version: \"2\"\nlinters:\n  exclusions:\n    paths:\n" +
+			"      - scratch\n      - gen/out\n",
+		"pkg/live.go": "package pkg\n",
+	})
+	issues := (orphanedConfigPathRule{}).Run(LintContext{Root: dir})
+	if len(issues) != 1 {
+		t.Fatalf("got %d findings, want 1 (only gen/out): %+v", len(issues), issues)
+	}
+	if !strings.Contains(issues[0].Message, "gen/out") {
+		t.Errorf("finding does not name the stale path: %s", issues[0].Message)
+	}
+}
+
+// TestOrphanedConfigPath_ExistingIgnoredPathIsNotOrphan covers the case where
+// the gitignored directory is present locally: it is alive by existence.
+func TestOrphanedConfigPath_ExistingIgnoredPathIsNotOrphan(t *testing.T) {
+	requireGit(t)
+	dir := writeGitLivenessFixture(t, map[string]string{
+		".gitignore":                    "ui/node_modules/*\n!ui/node_modules/.keep\n",
+		".golangci.yml":                 "version: \"2\"\nlinters:\n  exclusions:\n    paths:\n      - ui/node_modules\n",
+		"ui/node_modules/vendor/pkg.go": "package vendor\n",
+		"pkg/live.go":                   "package pkg\n",
+	})
+	if issues := (orphanedConfigPathRule{}).Run(LintContext{Root: dir}); len(issues) != 0 {
+		t.Fatalf("existing ignored path flagged as orphaned: %+v", issues)
+	}
+}
+
+// TestOrphanedConfigPath_AbsentPathOutsideGitIsOrphan pins the fallback: with
+// no git repository there are no ignore rules to consult, so a missing literal
+// path is stale as before.
+func TestOrphanedConfigPath_AbsentPathOutsideGitIsOrphan(t *testing.T) {
+	dir := writeLivenessFixture(t, map[string]string{
+		".golangci.yml": "version: \"2\"\nlinters:\n  exclusions:\n    paths:\n      - ui/node_modules\n",
+		"pkg/live.go":   "package pkg\n",
+	})
+	if issues := (orphanedConfigPathRule{}).Run(LintContext{Root: dir}); len(issues) != 1 {
+		t.Fatalf("got %d findings outside git, want 1: %+v", len(issues), issues)
+	}
+}
+
+func TestOrphanedConfigPath_GitignoredBaselineEntryIsNotOrphan(t *testing.T) {
+	requireGit(t)
+	dir := writeGitLivenessFixture(t, map[string]string{
+		".gitignore":        "gen/\n",
+		defaultBaselinePath: `{"version":1,"issues":[{"fingerprint":"a","file":"gen/out.go","rule":"complexity","count":1}]}`,
+		"pkg/live.go":       "package pkg\n",
+	})
+	if issues := (orphanedConfigPathRule{}).Run(LintContext{Root: dir}); len(issues) != 0 {
+		t.Fatalf("baseline entry for gitignored file flagged as orphaned: %+v", issues)
+	}
+}
+
+// writeGitLivenessFixture is writeLivenessFixture inside an initialized git
+// repository, so the ignore rules the fixture writes are in force.
+func writeGitLivenessFixture(t *testing.T, files map[string]string) string {
+	t.Helper()
+	dir := writeLivenessFixture(t, files)
+	if out, err := exec.Command("git", "-C", dir, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, out)
+	}
+	return dir
+}
+
+func requireGit(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
 	}
 }
 

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`orphaned-config-path` no longer flags gitignored exemptions.** A literal path
+  that the repo gitignores (`node_modules/`, `dir/*` with a `!dir/.keep` exception,
+  `scratch/`) is absent by design in a fresh checkout, so it is alive, not orphaned.
+  Lint-baseline entries for gitignored files are exempt the same way. The check
+  still flags missing paths that are not ignored, and runs unchanged outside git.
+
 ## [0.18.0] - 2026-09-17
 
 ### Added

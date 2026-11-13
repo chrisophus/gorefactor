@@ -1,0 +1,27 @@
+# Sandbox Studio's manifest for this repository: how an agent works one GitHub issue here with
+# nobody watching, and which checks its change has to pass before the studio pushes it.
+# Format: docs/manifest.md in chrisophus/sandbox-studio. There is no app to run, so no start hook.
+version: 1
+title: gorefactor
+base_ref: origin/main
+
+agent:
+  allowed_paths: [.]                # the whole repository; the studio keeps .sandbox/ and .github/ out
+  prompt: .sandbox/agent-prompt.md
+  bash_allow:
+    - "go build*"
+    - "go vet*"
+    - "go test*"
+    - "gofmt*"
+    - "make build-fast*"
+    - "make gate*"
+    - "./bin/gorefactor *"
+
+checks:
+  - { name: Format and vet, run: .sandbox/check.sh, args: [build], timeout: 5m }
+  - { name: Tests, run: .sandbox/check.sh, args: [test], timeout: 15m }
+  - { name: Gate, run: .sandbox/check.sh, args: [gate], timeout: 15m }
+
+host:
+  commands: [go, make, git]
+  per_slot: { memory_mb: 2000, disk_mb: 2000 }

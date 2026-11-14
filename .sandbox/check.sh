@@ -4,7 +4,7 @@
 # live in the slot directory and tools are run at CI's pinned versions with `go run`.
 set -euo pipefail
 export PATH="/usr/local/go/bin:$PATH"
-export GOCACHE="${SANDBOX_SLOT_DIR:?}/gocache" GOMODCACHE="${SANDBOX_SLOT_DIR}/gomod" GOFLAGS=-mod=mod
+export GOCACHE="${SANDBOX_SLOT_DIR:?}/gocache" GOMODCACHE="${SANDBOX_SLOT_DIR}/gomod"
 case "${1:-}" in
   build)
     bad="$(gofmt -l .)"

@@ -12,7 +12,7 @@ agent:
     - "go build*"
     - "go vet*"
     - "go test*"
-    - "go run*"
+    - "go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0*"
     - "go mod tidy*"
     - "gofmt*"
     - "./bin/gorefactor*"
@@ -22,7 +22,7 @@ checks:
   - { name: Lint, run: .sandbox/check.sh, args: [lint], timeout: 15m }
   - { name: Tests, run: .sandbox/check.sh, args: [test], timeout: 20m }
 host:
-  commands: [go, git]
+  commands: [go, gofmt, git]
   per_slot: { memory_mb: 2000, disk_mb: 2000 }
 
 ticket_ready:                      # ready only once Redline has reviewed the head commit

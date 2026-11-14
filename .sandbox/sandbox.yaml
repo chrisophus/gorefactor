@@ -1,0 +1,24 @@
+# Sandbox Studio manifest (github.com/chrisophus/sandbox-studio, docs/manifest.md). A tool with no
+# app: a slot is a worktree, the agent and the checks. The studio takes this repository's GitHub
+# issues labelled `agent` and turns each into a pull request.
+version: 1
+title: gorefactor
+base_ref: origin/main
+
+agent:
+  allowed_paths: [.]               # the whole repository, except .sandbox/ and .github/
+  prompt: .sandbox/agent-prompt.md
+
+checks:
+  - { name: Build and vet, run: .sandbox/check.sh, args: [build], timeout: 10m }
+  - { name: Lint, run: .sandbox/check.sh, args: [lint], timeout: 15m }
+  - { name: Tests, run: .sandbox/check.sh, args: [test], timeout: 20m }
+host:
+  commands: [go, git]
+  per_slot: { memory_mb: 2000, disk_mb: 2000 }
+
+ticket_ready:                      # ready only once Redline has reviewed the head commit
+  fresh: [.sandbox/redline-fresh.sh, "{pr}"]
+  inflight: [.sandbox/redline-inflight.sh]
+  request: /redline review
+  ignore_ci: [redline]             # the review job is not the agent's to fix; its findings arrive as review comments

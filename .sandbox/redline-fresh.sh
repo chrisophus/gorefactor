@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Sandbox Studio's review gate (ticket_ready.fresh in .sandbox/sandbox.yaml): prints
-# HEAD_FRESH=true when Redline's review workflow (.github/workflows/redline.yml) has posted a
+# HEAD_FRESH=true when redline-pr-watch (ansible-k8s, workstation/redline-pr-watch) has posted a
 # review of the pull request's current head commit, HEAD_FRESH=false otherwise. The studio runs it
 # in its own clone with GH_TOKEN and GH_REPO set: usage redline-fresh.sh <pr>.
 set -euo pipefail

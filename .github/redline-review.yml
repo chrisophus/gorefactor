@@ -1,4 +1,4 @@
-# The gate profile Redline's review workflow posts with (.github/workflows/review.yml). The markers
+# The gate profile redline-pr-watch posts this repository's reviews with. The markers
 # are what the Sandbox Studio ticket loop reads to know a pull request's head was reviewed
 # (.sandbox/redline-fresh.sh). Every field: redline-review.yml.example.
 review_marker: redline-review:v1

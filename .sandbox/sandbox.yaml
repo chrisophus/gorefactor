@@ -8,6 +8,14 @@ base_ref: origin/main
 agent:
   allowed_paths: [.]               # the whole repository, except .sandbox/ and .github/
   prompt: .sandbox/agent-prompt.md
+  bash_allow:                      # the agent's shell under agent_backend: claude-code; prefixes
+    - "go build*"
+    - "go vet*"
+    - "go test*"
+    - "go run*"
+    - "go mod tidy*"
+    - "gofmt*"
+    - "./bin/gorefactor*"
 
 checks:
   - { name: Build and vet, run: .sandbox/check.sh, args: [build], timeout: 10m }
@@ -19,6 +27,5 @@ host:
 
 ticket_ready:                      # ready only once Redline has reviewed the head commit
   fresh: [.sandbox/redline-fresh.sh, "{pr}"]
-  inflight: [.sandbox/redline-inflight.sh]
-  request: /redline review
-  ignore_ci: [redline]             # the review job is not the agent's to fix; its findings arrive as review comments
+  inflight: [.sandbox/redline-inflight.sh, "{pr}"]
+  request: /redline review          # redline-pr-watch reviews again on this comment

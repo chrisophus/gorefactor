@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Sandbox Studio's review gate (ticket_ready.inflight in .sandbox/sandbox.yaml): exits 1 while a
-# Redline review workflow run is queued or running in this repository, 0 when none is. Asking for
-# a review then would only cancel that run (the workflow's concurrency group is per pull request).
+# Sandbox Studio's review gate (ticket_ready.inflight in .sandbox/sandbox.yaml): exits 1 while
+# redline-pr-watch, the timer on the studio's host that reviews every pull request
+# (ansible-k8s, workstation/redline-pr-watch), is reviewing this one, 0 otherwise. The studio runs
+# it in its own clone with GH_REPO set: usage redline-inflight.sh <pr>.
 set -euo pipefail
-busy="$(gh run list -R "$GH_REPO" -w redline -L 20 --json status \
-  --jq '[.[] | select(.status != "completed")] | length')"
-[ "$busy" = 0 ]
+pr="${1:?usage: redline-inflight.sh <pr>}"
+[ ! -e "${REDLINE_WATCH_ROOT:-/srv/redline}/inflight/${GH_REPO/\//_}_$pr" ]

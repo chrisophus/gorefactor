@@ -1,0 +1,10 @@
+# The gate profile redline-pr-watch posts this repository's reviews with. The markers
+# are what the Sandbox Studio ticket loop reads to know a pull request's head was reviewed
+# (.sandbox/redline-fresh.sh). Every field: redline-review.yml.example.
+review_marker: redline-review:v1
+finding_marker: redline-finding:v1
+blocking: [error, warning]
+require_head: true
+fail_closed_pane: true
+body_style: walkthrough
+body_include: [intent, evidence, confirmations, unknowns, diff-links]

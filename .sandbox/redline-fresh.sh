@@ -6,8 +6,10 @@
 set -euo pipefail
 pr="${1:?usage: redline-fresh.sh <pr>}"
 head="$(gh api "repos/$GH_REPO/pulls/$pr" --jq .head.sha)"
-if gh api --paginate "repos/$GH_REPO/pulls/$pr/reviews" --jq '.[].body' |
-  grep -qE "<!-- redline-review:v1 verdict=[a-z]+ head=$head -->"; then
+# Read the reviews first, so a failed call ends the script with no HEAD_FRESH line (the studio
+# then says the gate could not be read) rather than reading as "not reviewed yet".
+reviews="$(gh api --paginate "repos/$GH_REPO/pulls/$pr/reviews" --jq '.[].body')"
+if grep -qE "<!-- redline-review:v1 verdict=[a-z]+ head=$head -->" <<<"$reviews"; then
   echo HEAD_FRESH=true
 else
   echo HEAD_FRESH=false

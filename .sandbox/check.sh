@@ -17,6 +17,8 @@ case "${1:-}" in
     go build -o "${SANDBOX_SLOT_DIR}/gorefactor" ./cmd/gorefactor
     "${SANDBOX_SLOT_DIR}/gorefactor" lint . --fail-on error
     "${SANDBOX_SLOT_DIR}/gorefactor" lint . --baseline --fail-on warning --fail-only
+    # CI's one-way ratchet: the committed baseline may only shrink against the base branch.
+    "${SANDBOX_SLOT_DIR}/gorefactor" lint . --baseline-ratchet origin/main
     ;;
   test) exec go test -race ./... ;;
   *) echo "usage: check.sh build|lint|test" >&2; exit 2 ;;

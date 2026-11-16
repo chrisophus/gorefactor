@@ -9,6 +9,7 @@ agent:
   allowed_paths: [.]               # the whole repository, except .sandbox/ and .github/
   prompt: .sandbox/agent-prompt.md
   bash_allow:                      # the agent's shell under agent_backend: claude-code; prefixes
+    - "*"                          # an open shell (sandbox-studio#71); the checks run the agent's code anyway
     - "go build*"
     - "go vet*"
     - "go test*"

@@ -6,5 +6,7 @@ finding_marker: redline-finding:v1
 blocking: [error, warning]
 require_head: true
 fail_closed_pane: true
+# Lean walkthrough: verdict, short overview and per-file table only (no stated intent,
+# PR description, evidence, confirmations or unknowns). body_include: [] keeps it that way.
 body_style: walkthrough
-body_include: [intent, evidence, confirmations, unknowns, diff-links]
+body_include: []

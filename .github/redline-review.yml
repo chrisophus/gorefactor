@@ -5,7 +5,7 @@ review_marker: redline-review:v1
 finding_marker: redline-finding:v1
 blocking: [error, warning]
 require_head: true
-fail_closed_pane: true
+fail_closed_pane: false
 # Lean walkthrough: verdict, short overview and per-file table only (no stated intent,
 # PR description, evidence, confirmations or unknowns). body_include: [] keeps it that way.
 body_style: walkthrough

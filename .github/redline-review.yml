@@ -9,4 +9,13 @@ fail_closed_pane: true
 # Lean walkthrough: verdict, short overview and per-file table only (no stated intent,
 # PR description, evidence, confirmations or unknowns). body_include: [] keeps it that way.
 body_style: walkthrough
-body_include: []
+
+# Optional extras in the walkthrough. intent and evidence are left out: the pull
+# request already shows its description. coverage, lint, confirmations and unknowns
+# are left out too.
+body_include:
+  - line-counts       # +/- beside each file and on each group heading
+  - test-totals       # test files as a heading with totals, no rows
+  - generated-totals  # one heading with the generated files' totals
+  - low-confidence    # unsure and hedged findings, folded instead of withheld
+  - diff-links        # each file links to its diff, except tests

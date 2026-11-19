@@ -6,14 +6,15 @@ finding_marker: redline-finding:v1
 blocking: [error, warning]
 require_head: true
 fail_closed_pane: false
-# Lean walkthrough: verdict, short overview and per-file table only (no stated intent,
-# PR description, evidence, confirmations or unknowns). body_include: [] keeps it that way.
+# Walkthrough: verdict, overview and per-file table, plus the sections listed in body_include.
 body_style: walkthrough
 
-# Optional extras in the walkthrough. intent and evidence are left out: the pull
-# request already shows its description. coverage, lint, confirmations and unknowns
-# are left out too.
+# Optional extras in the walkthrough. coverage and lint are left out.
 body_include:
+  - intent            # the stated intent
+  - evidence          # what backs the verdict
+  - confirmations     # what was checked and held
+  - unknowns          # what could not be determined
   - line-counts       # +/- beside each file and on each group heading
   - test-totals       # test files as a heading with totals, no rows
   - generated-totals  # one heading with the generated files' totals
